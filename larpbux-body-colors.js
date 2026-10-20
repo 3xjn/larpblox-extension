@@ -3,11 +3,13 @@
   if (globalThis.__larpbloxBodyColorsHooked) return;
   globalThis.__larpbloxBodyColorsHooked = true;
 
-  const PATHS = new Set(['/v1/avatar/set-body-colors', '/v2/avatar/set-body-colors']);
+  const PATHS = new Set(['/v1/avatar/set-body-colors', '/v2/avatar/set-body-colors', '/v4/avatar']);
   const WAIT_MS = 15000;
   let sequence = 0;
 
-  const active = () => /^\/my\/avatar\/?$/i.test(location.pathname) && document.documentElement.classList.contains('larpblox-pretend-mode');
+  const active = () => /^\/my\/avatar\/?$/i.test(location.pathname)
+    && document.documentElement.classList.contains('larpblox-pretend-mode')
+    && document.querySelector('#avatar-web-app')?.getAttribute('data-larpbux-avatar-view') === 'larp';
   const target = value => {
     try {
       const url = new URL(value, location.href);
@@ -30,6 +32,15 @@
     try { parsed = JSON.parse(body); } catch (_) { throw new Error('Invalid body color request.'); }
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Invalid body color request.');
     return parsed;
+  };
+  // Current Roblox editor nests colors in its v4 avatar update model.
+  const colorPayload = value => value?.avatarDefinition?.updateAvatarModel?.bodyColors ?? value?.bodyColor3s ?? value?.bodyColors;
+  const modernColors = body => {
+    try {
+      const value = parseBody(body);
+      const colors = colorPayload(value);
+      return colors !== undefined;
+    } catch (_) { return false; }
   };
   const validColors = colors => {
     const value = colors?.bodyColor3s || colors?.bodyColors || colors;
@@ -67,7 +78,10 @@
   });
   const synthetic = async (body, signal) => {
     let colors;
-    try { colors = validColors(parseBody(body)); }
+    try {
+      const parsed = parseBody(body);
+      colors = validColors(colorPayload(parsed) ?? parsed);
+    }
     catch (error) { return {ok: false, error: error.message}; }
     return waitForPage(colors, signal);
   };
@@ -83,9 +97,10 @@
     url = target(url);
     if (!url) return nativeFetch.apply(this, arguments);
     const method = String(init?.method || (input instanceof Request ? input.method : 'GET')).toUpperCase();
-    if (method !== 'POST') return nativeFetch.apply(this, arguments);
     let body = init?.body;
     if (body === undefined && input instanceof Request) body = await input.clone().text();
+    const modern = new URL(url).pathname === '/v4/avatar';
+    if (modern ? method !== 'PATCH' || !modernColors(body) : method !== 'POST') return nativeFetch.apply(this, arguments);
     const result = await synthetic(body, init?.signal || (input instanceof Request ? input.signal : undefined));
     if (result.aborted) throw new DOMException('The operation was aborted.', 'AbortError');
     return jsonResponse(result);
@@ -106,7 +121,8 @@
   };
   XMLHttpRequest.prototype.send = function(body) {
     const request = this.__larpbloxBodyColorRequest;
-    if (!active() || !request?.url || request.method !== 'POST') return xhrSend.apply(this, arguments);
+    const modern = request?.url && new URL(request.url).pathname === '/v4/avatar';
+    if (!active() || !request?.url || (modern ? request.method !== 'PATCH' || !modernColors(body) : request.method !== 'POST')) return xhrSend.apply(this, arguments);
     const xhr = this;
     const controller = new AbortController();
     let done = false;

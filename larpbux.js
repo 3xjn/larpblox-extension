@@ -458,7 +458,7 @@
   }
   async function applyBodyColorChange(request) {
     const account = userId;
-    if (!state?.mode || String(request.userId) !== String(account) || !/^\/my\/avatar\/?$/i.test(location.pathname)) throw new Error('Reopen the avatar editor with Larp mode on.');
+    if (!editingLarp() || String(request.userId) !== String(account) || !/^\/my\/avatar\/?$/i.test(location.pathname)) throw new Error('Reopen the avatar editor with Larp mode on.');
     const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 12000);
     try {
       const source = request.colors?.bodyColor3s || request.colors?.bodyColors || request.colors;
@@ -475,7 +475,7 @@
         const selected = outfitAssets(current.items.filter(item => current.equipped.includes(keyFor(item)) && supportsOutfit(item)));
         await loadBrowserPreview(selected, controller.signal);
       }
-      if (controller.signal.aborted || account !== userId || !state?.mode || !/^\/my\/avatar\/?$/i.test(location.pathname)) throw new Error('Your avatar changed. Try the color again.');
+      if (controller.signal.aborted || account !== userId || !editingLarp() || !/^\/my\/avatar\/?$/i.test(location.pathname)) throw new Error('Your avatar changed. Try the color again.');
       current = read(account);
       if (!current.mode) throw new Error('Turn Larp mode on before changing colors.');
       let look = current.gameLook;
