@@ -9,6 +9,7 @@
     window.open(new URL(itemPathFor(item), location.origin).href, '_blank', 'noopener');
   }
   window.addEventListener('mousedown', event => {
+    if (event.target.closest?.('a[href]')) return;
     if (event.button !== 1 || !event.target.closest?.('#avatar-web-app .larpbux-avatar-item, #avatar-web-app .larpbux-native-item')) return;
     event.preventDefault();
   }, true);
@@ -867,7 +868,7 @@
         if (previous) {
           previous.className = `${cardClasses} larpbux-avatar-item`;
           previous.dataset.larpbuxEquipped = String(equipped);
-          const button = previous.querySelector('button');
+          const button = previous.querySelector('.item-card-thumb');
           button.setAttribute('aria-label', `${label} ${item.name}`);
           button.setAttribute('aria-pressed', String(equipped));
           button.querySelector('.larpbux-avatar-action').textContent = label;
@@ -882,13 +883,20 @@
         card.dataset.larpbuxEquipped = String(equipped);
         const container = node('div', '', 'item-card-container');
         const holder = node('div', '', 'item-card-thumb-container');
-        const button = node('button', '', 'item-card-thumb'); button.type = 'button';
+        const button = node('a', '', 'item-card-thumb');
+        button.href = `/${item.itemType === 'Bundle' ? 'bundles' : 'catalog'}/${item.id}`;
+        button.setAttribute('role', 'button');
         button.append(node('span', label, 'larpbux-avatar-action'));
         button.setAttribute('aria-label', `${equipped ? 'Remove' : 'Wear'} ${item.name}`);
         button.setAttribute('aria-pressed', String(equipped));
         const thumb = node('span', '', 'thumbnail-2d-container'); const image = node('img'); thumbnail(image, item); thumb.append(image); button.append(thumb);
-        button.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); action(() => save(equip(state, keyFor(item)), true)); });
-        button.addEventListener('auxclick', event => openItemOnMiddleClick(event, item));
+        button.addEventListener('click', event => {
+          if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+          event.preventDefault(); event.stopPropagation(); action(() => save(equip(state, keyFor(item)), true));
+        });
+        button.addEventListener('keydown', event => {
+          if (event.key === ' ') { event.preventDefault(); button.click(); }
+        });
         holder.append(button);
         updateLimitedBadge(button, item);
         updateEquipped(holder, equipped);
