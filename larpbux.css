@@ -366,3 +366,16 @@ html:is(.rbx2016,.larpblox-modern) .larpbux-purchase-complete .larpbux-purchase-
 html:is(.rbx2016,.larpblox-modern) .larpbux-purchase-complete .larpbux-buy-confirm { width:100%; min-height:48px; margin:0; border:0; border-radius:8px; background:#335fff; color:#fff; font-size:16px; font-weight:600; }
 html:is(.rbx2016,.larpblox-modern) dialog.larpbux-purchase-complete { font-family:"Builder Sans",Arial,sans-serif; }
 html:is(.rbx2016,.larpblox-modern) .larpbux-purchase-complete .larpbux-modal-close { color:#f7f7f8; }
+/* Roblox Foundation modal motion: 100ms backdrop, 300ms scale, 1s spinner. */
+.larpbux-buy-dialog[open] { animation:larpbux-purchase-open .3s cubic-bezier(.2,0,0,1); }
+.larpbux-buy-dialog[open]::backdrop { animation:larpbux-purchase-backdrop-in .1s linear; }
+.larpbux-buy-dialog.larpbux-purchase-closing { pointer-events:none; animation:larpbux-purchase-close .3s cubic-bezier(.2,0,0,1) forwards; }
+.larpbux-buy-dialog.larpbux-purchase-closing::backdrop { animation:larpbux-purchase-backdrop-out .1s linear forwards; }
+html:is(.rbx2016,.larpblox-modern) .larpbux-buy-dialog .larpbux-buy-confirm.is-loading { display:flex; align-items:center; justify-content:center; gap:9px; }
+html:is(.rbx2016,.larpblox-modern) .larpbux-buy-dialog .larpbux-buy-confirm.is-loading::before { content:""; width:16px; height:16px; box-sizing:border-box; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation:larpbux-buy-spin 1s linear infinite; }
+.larpbux-purchase-complete .larpbux-complete-body { animation:larpbux-purchase-backdrop-in .1s linear; }
+@keyframes larpbux-purchase-open { from { transform:scale(.975); } to { transform:scale(1); } }
+@keyframes larpbux-purchase-close { from { transform:scale(1); } to { transform:scale(.975); opacity:0; } }
+@keyframes larpbux-purchase-backdrop-in { from { opacity:0; } to { opacity:1; } }
+@keyframes larpbux-purchase-backdrop-out { from { opacity:1; } to { opacity:0; } }
+@media(prefers-reduced-motion:reduce) { .larpbux-buy-dialog[open],.larpbux-buy-dialog[open]::backdrop,.larpbux-purchase-complete .larpbux-complete-body { animation:none; } }

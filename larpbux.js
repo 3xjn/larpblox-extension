@@ -1324,7 +1324,12 @@
   }
   function closePurchase() {
     if (!purchaseDialog) return;
-    purchaseDialog.close(); purchaseDialog.remove(); purchaseDialog = undefined;
+    const dialog = purchaseDialog; purchaseDialog = undefined;
+    dialog.dataset.closing = 'true';
+    if (arguments[0] instanceof Event && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      dialog.classList.add('larpbux-purchase-closing');
+      setTimeout(() => { dialog.close(); dialog.remove(); }, 300);
+    } else { dialog.close(); dialog.remove(); }
   }
   function purchaseUsername() {
     if (!state?.mode || !userId) return;
@@ -1351,19 +1356,26 @@
     footer.append(confirm,cancel);dialog.append(title,node('div',`R$ ${state.balance.toLocaleString('en-US')}`,'larpbux-purchase-balance'),close,body,status,footer);
     dialog.addEventListener('cancel',event=>{event.preventDefault();closePurchase();});
     document.body.append(dialog);dialog.showModal();input.focus();
-    confirm.addEventListener('click',()=>{
+    confirm.addEventListener('click',async ()=>{
       if (confirm.disabled) return;
       confirm.disabled=true;
       try {
-        if (!dialog.open || userId!==account || path!==location.pathname || !state?.mode) throw new Error('Your account or purchase state changed. Please reopen the purchase.');
+        if (!dialog.open || dialog.dataset.closing || userId!==account || path!==location.pathname || !state?.mode) throw new Error('Your account or purchase state changed. Please reopen the purchase.');
         const current=read(account);
         if (!current.mode) throw new Error('Turn Larp mode on before changing your username.');
-        const next=changeUsername(current,input.value);
+        const requestedName=input.value;
+        changeUsername(current,requestedName);
+        const finishLoading=purchaseLoading(dialog,confirm);
+        await finishLoading();
+        if (!dialog.open || dialog.dataset.closing || userId!==account || path!==location.pathname || !state?.mode) return;
+        const latest=read(account);
+        if (!latest.mode) throw new Error('Turn Larp mode on before changing your username.');
+        const next=changeUsername(latest,requestedName);
         const realName=document.querySelector('meta[name="user-data"]')?.getAttribute('data-name') || '';
         if (next.names.username.toLowerCase()===realName.toLowerCase()) throw new Error('Choose a different username.');
         save(next);
         purchaseComplete(dialog, `Your username and display name are now ${state.names.username}.`);
-      } catch(error) {status.textContent=error.message;confirm.disabled=false;}
+      } catch(error) {dialog.removeAttribute('aria-busy');status.textContent=error.message;confirm.disabled=false;confirm.classList.remove('is-loading');confirm.removeAttribute('aria-busy');confirm.textContent='Buy';}
     });
     input.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();confirm.click();}});
   }
@@ -1380,6 +1392,17 @@
       if (row.matches('#account-username, .account-username, [data-testid="account-username"]')) return true;
     }
     return false;
+  }
+  function purchaseLoading(dialog, button) {
+    button.disabled = true; button.classList.add('is-loading');
+    button.setAttribute('aria-busy', 'true'); button.textContent = 'Loading…';
+    dialog.setAttribute('aria-busy', 'true');
+    // Local purchases finish instantly; keep processing visible without stacking a delay on slow requests.
+    const started = performance.now();
+    return async () => {
+      await new Promise(resolve => setTimeout(resolve, Math.max(0, 900 - (performance.now() - started))));
+      dialog.removeAttribute('aria-busy');
+    };
   }
   function purchaseComplete(dialog, message) {
     dialog.classList.add('larpbux-purchase-complete');
@@ -1428,14 +1451,12 @@
     document.body.append(dialog); dialog.showModal();
     confirm.addEventListener('click', async () => {
       if (confirm.disabled) return;
-      confirm.disabled = true;
-      confirm.textContent = 'Loading…';
-      confirm.classList.add('is-loading');
-      confirm.setAttribute('aria-busy', 'true');
+      const finishLoading = purchaseLoading(dialog, confirm);
       try {
         if (account !== userId || path !== location.pathname || !state?.mode) throw new Error('Your account or purchase state changed. Please reopen the purchase.');
         const latest = await itemData();
-        if (!dialog.open || !latest) return;
+        await finishLoading();
+        if (!dialog.open || dialog.dataset.closing || !latest) return;
         if (account !== userId || path !== location.pathname || !state?.mode) throw new Error('Your account or purchase state changed. Please reopen the purchase.');
         if (latest.price !== item.price) { purchase(latest); return; }
         const existing = state.items.some(owned => keyFor(owned) === keyFor(item));
@@ -1445,6 +1466,7 @@
         save(collect(current, latest));
         purchaseComplete(dialog, existing && !repeatable ? 'You already own this item. Your account has not been charged.' : `You have successfully bought ${item.name}`);
       } catch (error) {
+        dialog.removeAttribute('aria-busy');
         status.textContent = error.message;
         confirm.disabled = false;
         confirm.textContent = 'Buy';
@@ -1483,16 +1505,17 @@
       rows.append(node('p', `Total: R$ ${cost.toLocaleString('en-US')}`), node('p', `Your balance: R$ ${state.balance.toLocaleString('en-US')}`));
       const buy = node('button', confirming ? 'Buy' : 'Checkout', 'larpbux-buy-confirm'); buy.type = 'button'; buy.disabled = !state.cart?.length || Boolean(error);
       status.textContent = error || (confirming ? 'Confirm your purchase with Larp Robux.' : '');
-      buy.addEventListener('click', () => {
+      buy.addEventListener('click', async () => {
         if (!confirming) { confirming = true; draw(); return; }
-        buy.disabled = true;
+        const finishLoading = purchaseLoading(dialog, buy);
         try {
-          if (!dialog.open || userId !== account || !state?.mode) throw new Error('Your account changed. Reopen your cart.');
+          await finishLoading();
+          if (!dialog.open || dialog.dataset.closing || userId !== account || !state?.mode) throw new Error('Your account changed. Reopen your cart.');
           const current = read(account);
           if (!current.mode) throw new Error('Turn Larp mode on before buying.');
           if (JSON.stringify(current.cart) !== JSON.stringify(state.cart)) throw new Error('Your cart changed. Reopen it to review your purchase.');
           save(checkoutCart(current)); purchaseComplete(dialog, 'You have successfully bought the items in your cart');
-        } catch (failure) { status.textContent = failure.message; buy.disabled = false; }
+        } catch (failure) { dialog.removeAttribute('aria-busy'); status.textContent = failure.message; buy.disabled = false; buy.classList.remove('is-loading'); buy.removeAttribute('aria-busy'); buy.textContent = 'Buy'; }
       });
       footer.append(buy);
     };
