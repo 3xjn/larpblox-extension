@@ -26,6 +26,9 @@ const {chromium}=require('playwright');
   assert.equal(await page.evaluate(()=>viewers[0].definition.backgroundRequestModel.id),75789087422384);
   const size=await page.locator('.larpbux-avatar-scene').boundingBox();
   assert.equal(size.width,277);assert.equal(size.height,352);
+  await page.locator('.avatar-thumbnail').evaluate(e=>e.classList.add('larpbux-hat-tab'));
+  const hatsSize=await page.locator('.larpbux-avatar-scene').boundingBox();
+  assert.equal(hatsSize.x,size.x);assert.equal(hatsSize.width,size.width,'opening Hats must not shrink the background');
   console.log('PASS: equipped backgrounds retain the interactive 3D editor and fill its rectangular preview.');
  } finally {await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1});

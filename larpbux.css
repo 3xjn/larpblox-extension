@@ -286,7 +286,7 @@ html[data-larpblox-identity-avatar="true"] #avatar-web-app:not([data-larpbux-ava
 /* Keep the local viewer inside the same frame and use the native backdrop. */
 html #avatar-web-app .avatar-thumbnail:has(> .larpbux-avatar-look) { max-width:100% !important; min-width:0; overflow:hidden; border-radius:inherit; isolation:isolate; }
 html #avatar-web-app .larpbux-avatar-look { box-sizing:border-box; max-width:100%; overflow:hidden; border-radius:inherit; background-color:var(--larpbux-preview-background,transparent) !important; background-image:var(--larpbux-preview-image,none) !important; background-size:cover !important; background-repeat:no-repeat !important; background-position:center !important; }
-html #avatar-web-app .larpbux-avatar-look .larpbux-avatar-scene { left:60px; right:0; width:auto !important; min-width:0; overflow:hidden; }
+html #avatar-web-app .larpbux-avatar-look .larpbux-avatar-scene { left:0; right:0; width:auto !important; min-width:0; overflow:hidden; }
 html #avatar-web-app .larpbux-avatar-hats { background:transparent !important; max-height:calc(100% - 24px); overflow-y:auto; overflow-x:hidden; }
 
 #avatar-web-app .larpbux-avatar-view-controls { flex-wrap:wrap; align-items:center; }
@@ -303,7 +303,6 @@ html.larpblox-modern #avatar-web-app .larpbux-avatar-hats button { background:va
 
 html #avatar-web-app .larpbux-avatar-hats { top:12px !important; left:8px !important; right:auto !important; transform:none !important; margin:0 !important; padding:0 !important; }
 html #avatar-web-app .larpbux-avatar-hats button { position:static !important; inset:auto !important; transform:none !important; margin:0 !important; box-sizing:border-box; }
-html #avatar-web-app .avatar-thumbnail:not(.larpbux-hat-tab) .larpbux-avatar-look .larpbux-avatar-scene { left:0; }
 
 /* Align the replacement hats with Roblox's own slot, outside nested viewer offsets. */
 html #avatar-web-app .larpbux-avatar-hats { left:var(--larpbux-hat-left,8px) !important; top:50% !important; bottom:auto !important; transform:translateY(-50%) !important; width:var(--larpbux-hat-size,48px); }
