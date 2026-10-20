@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Roblox 2016 Classic",
-  "version": "1.20.3",
+  "version": "1.20.4",
   "permissions": [
     "storage"
   ],
@@ -42,6 +42,7 @@
         "classic-groups.js",
         "larpbux-avatar-3d.js",
         "larpbux-game-bridge.js",
+        "larpblox-avatar-requests.js",
         "larpbux-avatar-surfaces.js",
         "larpbux-profile-wearing.js",
         "larpbux-names.js",

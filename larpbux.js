@@ -186,6 +186,8 @@
   let state, userId, panel, controls, list, balance, mode, message, exportBox, purchaseDialog, previewElement, previewViewer, previewSignature, previewController;
   let nameUsername;
   const thumbnails = new Map();
+  const thumbnailPending = new Map();
+  let thumbnailTimer, thumbnailBusy = false, thumbnailBlockedUntil = 0;
   const counts = new Map();
   const details = new Map();
   let namesPending=false;
@@ -311,26 +313,56 @@
       imageCache = {key: cacheKey, imageUrl};
     } catch (_) {}
   }
+  function scheduleThumbnails() {
+    if (thumbnailBusy || !thumbnailPending.size) return;
+    clearTimeout(thumbnailTimer);
+    const due = Math.min(...[...thumbnailPending.values()].map(entry => entry.due));
+    thumbnailTimer = setTimeout(flushThumbnails, Math.max(0, Math.max(due, thumbnailBlockedUntil) - Date.now()));
+  }
+  async function flushThumbnails() {
+    if (thumbnailBusy) return;
+    const ready = [...thumbnailPending.values()].filter(entry => entry.due <= Date.now());
+    if (!ready.length || Date.now() < thumbnailBlockedUntil) { scheduleThumbnails(); return; }
+    thumbnailBusy = true;
+    const type = ready[0].item.itemType;
+    const batch = ready.filter(entry => entry.item.itemType === type).slice(0, 100);
+    const ids = batch.map(entry => entry.item.id).join(',');
+    const endpoint = type === 'Bundle' ? `bundles/thumbnails?bundleIds=${ids}` : `assets?assetIds=${ids}`;
+    const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 15000);
+    try {
+      const response = await fetch(`https://thumbnails.roblox.com/v1/${endpoint}&size=150x150&format=Png&isCircular=false`, {signal:controller.signal});
+      if (response.status === 429) {
+        thumbnailBlockedUntil = Date.now() + Math.max(1, LarpbloxAvatarRequests.retryAfter(response, 20)) * 1000;
+        return;
+      }
+      if (!response.ok) throw new Error('Item thumbnails are temporarily unavailable.');
+      const results = new Map(((await response.json()).data || []).map(entry => [String(entry.targetId), entry]));
+      for (const entry of batch) {
+        const result = results.get(String(entry.item.id));
+        if (result?.imageUrl || result?.state === 'Blocked' || result?.state === 'InReview') {
+          thumbnailPending.delete(entry.key); entry.resolve(result.imageUrl || null);
+        } else if (++entry.attempts >= 6) {
+          thumbnailPending.delete(entry.key); entry.resolve(null);
+        } else entry.due = Date.now() + Math.min(10000, 1000 * entry.attempts);
+      }
+    } catch (_) {
+      for (const entry of batch) {
+        if (++entry.attempts >= 6) { thumbnailPending.delete(entry.key); entry.resolve(null); }
+        else entry.due = Date.now() + Math.min(30000, 2000 * entry.attempts);
+      }
+    } finally {
+      clearTimeout(timeout); thumbnailBusy = false;
+      thumbnailBlockedUntil = Math.max(thumbnailBlockedUntil, Date.now() + 250);
+      scheduleThumbnails();
+    }
+  }
   function thumbnail(image, item) {
     image.alt = item.name;
     if (item.thumbnail) { image.src = item.thumbnail; return; }
     const key = keyFor(item);
     if (!thumbnails.has(key)) {
-      const endpoint = item.itemType === 'Bundle' ? `bundles/thumbnails?bundleIds=${item.id}` : `assets?assetIds=${item.id}`;
-      const request = (async () => {
-        for (let attempt = 0; attempt < 4; attempt++) {
-          if (attempt) await new Promise(resolve => setTimeout(resolve, attempt * 500));
-          try {
-            const response = await fetch(`https://thumbnails.roblox.com/v1/${endpoint}&size=150x150&format=Png&isCircular=false`);
-            const entry = response.ok ? (await response.json())?.data?.[0] : null;
-            if (entry?.imageUrl) return entry.imageUrl;
-            if (entry?.state === 'Blocked' || entry?.state === 'InReview') break;
-          } catch (_) {}
-        }
-        thumbnails.delete(key);
-        return null;
-      })();
-      thumbnails.set(key, request);
+      const promise = new Promise(resolve => thumbnailPending.set(key, {key,item,resolve,due:Date.now(),attempts:0}));
+      thumbnails.set(key,promise); scheduleThumbnails();
     }
     thumbnails.get(key).then(url => { if (url) image.src = url; });
   }
@@ -574,7 +606,7 @@
     const selected = editingLarp() ? state.items.filter(item => state.equipped.includes(keyFor(item)) && supportsOutfit(item)) : [];
     const holder = editor?.querySelector('.avatar-thumbnail');
     const gameLook = editingLarp() && state.gameLook;
-    holder?.classList.toggle('larpbux-local-preview', Boolean(editingLarp() && (selected.length || gameLook)));
+    holder?.classList.toggle('larpbux-local-preview', Boolean(editingLarp() && (selected.length || gameLook) && previewElement && !previewElement.hidden));
     if (!holder || (!selected.length && !gameLook)) {
       clearTimeout(previewRetryTimer); previewRetryKey = undefined;
       previewFeedback(editor, '');
@@ -594,8 +626,6 @@
     if (previewRetryKey !== signature) { previewRetryKey = signature; previewRetries = 0; }
     previewController?.abort(); previewController = new AbortController();
     const controller = previewController, signal = controller.signal, account = userId;
-    let timedOut = false;
-    const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, 20000);
     previewFeedback(editor, 'Updating avatar…');
     previewSignature = signature;
     if (previewElement?.parentElement !== holder) {
@@ -630,27 +660,13 @@
         return;
       }
       let renderKind = threeDimensional && previewRetries < 2 ? '3d' : '2d';
-      const renderBody = () => JSON.stringify({avatarDefinition: definition, thumbnailConfig: {thumbnailId: Number(account), thumbnailType: renderKind, size: '420x420'}});
-      let token = globalThis.LarpbloxRenderToken || document.querySelector('meta[name="csrf-token"]')?.getAttribute('data-token');
-      for (let attempt = 0; attempt < 20; attempt++) {
-        const headers = {'Content-Type': 'application/json'}; if (token) headers['X-CSRF-TOKEN'] = token;
-        if (typeof LarpbloxAvatarSurfaces !== 'undefined' && typeof LarpbloxAvatarSurfaces.waitForRender === 'function') await LarpbloxAvatarSurfaces.waitForRender(signal);
-        if (signal.aborted) throw new Error('Avatar update cancelled.');
-        const response = await fetch('https://avatar.roblox.com/v1/avatar/render', {method: 'POST', credentials: 'include', headers, body: renderBody(), signal});
-        const refreshedToken = response.headers.get('x-csrf-token');
-        if (response.status === 403 && refreshedToken && refreshedToken !== token) { token = refreshedToken; globalThis.LarpbloxRenderToken = token; continue; }
-        if (!response.ok) {
-          let details;
-          try { details = await response.json(); } catch {}
-          const serverMessage = details?.errors?.map(error => error.message).filter(Boolean).join('; ') || details?.message || '';
-          previewFailure = {status: response.status, details, avatarDefinition: definition, renderKind};
-          const error = new Error(`Avatar render failed (${response.status})${serverMessage ? ': ' + serverMessage : '.'}`);
-          error.retryAfter = Number(response.headers.get('retry-after')) || (response.status === 429 ? 10 : 0);
-          if (response.status === 429) globalThis.LarpbloxRenderBlockedUntil = Date.now() + error.retryAfter * 1000;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        let imageUrl;
+        try { imageUrl = await LarpbloxAvatarRequests.render(definition, account, signal, renderKind); }
+        catch (error) {
+          if (renderKind === '3d' && error.status !== 429 && !signal.aborted) { renderKind = '2d'; continue; }
           throw error;
         }
-        const result = await response.json();
-        if (result.state === 'Completed' && result.imageUrl) {
           if (renderKind === '3d') {
             try {
               if (typeof LarpbloxAvatar3D === 'undefined') throw new Error('3D preview is unavailable.');
@@ -658,7 +674,7 @@
               const cancelModel = () => modelController.abort();
               signal.addEventListener('abort', cancelModel, {once: true});
               const modelTimeout = setTimeout(cancelModel, 8000);
-              try { nextViewer = await LarpbloxAvatar3D.create(pending, result.imageUrl, {signal: modelController.signal, view, definition}); }
+              try { nextViewer = await LarpbloxAvatar3D.create(pending, imageUrl, {signal: modelController.signal, view, definition}); }
               finally { clearTimeout(modelTimeout); signal.removeEventListener('abort', cancelModel); }
             } catch (error) {
               if (signal.aborted) throw error;
@@ -667,42 +683,47 @@
               continue;
             }
           } else {
-            const image = node('img'); image.alt = 'Your avatar with selected items'; image.src = result.imageUrl; pending.append(image);
+            const image = node('img'); image.alt = 'Your avatar with selected items';
+            await new Promise((resolve, reject) => {
+              const finish = error => {
+                clearTimeout(timer); signal.removeEventListener('abort', abort);
+                image.onload = image.onerror = null; error ? reject(error) : resolve();
+              };
+              const abort = () => finish(new Error('Avatar update cancelled.'));
+              const timer = setTimeout(() => finish(new Error('Avatar image took too long to load.')), 15000);
+              image.onload = () => finish(); image.onerror = () => finish(new Error('Avatar image could not load.'));
+              signal.addEventListener('abort', abort, {once: true}); image.src = imageUrl;
+            });
+            pending.append(image);
           }
           if (account !== userId || signature !== previewSignature || signal.aborted) return;
           previewViewer?.dispose(); previewViewer = nextViewer;
           pending.classList.remove('larpbux-avatar-loading');
           surface.replaceChildren(pending); surface.hidden = false;
+          holder.classList.add('larpbux-local-preview');
           committed = true; previewRetries = 0;
           previewFeedback(editor, '');
           for (const button of editor.querySelectorAll('.larpbux-avatar-item button')) button.title = '';
           // Image publication is deliberately detached from preview rendering.
-          publishPreviewImage(definition, result.imageUrl, account, signal, signature, renderKind !== '2d');
+          publishPreviewImage(definition, imageUrl, account, signal, signature, renderKind !== '2d');
           return;
-        }
-        if (result.state !== 'Pending') {
-          if (renderKind === '3d') { renderKind = '2d'; continue; }
-          throw new Error('Roblox could not preview this outfit.');
-        }
-        if (renderKind === '3d' && attempt >= 5) renderKind = '2d';
-        await new Promise(resolve => setTimeout(resolve, 700)); if (signal.aborted) throw new Error('Avatar update cancelled.');
       }
       throw new Error('The avatar preview is still processing. Try Wear again.');
     } catch (error) {
-      if (account !== userId || signature !== previewSignature || (signal.aborted && !timedOut)) return;
-      const reason = timedOut ? 'Avatar update timed out.' : error.message;
+      if (account !== userId || signature !== previewSignature || signal.aborted) return;
+      const reason = error.message;
+      previewFailure = {status:error.status, message:reason};
       surface.title = reason;
-      if (previewRetries < 2) {
-        previewRetries++;
+      if (error.status === 429 || previewRetries < 2) {
+        if (error.status !== 429) previewRetries++;
         previewFeedback(editor, error.retryAfter ? 'Roblox is limiting requests. Waiting before retry…' : 'Retrying avatar update…');
         previewRetryTimer = setTimeout(() => {
           if (signature !== previewSignature || account !== userId || !editingLarp()) return;
           previewSignature = undefined; updateAvatarPreview(editor);
-        }, Math.max(800 * previewRetries, Math.min(error.retryAfter || 0, 30) * 1000));
+        }, Math.max(1000, 800 * previewRetries, (error.retryAfter || 0) * 1000));
       } else previewFeedback(editor, reason, true);
       for (const button of editor.querySelectorAll('.larpbux-avatar-item button')) button.title = error.message;
     } finally {
-      clearTimeout(timeout);
       if (!committed) { nextViewer?.dispose(); pending.remove(); }
     }
   }

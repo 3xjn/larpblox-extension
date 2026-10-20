@@ -73,34 +73,10 @@
     hiddenCanvases.clear();
   }
   async function waitForRender(signal) {
-    while (Date.now() < (globalThis.LarpbloxRenderBlockedUntil || 0)) {
-      if (signal.aborted) throw new Error('Avatar request cancelled.');
-      await new Promise(resolve => setTimeout(resolve, Math.min(1000, globalThis.LarpbloxRenderBlockedUntil - Date.now())));
-    }
+    return LarpbloxAvatarRequests.waitForRender(signal);
   }
   async function render(definition, userId, signal, thumbnailType = '3d') {
-    const body = JSON.stringify({avatarDefinition: definition, thumbnailConfig: {thumbnailId: Number(userId), thumbnailType, size: '420x420'}});
-    let token = globalThis.LarpbloxRenderToken || document.querySelector('meta[name="csrf-token"]')?.getAttribute('data-token');
-    for (let attempt = 0; attempt < 20; attempt++) {
-      if (signal.aborted) throw new Error('Avatar request cancelled.');
-      const headers = {'Content-Type': 'application/json'};
-      if (token) headers['X-CSRF-TOKEN'] = token;
-      await waitForRender(signal);
-      const response = await fetch('https://avatar.roblox.com/v1/avatar/render', {method: 'POST', credentials: 'include', headers, body, signal});
-      const refreshed = response.headers.get('x-csrf-token');
-      if (response.status === 403 && refreshed && refreshed !== token) { token = refreshed; globalThis.LarpbloxRenderToken = token; continue; }
-      if (!response.ok) {
-        const error = new Error(`Avatar render failed (${response.status}).`);
-        error.retryAfter = Number(response.headers.get('retry-after')) || (response.status === 429 ? 10 : 0);
-        if (response.status === 429) globalThis.LarpbloxRenderBlockedUntil = Date.now() + error.retryAfter * 1000;
-        throw error;
-      }
-      const result = await response.json();
-      if (result.state === 'Completed' && result.imageUrl) return result.imageUrl;
-      if (result.state !== 'Pending') throw new Error('Avatar render failed.');
-      await new Promise(resolve => setTimeout(resolve, 700));
-    }
-    throw new Error('Avatar render timed out.');
+    return LarpbloxAvatarRequests.render(definition, userId, signal, thumbnailType);
   }
   async function pictures(descriptor, signal) {
     status = {stage: 'capturing', descriptor};
@@ -163,15 +139,7 @@
       }
       return;
     }
-    for (const image of images) {
-      const record = remember(image);
-      image.style.visibility = 'hidden';
-    }
-    for (const canvas of document.querySelectorAll('.profile-avatar-thumb canvas, .profile-avatar-left canvas, .profile-avatar canvas')) {
-      if (!ownImage(canvas, userId)) continue;
-      if (!hiddenCanvases.has(canvas)) hiddenCanvases.set(canvas, canvas.style.visibility || '');
-      canvas.style.visibility = 'hidden';
-    }
+    // Keep native/previous portraits visible until their replacements are ready.
     if (!images.length && !document.querySelector('.profile-avatar-thumb canvas, .profile-avatar-left canvas, .profile-avatar canvas')) return;
     if (cache?.retryAt && Date.now() < cache.retryAt) return;
     if (!cache || cache.retryAt) {
@@ -181,7 +149,7 @@
       entry.promise = (async () => pictures(await render(await loadDefinition(controller.signal), userId, controller.signal), controller.signal))();
       entry.promise.catch(error => {
         if (cache !== entry) return;
-        entry.retryAt = Date.now() + Math.max(5000, Math.min(error.retryAfter || 0, 60) * 1000);
+        entry.retryAt = Date.now() + Math.max(5000, (error.retryAfter || 0) * 1000);
         status = {stage: 'failed', error: String(error.message), retryAt: entry.retryAt};
         const failure = `${key}:${error.message}`;
         if (lastFailure !== failure) console.warn('Larp avatar pictures could not render; retrying.', error.message);
