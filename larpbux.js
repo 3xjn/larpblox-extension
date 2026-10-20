@@ -1177,9 +1177,9 @@
       settingsHidden.clear();
       settingsNavState.forEach((value, link) => { if (link.isConnected && value.current !== null && link.hash.split('?')[0] === location.hash.split('?')[0]) link.setAttribute('aria-current', value.current); });
       settingsNavState.clear(); settingsNav?.classList.remove('larpbux-settings-nav-active');
-      if (settingsSection?.contains(controls)) panel.insertBefore(controls, panel.querySelector('h3'));
+      if (settingsSection?.contains(controls)) controls.remove();
       settingsSection?.remove();
-      settingsActive = false; attachDropdown(); return;
+      settingsActive = false; return;
     }
     if (!settingsCustomizeLink || !settingsCustomizeLink.isConnected) {
       const browser = [...document.querySelectorAll('a[href]')].find(link => /^browser preferences$/i.test(link.textContent.trim()));
@@ -1233,10 +1233,9 @@
       settingsHidden.clear();
       settingsNavState.forEach((value, link) => { if (link.isConnected && value.current !== null && link.hash.split('?')[0] === location.hash.split('?')[0]) link.setAttribute('aria-current', value.current); });
       settingsNavState.clear(); settingsNav?.classList.remove('larpbux-settings-nav-active'); settingsCustomizeItem.classList.remove('active'); settingsCustomizeLink.classList.remove('active'); settingsCustomizeLink.removeAttribute('aria-current');
-      if (settingsSection && settingsSection.contains(controls)) panel.insertBefore(controls, panel.querySelector('h3'));
+      if (settingsSection?.contains(controls)) controls.remove();
       settingsSection?.remove();
       settingsActive = false;
-      attachDropdown();
     }
   }
   function nativePrice() {
@@ -1585,21 +1584,6 @@
       record.shown = pretend ? text : null;
     }
   }
-  function attachDropdown() {
-    let menu = document.querySelector('#robux-menu .dropdown-menu, #robux-menu .popover-content, #robux-menu[role="menu"], #robux-menu');
-    if (!menu) {
-      // Some Roblox headers render the menu in a separate popover.
-      for (const link of document.querySelectorAll('a[href*="/transactions"], a[href*="/redeem"]')) {
-        const candidate = link.closest('[role="menu"], .dropdown-menu, .popover-content');
-        if (candidate && candidate.querySelector('a[href*="/robux"], a[href*="/upgrades"]')) { menu = candidate; break; }
-      }
-    }
-    if (!menu || menu.contains(controls)) return;
-    menu.classList.add('larpbux-robux-menu');
-    if (menu.tagName === 'UL' || menu.tagName === 'OL') {
-      const row = node('li'); row.append(controls); menu.append(row);
-    } else menu.append(controls);
-  }
   function update() {
     const id = document.querySelector('meta[name="user-data"]')?.getAttribute('data-userid');
     globalThis.LarpbloxSharedUsers?.update({userId:id, mode:state?.mode === true});
@@ -1614,7 +1598,6 @@
     if (!panel) mount();
     if (userId !== id) { closePurchase(); queuedGameCommand = undefined; awaitingGameOutfit = undefined; userId = id; state = read(id); if (bridgeStatus) bridgeStatus.textContent = 'Checking connection…'; render(); }
     updateSettingsRoute();
-    if (!settingsActive) attachDropdown();
     updateNames();
     updateHeaderBalance();
     updateItem(); updateAvatar();

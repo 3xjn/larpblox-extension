@@ -22,6 +22,7 @@ body{font:16px Arial;background:#111216;color:#f7f7f8;margin:40px}h1{font-size:3
     await load();
     const customize = page.getByRole('link',{name:'Customize',exact:true});
     await customize.waitFor();
+    assert.equal(await page.locator('#robux-menu .larpbux-dropdown').count(),0);
     assert.deepEqual(await page.locator('.menu-vertical li').allTextContents(),['Account info','Security','Browser preferences','Customize']);
     await customize.click();
     await page.getByRole('heading',{name:'Customize',exact:true}).waitFor();
@@ -40,6 +41,7 @@ body{font:16px Arial;background:#111216;color:#f7f7f8;margin:40px}h1{font-size:3
     await page.getByRole('link',{name:'Account info',exact:true}).click();
     await page.waitForFunction(()=>!document.querySelector('#native-settings').hidden && getComputedStyle(document.querySelector('#native-settings')).display!=='none');
     assert.equal(await page.locator('#native-settings').isVisible(),true);
+    assert.equal(await page.locator('#robux-menu .larpbux-dropdown').count(),0);
     await customize.click();
     await page.reload();
     await load();
