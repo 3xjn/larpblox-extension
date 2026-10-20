@@ -715,6 +715,7 @@
     }
   }
   function previewFeedback(editor, message, retry = false) {
+    if (!retry) message = '';
     const status = editor?.querySelector('.larpbux-preview-status'), button = editor?.querySelector('.larpbux-preview-retry');
     if (status && status.textContent !== message) status.textContent = message;
     if (button) button.hidden = !retry;
