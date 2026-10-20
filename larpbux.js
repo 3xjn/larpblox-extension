@@ -1208,13 +1208,14 @@
   }
   function settingsNameRow(target) {
     if (!/^\/my\/account\/?$/i.test(location.pathname)) return false;
-    const button=target.closest?.('button, a, [role="button"]');
+    const button=target.closest?.('button, a, [role="button"], .icon-edit, [class*="btn-generic-edit"], [tabindex="0"]');
     if (!button || button.closest('.larpbux-buy-dialog, .larpbux-dropdown')) return false;
     if (button.matches('#account-username-edit, [data-testid="username-edit"], [aria-label="Edit Username"], [aria-label="Edit username"]')) return true;
     let row=button.parentElement;
     for(let depth=0;row && depth<4;depth++,row=row.parentElement) {
       if (row.querySelectorAll('button, [role="button"]').length>1) break;
-      if ([...row.querySelectorAll('label, .text-label, .font-header-2, b, strong')].some(label=>/^username\s*:?$/i.test(label.textContent.trim()))) return true;
+      if ([...row.querySelectorAll('label, span, div, .text-label, .font-header-2, b, strong')].some(label=>/^username\s*:?$/i.test(label.textContent.trim()))) return true;
+      if (/^username\s*:/i.test(row.textContent.trim())) return true;
       if (row.matches('#account-username, .account-username, [data-testid="account-username"]')) return true;
     }
     return false;
@@ -1355,7 +1356,7 @@
     updateItem(); updateAvatar();
   }
   function start() {
-    document.addEventListener('click',event=>{
+    window.addEventListener('click',event=>{
       if (!state?.mode || !settingsNameRow(event.target)) return;
       event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();purchaseUsername();
     },true);
