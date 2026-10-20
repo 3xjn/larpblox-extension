@@ -154,13 +154,28 @@ async function handle(message, sender) {
   throw new Error('Unsupported connection action.');
 }
 chrome.runtime.onMessage.addListener((message, sender, respond) => {
+  if (message?.type === 'larpblox-publish-profile') {
+    if (!/^https:\/\/www\.roblox\.com\//.test(sender.url || '') || sender.id !== chrome.runtime.id || !/^[1-9]\d{0,15}$/.test(String(message.userId))) {
+      respond({ok:false}); return false;
+    }
+    try {
+      if (message.record) LarpbloxGameBridge.validateSnapshot(message.record.snapshot, message.userId);
+    } catch (_) { respond({ok:false}); return false; }
+    const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 5000);
+    fetch('https://larp.3xjn.dev/v1/profiles/' + message.userId, {method:message.record ? 'PUT' : 'DELETE',credentials:'omit',signal:controller.signal,
+      ...(message.record ? {headers:{'Content-Type':'application/json'},body:JSON.stringify(message.record)} : {})})
+      .then(response => respond({ok:response.ok}), () => respond({ok:false}))
+      .finally(() => clearTimeout(timer));
+    return true;
+  }
   if (message?.type === 'larpblox-shared-users') {
     if (!/^https:\/\/www\.roblox\.com\//.test(sender.url || '') || sender.id !== chrome.runtime.id || !Array.isArray(message.userIds) || message.userIds.length > 50 || !message.userIds.length || message.userIds.some(id => !/^[1-9]\d{0,15}$/.test(String(id)))) {
       respond({ok:false}); return false;
     }
     const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 5000);
-    fetch('https://larp.3xjn.dev/v1/players?userIds=' + message.userIds.join(','), {credentials:'omit',cache:'no-store',signal:controller.signal})
-      .then(response => { if (!response.ok) throw new Error('Unavailable'); return response.json(); })
+    Promise.all(['/v1/players', '/v1/profiles'].map(path => fetch('https://larp.3xjn.dev' + path + '?userIds=' + message.userIds.join(','), {credentials:'omit',cache:'no-store',signal:controller.signal})
+      .then(response => response.ok ? response.json() : {players:[]})))
+      .then(([presence, profiles]) => ({version:1,players:[...new Map([...(presence.players || []), ...(profiles.players || [])].map(record => [String(record.userId),record])).values()]}))
       .then(data => respond({ok:true,data}), () => respond({ok:false}))
       .finally(() => clearTimeout(timer));
     return true;

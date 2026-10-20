@@ -2,6 +2,30 @@
 (() => {
   'use strict';
   const portraits = new Map(), names = new Map();
+  let publication, publicationKey = '', publicationTime = 0, publishing = false, publicationGeneration = 0;
+  function publishProfile(options) {
+    const key = JSON.stringify([options.userId, options.active, options.signature, options.names]);
+    if (key !== publicationKey) { publicationKey = key; publicationGeneration++; publicationTime = 0; }
+    publication = options;
+    flushProfile();
+  }
+  async function flushProfile() {
+    if (!publication?.userId || publishing || Date.now() - publicationTime < 60000) return;
+    const options = publication, mine = publicationGeneration;
+    publishing = true; publicationTime = Date.now();
+    try {
+      let record;
+      if (options.active) {
+        const definition = await options.loadDefinition(new AbortController().signal);
+        const userId = String(options.userId), username = options.names?.username || '';
+        record = {version:1, userId, snapshot:{version:1,userId,definition,items:[]}, name:{enabled:!!username,username,displayName:username}};
+      }
+      if (mine !== publicationGeneration) return;
+      const response = await chrome.runtime.sendMessage({type:'larpblox-publish-profile',userId:String(options.userId),record});
+      if (response?.ok && mine === publicationGeneration) publicationTime = Date.now();
+    } catch (_) { /* Retry after transient relay or avatar failures. */ }
+    finally { publishing = false; if (mine !== publicationGeneration) flushProfile(); }
+  }
   let context = {}, records = new Map(), pending = false, lastPoll = 0, queued = false, generation = 0;
   const userIdFrom = value => {
     try {
@@ -61,7 +85,7 @@
     for (const [id, surface] of portraits) if (!records.has(id)) { surface.update({active:false}); portraits.delete(id); }
     for (const [id, record] of records) {
       if (!portraits.has(id)) portraits.set(id, LarpbloxAvatarSurfaces.createForPeer());
-      portraits.get(id).update({userId:id, active:true, signature:JSON.stringify(record.snapshot) + (record.imageUrl || ''), imageUrl:record.imageUrl, loadDefinition:async () => record.snapshot.definition});
+      portraits.get(id).update({userId:id, active:true, signature:JSON.stringify(record.snapshot) + (record.imageUrl || ''), imageUrl:record.imageUrl, backgroundId:record.snapshot.definition.backgroundRequestModel?.id, loadDefinition:async () => record.snapshot.definition});
     }
   }
   async function scan() {
@@ -99,5 +123,6 @@
     if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; scan(); }); }
   }
   setInterval(scan, 5000);
-  globalThis.LarpbloxSharedUsers = {update};
+  setInterval(flushProfile, 60000);
+  globalThis.LarpbloxSharedUsers = {update, publishProfile};
 })();

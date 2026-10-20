@@ -74,23 +74,28 @@
     return {...next, cart:[]};
   }
   const bodyAssetTypes = [17, 18, 27, 28, 29, 30, 31, 79];
+  const backgroundAssetTypes = [92];
   const wearableAssetTypes = [17, 18, 27, 28, 29, 30, 31, 79, 2, 8, 11, 12, 19, 41, 42, 43, 44, 45, 46, 47, 48, 50, 51, 52, 53, 54, 55, 56, 64, 65, 66, 67, 68, 69, 70, 71, 72, 76, 77];
   const animationAssetTypes = [48, 50, 51, 52, 53, 54, 55, 56];
   const isWearableAsset = item => item?.itemType === 'Asset' && wearableAssetTypes.includes(Number(item.assetType));
+  const isBackground = item => item?.itemType === 'Asset' && backgroundAssetTypes.includes(Number(item.assetType));
   const isAnimationBundle = item => item?.itemType === 'Bundle' && item.bundleType === 'AvatarAnimations' && Array.isArray(item.assets) && item.assets.some(asset => animationAssetTypes.includes(Number(asset.assetType)));
   const isBodyBundle = item => item?.itemType === 'Bundle' && ['BodyParts', 'DynamicHead'].includes(item.bundleType) && Array.isArray(item.assets) && item.assets.some(asset => bodyAssetTypes.includes(Number(asset.assetType)));
   const expandOutfitItem = item => (isAnimationBundle(item) || isBodyBundle(item)) ? item.assets.filter(isWearableAsset) : (isWearableAsset(item) ? [item] : []);
   const supportsOutfit = item => isWearableAsset(item) || isAnimationBundle(item) || isBodyBundle(item);
+  const supportsCosmetic = item => supportsOutfit(item) || isBackground(item);
   const outfitAssets = items => items.flatMap(expandOutfitItem);
   function matchesAvatarCategory(item, category, equipped = false) {
-    if (!supportsOutfit(item)) return false;
+    if (!supportsCosmetic(item)) return false;
     let name = String(category).toLowerCase().replace(/[^a-z]/g, '');
     if (isBodyBundle(item)) return /purchased/.test(name) || (/recent/.test(name) && (!/wearing|equipped/.test(name) || equipped));
     if (isAnimationBundle(item)) return /animation/.test(name) || (/recent/.test(name) && (!/wearing|equipped/.test(name) || equipped));
     if (/gear/.test(name)) return Number(item.assetType) === 19;
     if (/eyebrow/.test(name)) return item.assetType === 76;
     if (/eyelash/.test(name)) return item.assetType === 77;
-    if (/avatar|creation|character|makeup|background/.test(name)) return false;
+    if (/background/.test(name)) return isBackground(item) && (!/wearing|equipped/.test(name) || equipped);
+    if (isBackground(item) && /recent/.test(name)) return /wearing|equipped/.test(name) ? equipped : true;
+    if (/avatar|creation|character|makeup/.test(name)) return false;
     if (/animation/.test(name)) return animationAssetTypes.includes(Number(item.assetType));
     if (/recent/.test(name)) {
       if (/wearing|equipped/.test(name)) return equipped;
@@ -120,6 +125,10 @@
   function equip(state, key) {
     const item = state.items.find(item => keyFor(item) === key);
     if (!item) throw new Error('Collect this cosmetic item first.');
+    if (isBackground(item)) {
+      const nextId = state.backgroundId === item.id ? undefined : item.id;
+      return {...state, backgroundId:nextId, equipped:(state.equipped || []).filter(value => !isBackground(state.items.find(candidate => keyFor(candidate) === value)))};
+    }
     if (!supportsOutfit(item)) throw new Error('This item can be collected, but the game outfit importer does not support it yet.');
     if (isBodyBundle(item)) {
       const parts = item.assets.filter(isWearableAsset);
@@ -144,7 +153,7 @@
   function outfit(state, userId) {
     return JSON.stringify({version: 1, kind: 'larpblox-cosmetic-outfit', userId, items: outfitAssets(state.items.filter(item => supportsOutfit(item) && state.equipped.includes(keyFor(item)))).map(({id, name, itemType, assetType}) => ({id, name, itemType, assetType}))});
   }
-  function previewDefinition(avatar, rules, items) {
+  function previewDefinition(avatar, rules, items, backgroundId) {
     items = outfitAssets(items);
     const slots = new Set(items.filter(item => [17, 18, 27, 28, 29, 30, 31, 79, 2, 11, 12, 19, 48, 50, 51, 52, 53, 54, 55, 56, 64, 65, 66, 67, 68, 69, 70, 71, 72].includes(item.assetType)).map(item => item.assetType));
     if (slots.has(17) || slots.has(79)) { slots.add(17); slots.add(79); }
@@ -162,7 +171,12 @@
       if (!hex) throw new Error('Roblox could not load the avatar colors for the preview.');
         bodyColors[part.replace(/ColorId$/, 'Color')] = hex.startsWith('#') ? hex : `#${hex}`;
     }
-    return {assets, bodyColors, scales: avatar.scales, playerAvatarType: {playerAvatarType: avatar.playerAvatarType}};
+    const definition = {assets, bodyColors, scales: avatar.scales, playerAvatarType: {playerAvatarType: avatar.playerAvatarType}};
+    if (Number.isSafeInteger(Number(backgroundId)) && Number(backgroundId) > 0) {
+      definition.backgroundId = Number(backgroundId);
+      definition.backgroundRequestModel = {id: Number(backgroundId)};
+    }
+    return definition;
   }
   function mergeGameSnapshot(state, snapshot, preserveBodyRemovals = false) {
     const bodySlot = type => Number(type) === 79 ? 17 : Number(type);
@@ -185,7 +199,8 @@
     }
     const equipped = snapshotItems.filter(item => !bundled.has(keyFor(item)) && !removedBodySlots.has(bodySlot(item.assetType))).map(keyFor);
     for (const key of bundled) if (state.items.some(item => keyFor(item) === key)) equipped.push(key);
-    return {...state, items, equipped, gameLook: snapshot};
+    const backgroundId = Number.isSafeInteger(Number(snapshot.backgroundId)) && Number(snapshot.backgroundId) > 0 ? Number(snapshot.backgroundId) : state.backgroundId;
+    return {...state, items, equipped, ...(backgroundId ? {backgroundId} : {backgroundId:undefined}), gameLook: snapshot};
   }
   function gamePreviewDefinition(state) {
     const look = state.gameLook;
@@ -198,7 +213,12 @@
     const assets = look.definition.assets.filter(asset =>
       (!managed.has(asset.id) || selectedIds.has(asset.id)) && (!replaceSlots.has(types.get(asset.id)) || selectedIds.has(asset.id)));
     for (const item of selected) if (!assets.some(asset => asset.id === item.id)) assets.push({id: item.id});
-    return {...look.definition, assets};
+    const definition = {...look.definition, assets};
+    if (Number.isSafeInteger(Number(state.backgroundId)) && Number(state.backgroundId) > 0) {
+      definition.backgroundId = Number(state.backgroundId);
+      definition.backgroundRequestModel = {id: Number(state.backgroundId)};
+    } else { delete definition.backgroundId; delete definition.backgroundRequestModel; }
+    return definition;
   }
   function changedBodyColors(original, value, rules = {}) {
     const source = value?.bodyColor3s || value?.bodyColors || value;
@@ -228,9 +248,9 @@
     const definition = gamePreviewDefinition(state);
     const items = new Map(state.gameLook.items.map(item => [item.id, item]));
     for (const item of outfitAssets(state.items.filter(item => state.equipped.includes(keyFor(item))))) items.set(item.id, item);
-    return {version: 1, userId: String(userId), definition, items: definition.assets.map(asset => items.get(asset.id)).filter(Boolean).map(({id, name, assetType}) => ({id, name, assetType, itemType: 'Asset'}))};
+    return {version: 1, userId: String(userId), definition, ...(definition.backgroundId ? {backgroundId: definition.backgroundId} : {}), items: definition.assets.map(asset => items.get(asset.id)).filter(Boolean).map(({id, name, assetType}) => ({id, name, assetType, itemType: 'Asset'}))};
   }
-  if (typeof module !== 'undefined' && module.exports) { module.exports = {changedBodyColors, addToCart, checkoutCart, changeUsername, localNames, amount, formatBalance, collect, equip, outfit, supportsOutfit, previewDefinition, matchesAvatarCategory, mergeGameSnapshot, gamePreviewDefinition, gameCommand, gameOutfitMatches}; return; }
+  if (typeof module !== 'undefined' && module.exports) { module.exports = {changedBodyColors, addToCart, checkoutCart, changeUsername, localNames, amount, formatBalance, collect, equip, outfit, supportsOutfit, supportsCosmetic, isBackground, previewDefinition, matchesAvatarCategory, mergeGameSnapshot, gamePreviewDefinition, gameCommand, gameOutfitMatches}; return; }
   let state, userId, panel, controls, list, balance, mode, message, exportBox, purchaseDialog, previewElement, previewViewer, previewSignature, previewController;
   // Catalog Try On is deliberately separate from the saved Larp outfit.  It is
   // a disposable render only: no save(), bridge message, purchase, or equip is
@@ -267,7 +287,8 @@
       try { gameLook = LarpbloxGameBridge.validateSnapshot(saved.gameLook, id); } catch (_) {}
     }
     const cart = Array.isArray(saved?.cart) ? saved.cart.filter(item => Number.isSafeInteger(item.id) && item.id > 0 && ['Asset', 'Bundle'].includes(item.itemType) && typeof item.name === 'string' && Number.isSafeInteger(item.price) && item.price >= 0 && Number.isSafeInteger(item.quantity) && item.quantity > 0).slice(0, 2000) : [];
-    return {version: 1, cart, names, mode: saved?.mode === true, pendingOutfit: saved?.mode === true && saved?.pendingOutfit === true, balance: Number.isSafeInteger(saved?.balance) && saved.balance >= 0 ? saved.balance : 0, items, equipped: Array.isArray(saved?.equipped) ? saved.equipped.filter(value => items.some(item => keyFor(item) === value)).slice(0, 100) : [], ...(gameLook ? {gameLook} : {})};
+    const backgroundId = Number.isSafeInteger(saved?.backgroundId) && saved.backgroundId > 0 && items.some(item => isBackground(item) && item.id === saved.backgroundId) ? saved.backgroundId : undefined;
+    return {version: 1, cart, names, mode: saved?.mode === true, pendingOutfit: saved?.mode === true && saved?.pendingOutfit === true, balance: Number.isSafeInteger(saved?.balance) && saved.balance >= 0 ? saved.balance : 0, items, backgroundId, equipped: Array.isArray(saved?.equipped) ? saved.equipped.filter(value => items.some(item => keyFor(item) === value) && !isBackground(items.find(item => keyFor(item) === value))).slice(0, 100) : [], ...(gameLook ? {gameLook} : {})};
   }
   const avatarUrl = () => '/my/avatar';
   async function syncNames() {
@@ -432,15 +453,16 @@
       const link = node('a'); link.href = `/${item.itemType === 'Bundle' ? 'bundles' : 'catalog'}/${item.id}`;
       const image = node('img'); thumbnail(image, item);
       link.append(image, node('span', item.name));
-      const button = node('button', state.equipped.includes(keyFor(item)) ? 'Remove' : 'Wear'); button.type = 'button';
-      button.disabled = !supportsOutfit(item);
+      const equipped = isBackground(item) ? state.backgroundId === item.id : state.equipped.includes(keyFor(item));
+      const button = node('button', equipped ? 'Remove' : 'Wear'); button.type = 'button';
+      button.disabled = !supportsCosmetic(item);
       if (button.disabled) button.textContent = 'Collection only';
       button.addEventListener('click', () => action(() => { save(equip(state, keyFor(item)), true); message.textContent = 'Outfit saved.'; }));
       row.append(link, button); target.append(row);
     }
   }
   let browserAvatarBase;
-  async function loadBrowserPreview(selected, signal) {
+  async function loadBrowserPreview(selected, signal, backgroundId = state?.backgroundId) {
     const account = userId;
     if (!browserAvatarBase || browserAvatarBase.account !== account || Date.now() > browserAvatarBase.expires) {
       const entry = {account, expires: Date.now() + 15000};
@@ -464,7 +486,7 @@
     }
     const {avatar, rules} = await browserAvatarBase.promise;
     if (signal.aborted || account !== userId) throw new Error('Avatar update cancelled.');
-    return previewDefinition(avatar, rules, selected);
+    return previewDefinition(avatar, rules, selected, backgroundId);
   }
   async function applyBodyColorChange(request) {
     const account = userId;
@@ -492,7 +514,7 @@
       if (!look) {
         const {avatar, rules:baseRules} = await browserAvatarBase.promise;
         const selected = outfitAssets(current.items.filter(item => current.equipped.includes(keyFor(item)) && supportsOutfit(item)));
-        const definition = previewDefinition(avatar, baseRules, selected);
+      const definition = previewDefinition(avatar, baseRules, selected, current.backgroundId);
         const known = new Map((avatar.assets || []).map(item => [item.id, {id:item.id, name:item.name || 'Roblox item', assetType:item.assetType?.id, itemType:'Asset'}]));
         for (const item of selected) known.set(item.id, item);
         look = {version:1, userId:String(account), definition, items:definition.assets.map(asset => known.get(asset.id)).filter(item => item && Number.isInteger(item.assetType))};
@@ -525,14 +547,16 @@
         items.push(...batch);
       }
       if (account !== userId || !state.mode || JSON.stringify(current.equipped) !== JSON.stringify(state.equipped) || JSON.stringify(current.gameLook) !== JSON.stringify(state.gameLook)) throw new Error('Your outfit changed while saving. Try again.');
-      const snapshot = {version: 1, userId: String(account), definition, items};
+      const snapshot = {version: 1, userId: String(account), definition, ...(current.backgroundId ? {backgroundId: current.backgroundId} : {}), items};
       return JSON.parse(JSON.stringify(LarpbloxGameBridge.validateSnapshot(snapshot, account)));
     } finally { clearTimeout(timer); }
   }
   function applyCharacter(snapshot) {
     if (!state?.mode) throw new Error('Turn Larp mode on first.');
     LarpbloxGameBridge.validateSnapshot(snapshot, userId);
-    save(mergeGameSnapshot(state, JSON.parse(JSON.stringify(snapshot))), true);
+    // Native saved outfits are complete replacements; local backgrounds are
+    // not part of that payload and should not survive selecting one.
+    save(mergeGameSnapshot({...state, backgroundId: undefined}, JSON.parse(JSON.stringify(snapshot))), true);
   }
   async function applyNativeCharacter(card) {
     const account = userId;
@@ -697,10 +721,11 @@
   }
   async function updateAvatarPreview(editor) {
     const selected = editingLarp() ? state.items.filter(item => state.equipped.includes(keyFor(item)) && supportsOutfit(item)) : [];
+    const backgroundId = editingLarp() ? state.backgroundId : undefined;
     const holder = editor?.querySelector('.avatar-thumbnail');
     const gameLook = editingLarp() && state.gameLook;
-    holder?.classList.toggle('larpbux-local-preview', Boolean(editingLarp() && (selected.length || gameLook)));
-    if (!holder || (!selected.length && !gameLook)) {
+    holder?.classList.toggle('larpbux-local-preview', Boolean(editingLarp() && (selected.length || backgroundId || gameLook)));
+    if (!holder || (!selected.length && !backgroundId && !gameLook)) {
       clearTimeout(previewRetryTimer); previewRetryKey = undefined;
       previewFeedback(editor, '');
       previewController?.abort(); previewViewer?.dispose(); previewElement?.remove();
@@ -713,7 +738,7 @@
     // Roblox's existing toggle names the mode it will switch to, not the current mode.
     const toggle = editor.querySelector('.toggle-three-dee');
     const threeDimensional = !/^3d$/i.test(toggle?.textContent?.trim() || '');
-    const signature = JSON.stringify([userId, selected.map(item => item.id), threeDimensional, gameLook?.definition, Boolean(state?.mode)]);
+    const signature = JSON.stringify([userId, selected.map(item => item.id), backgroundId, threeDimensional, gameLook?.definition, Boolean(state?.mode)]);
     if (previewSignature === signature && (previewElement?.isConnected || (!selected.length && !gameLook))) return;
     clearTimeout(previewRetryTimer);
     if (previewRetryKey !== signature) { previewRetryKey = signature; previewRetries = 0; }
@@ -747,12 +772,14 @@
         definition = await loadBrowserPreview(selected, signal);
       }
       if (account !== userId || signature !== previewSignature || signal.aborted) return;
-      if (!selected.length && !gameLook) {
+      if (!selected.length && !backgroundId && !gameLook) {
         previewViewer?.dispose(); previewElement?.remove();
         previewViewer = undefined; previewElement = undefined; previewController = undefined;
         return;
       }
-      let renderKind = threeDimensional && previewRetries < 2 ? '3d' : '2d';
+      // Roblox's native thumbnail renderer applies backgroundRequestModel to 2D
+      // images. The custom 3D model viewer does not know about backgrounds.
+      let renderKind = backgroundId ? '2d' : (threeDimensional && previewRetries < 2 ? '3d' : '2d');
       for (let attempt = 0; attempt < 2; attempt++) {
         let imageUrl;
         try { imageUrl = await LarpbloxAvatarRequests.render(definition, account, signal, renderKind); }
@@ -823,16 +850,19 @@
   function updateOwnAvatarSurfaces() {
     const current = state, account = userId;
     const selected = current?.items.filter(item => current.equipped.includes(keyFor(item)) && supportsOutfit(item)) || [];
-    const signature = JSON.stringify([account, selected.map(item => item.id), current?.gameLook?.definition]);
+    const signature = JSON.stringify([account, selected.map(item => item.id), current?.backgroundId, current?.gameLook?.definition, current?.names]);
     const loadDefinition = signal => current?.gameLook ? Promise.resolve(gamePreviewDefinition(current)) : loadBrowserPreview(selected, signal);
     if (typeof LarpbloxProfileWearing !== 'undefined') LarpbloxProfileWearing.update({
       userId: account, active: Boolean(current?.mode), signature,
-      items: [...(current?.gameLook?.items || []), ...(current?.items || [])], loadDefinition, thumbnail,
+      items: [...(current?.gameLook?.items || []), ...(current?.items || [])], backgroundId: current?.backgroundId, loadDefinition, thumbnail,
     });
     if (typeof LarpbloxAvatarSurfaces !== 'undefined') LarpbloxAvatarSurfaces.update({
       userId: account,
-      active: Boolean(current?.mode && (current.gameLook || selected.length)),
-      signature, loadDefinition,
+      active: Boolean(current?.mode && (current.gameLook || selected.length || current.backgroundId)),
+      backgroundId: current?.backgroundId, signature, loadDefinition,
+    });
+    if (typeof LarpbloxSharedUsers !== 'undefined' && typeof LarpbloxSharedUsers.publishProfile === 'function') LarpbloxSharedUsers.publishProfile({
+      userId: account, active: Boolean(current?.mode), signature, loadDefinition, names: current?.names,
     });
   }
   async function bundleAssets(data, signal) {
@@ -946,15 +976,16 @@
     const label = [...editor.querySelectorAll('.breadcrumb-container, .breadcrumb, .avatar-category-title, [aria-label="Breadcrumb"], [aria-label="breadcrumb"]')]
       .find(element => element.getClientRects().length && element.textContent?.trim())?.textContent?.toLowerCase() || '';
     const category = label || editor.querySelector('[aria-selected="true"]')?.textContent?.toLowerCase() || '';
-    const items = state.items.filter(item => item.source !== 'native' && matchesAvatarCategory(item, category, state.equipped.includes(keyFor(item))));
-    const signature = JSON.stringify([userId, items, state.equipped, category, cardClasses, nativeEquipped?.outerHTML]);
+    const isEquippedItem = item => isBackground(item) ? state.backgroundId === item.id : state.equipped.includes(keyFor(item));
+    const items = state.items.filter(item => item.source !== 'native' && matchesAvatarCategory(item, category, isEquippedItem(item)));
+    const signature = JSON.stringify([userId, items, state.equipped, state.backgroundId, category, cardClasses, nativeEquipped?.outerHTML]);
     const cards = [...grid.querySelectorAll('.larpbux-avatar-item')];
     if (grid._larpbuxSignature !== signature || cards.length !== items.length) {
       const existing = new Map(cards.map(card => [card.dataset.larpbuxKey, card]));
       const wanted = new Set(items.map(keyFor));
       for (const card of cards) if (!wanted.has(card.dataset.larpbuxKey)) card.remove();
       for (const item of items) {
-        const itemKey = keyFor(item), equipped = isBodyBundle(item) ? item.assets.filter(isWearableAsset).every(part => state.equipped.includes(keyFor(part))) : state.equipped.includes(itemKey);
+        const itemKey = keyFor(item), equipped = isBackground(item) ? state.backgroundId === item.id : isBodyBundle(item) ? item.assets.filter(isWearableAsset).every(part => state.equipped.includes(keyFor(part))) : state.equipped.includes(itemKey);
         const label = equipped ? 'Remove' : 'Wear';
         const previous = existing.get(itemKey);
         if (previous) {
@@ -1024,6 +1055,7 @@
       if (/front/.test(name)) return 45;
       if (/back/.test(name)) return 46;
       if (/waist/.test(name)) return 47;
+      if (/background/.test(name)) return 92;
       return undefined;
     };
     const nativeCardItem = card => {
@@ -1042,7 +1074,7 @@
       const native = nativeCardItem(card);
       if (!native) continue;
       const nativeKey = keyFor(native);
-      const equipped = state.equipped.includes(nativeKey);
+      const equipped = isBackground(native) ? state.backgroundId === native.id : state.equipped.includes(nativeKey);
       card.classList.add('larpbux-native-item');
       card.dataset.larpbuxEquipped = String(equipped);
       for (const control of card.querySelectorAll('.item-card-thumb, .item-card-thumb-container button')) {
@@ -1066,14 +1098,14 @@
         if (anchor && !anchor.closest?.('.item-card-thumb, .item-card-thumb-container, button')) return;
         event.preventDefault?.(); event.stopPropagation?.(); event.stopImmediatePropagation?.();
         const finish = item => action(() => {
-          if (!supportsOutfit(item) || !editingLarp() || account !== userId) return;
+          if (!supportsCosmetic(item) || !editingLarp() || account !== userId) return;
           const current = read(userId), existing = current.items.find(value => keyFor(value) === nativeKey);
           const next = existing ? current : {...current, items: [...current.items, item]};
           save(equip(next, nativeKey), true);
         });
         const known = state.items.find(item => keyFor(item) === nativeKey);
-        if (supportsOutfit(known)) { finish(known); return; }
-        if (native.assetTypeVerified && supportsOutfit(native)) { finish(native); return; }
+        if (supportsCosmetic(known)) { finish(known); return; }
+        if (native.assetTypeVerified && supportsCosmetic(native)) { finish(native); return; }
         const endpoint = native.itemType === 'Bundle' ? `https://catalog.roblox.com/v1/bundles/${native.id}/details` : `https://economy.roblox.com/v2/assets/${native.id}/details`;
         fetch(endpoint).then(response => response.ok ? response.json() : null).then(data => {
           if (!data) return;
@@ -1285,6 +1317,7 @@
       eyelashaccessory:77, eyelashaccessories:77,
       climbanimation:48, fallanimation:50, idleanimation:51, jumpanimation:52,
       runanimation:53, swimanimation:54, walkanimation:55, poseanimation:56,
+      background:92, backgrounds:92,
       gear:19, gears:19,
       gear:19, gears:19,
     }[normalizedType] || {head:8,hair:41,face:42,neck:43,shoulder:44,front:45,back:46,waist:47,eyebrow:76,eyelash:77}[normalizedType.replace(/accessor(?:y|ies)/g, '')] || 0;
@@ -1376,19 +1409,22 @@
         item = {id,itemType,name:String((itemType === 'Asset' ? data.Name : data.name) || 'Item').slice(0,128),assetType:itemType === 'Asset' ? Number(data.AssetTypeId) : 0,bundleType:data.bundleType,assets:itemType === 'Bundle' ? await bundleAssets(data, controller.signal) : undefined};
       }
       if (!active()) return;
-      if (!supportsOutfit(item)) throw new Error('This item does not support avatar Try On.');
+      if (!supportsCosmetic(item)) throw new Error('This item does not support avatar Try On.');
       record.item = item;
       const current = read(account);
       let temporary = {...current,items:[...current.items],equipped:[...current.equipped]};
+      if (isBackground(item)) temporary.backgroundId = item.id;
       for (const part of expandOutfitItem(item)) {
         const index = temporary.items.findIndex(owned => keyFor(owned) === keyFor(part));
         if (index < 0) temporary.items.push(part);
         else temporary.items[index] = {...temporary.items[index], ...part};
         if (!temporary.equipped.includes(keyFor(part))) temporary = equip(temporary, keyFor(part));
       }
-      const definition = temporary.gameLook ? gamePreviewDefinition(temporary) : await loadBrowserPreview(outfitAssets(temporary.items.filter(owned => temporary.equipped.includes(keyFor(owned)) && supportsOutfit(owned))), controller.signal);
+      const definition = temporary.gameLook ? gamePreviewDefinition(temporary) : await loadBrowserPreview(outfitAssets(temporary.items.filter(owned => temporary.equipped.includes(keyFor(owned)) && supportsOutfit(owned))), controller.signal, temporary.backgroundId);
       if (!active()) return;
-      let renderKind = kind;
+      // Backgrounds are rendered by Roblox's native 2D thumbnail path. Keep
+      // ordinary try-on items on their requested 2D/3D path.
+      let renderKind = temporary.backgroundId ? '2d' : kind;
       let imageUrl = await LarpbloxAvatarRequests.render(definition, account, controller.signal, renderKind);
       if (!active()) return;
       surface.textContent = '';

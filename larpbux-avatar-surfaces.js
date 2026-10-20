@@ -99,7 +99,7 @@
       return {descriptor, headshot, fullBody};
     } finally { viewer?.dispose(); host.remove(); }
   }
-  async function updateProfilePreviews(userId, key, descriptor) {
+  async function updateProfilePreviews(userId, key, descriptor, backgroundImage) {
     const containers = [...document.querySelectorAll('.profile-avatar-thumb, .profile-avatar-left, .profile-avatar')]
       .filter(container => !container.closest('#avatar-web-app') && ownImage(container, userId) && container.querySelector('canvas:not(.larpblox-own-avatar-canvas)'));
     // Use the innermost native canvas wrapper, avoiding nested duplicate viewers.
@@ -114,7 +114,15 @@
       previews.set(container, record);
       container.style.position = 'relative'; container.append(host);
       try {
-        const viewer = await LarpbloxAvatar3D.create(host, descriptor, {signal: controller.signal});
+        let viewer;
+        if (backgroundImage) {
+          const image = document.createElement('img');
+          image.alt = 'Larp avatar'; image.src = backgroundImage;
+          image.className = 'larpblox-own-avatar-canvas';
+          image.style.cssText = 'width:100%;height:100%;object-fit:contain';
+          host.append(image);
+          viewer = {dispose() { image.remove(); }};
+        } else viewer = await LarpbloxAvatar3D.create(host, descriptor, {signal: controller.signal});
         if (activeKey !== key || controller.signal.aborted || !container.isConnected) { viewer.dispose(); removePreview(container, record); continue; }
         record.viewer = viewer;
         host.querySelector('canvas')?.classList.add('larpblox-own-avatar-canvas');
@@ -137,7 +145,7 @@
     const images = findOwnImages(userId);
     if (!images.length) status = {stage: 'no-matching-images', userId};
     for (const image of records.keys()) if (!images.includes(image)) restore(image);
-    if (peer && options.imageUrl && !document.querySelector('.profile-avatar-thumb canvas, .profile-avatar-left canvas, .profile-avatar canvas')) {
+    if (peer && options.imageUrl && !options.backgroundId && !document.querySelector('.profile-avatar-thumb canvas, .profile-avatar-left canvas, .profile-avatar canvas')) {
       for (const image of images) {
         const record = remember(image);
         record.applied = options.imageUrl;
@@ -154,7 +162,17 @@
       const controller = new AbortController();
       const entry = {controller}; cache = entry;
       status = {stage: 'loading-outfit', userId};
-      entry.promise = (async () => pictures(await render(await loadDefinition(controller.signal), userId, controller.signal), controller.signal))();
+      entry.promise = (async () => {
+        const definition = await loadDefinition(controller.signal);
+        const modelDefinition = {...definition};
+        delete modelDefinition.backgroundRequestModel; delete modelDefinition.backgroundId;
+        const result = await pictures(await render(modelDefinition, userId, controller.signal), controller.signal);
+        if (definition.backgroundRequestModel?.id) {
+          result.backgroundImage = await render(definition, userId, controller.signal, '2d');
+          result.fullBody = result.backgroundImage;
+        }
+        return result;
+      })();
       entry.promise.catch(error => {
         if (cache !== entry) return;
         entry.retryAt = Date.now() + Math.max(5000, (error.retryAfter || 0) * 1000);
@@ -183,7 +201,7 @@
         if (image.getAttribute('srcset') !== null) image.removeAttribute('srcset');
         image.style.visibility = record.visibility;
       }
-      await updateProfilePreviews(userId, key, result.descriptor);
+      await updateProfilePreviews(userId, key, result.descriptor, result.backgroundImage);
       if (activeKey === key) status = {stage: 'applied', images: images.length};
     } catch (error) {
       if (activeKey === key && !cache?.retryAt) status = {stage: 'failed-applying', error: String(error.message)};
