@@ -958,7 +958,6 @@
           previous.querySelector('.item-card-name-link').textContent = item.name;
           updateEquipped(previous.querySelector('.item-card-thumb-container'), equipped);
           updateLimitedBadge(previous.querySelector('.item-card-thumb'), item);
-          grid.prepend(previous);
           continue;
         }
         const card = node('li', '', `${cardClasses} larpbux-avatar-item`);
@@ -985,7 +984,15 @@
         updateEquipped(holder, equipped);
         const caption = node('div', '', 'item-card-caption');
         const link = node('a', item.name, 'item-card-name-link'); link.href = `/${item.itemType === 'Bundle' ? 'bundles' : 'catalog'}/${item.id}`; caption.append(link);
-        container.append(holder, caption); card.append(container); grid.prepend(card);
+        container.append(holder, caption); card.append(container); grid.append(card);
+        existing.set(itemKey, card);
+      }
+      // Keep unchanged cards attached so focus and browser scroll anchoring stay put.
+      let cursor = grid.firstChild;
+      for (const item of [...items].reverse()) {
+        const card = existing.get(keyFor(item));
+        if (card !== cursor) grid.insertBefore(card, cursor);
+        cursor = card.nextSibling;
       }
       grid._larpbuxSignature = signature;
     }
