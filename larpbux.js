@@ -232,6 +232,7 @@
   }
   if (typeof module !== 'undefined' && module.exports) { module.exports = {changedBodyColors, addToCart, checkoutCart, changeUsername, localNames, amount, formatBalance, collect, equip, outfit, supportsOutfit, previewDefinition, matchesAvatarCategory, mergeGameSnapshot, gamePreviewDefinition, gameCommand, gameOutfitMatches}; return; }
   let state, userId, panel, controls, list, balance, mode, message, exportBox, purchaseDialog, previewElement, previewViewer, previewSignature, previewController;
+  let settingsCustomizeLink, settingsCustomizeItem, settingsSection, settingsNav, settingsHidden = new Map(), settingsNavState = new Map(), settingsActive = false;
   const thumbnails = new Map();
   const thumbnailPending = new Map();
   let thumbnailTimer, thumbnailBusy = false, thumbnailBlockedUntil = 0;
@@ -1159,6 +1160,85 @@
       node('p', 'Game import supports accessories, classic clothes, movement animations, and held gear visuals. Gear actions are not included. Other items are collection only. The updated game script must be installed first. For games: copy this export, then paste it into Accessories → Browser cosmetic outfit in Larpblox. Supported cosmetics are added to your current look.'), exportBox, select, diagnostics);
     document.body.append(panel);
   }
+  function settingsLink() {
+    if (!/^\/my\/account\/?$/i.test(location.pathname)) return null;
+    return [...document.querySelectorAll('a[href]')].find(link => {
+      const href = link.getAttribute('href') || '';
+      const text = link.textContent.trim().replace(/\s+/g, ' ');
+      return /#!\/info(?:$|&)/i.test(href) || /^account info$/i.test(text) || /browser preferences/i.test(text);
+    });
+  }
+  function updateSettingsRoute() {
+    const info = settingsLink();
+    if (!panel) return;
+    if (!info) {
+      if (!settingsActive) return;
+      settingsHidden.forEach((hidden, child) => { if (child.isConnected) child.hidden = hidden; delete child.dataset.larpbuxSettingsNative; });
+      settingsHidden.clear();
+      settingsNavState.forEach((value, link) => { if (link.isConnected && value.current !== null && link.hash.split('?')[0] === location.hash.split('?')[0]) link.setAttribute('aria-current', value.current); });
+      settingsNavState.clear(); settingsNav?.classList.remove('larpbux-settings-nav-active');
+      if (settingsSection?.contains(controls)) panel.insertBefore(controls, panel.querySelector('h3'));
+      settingsSection?.remove();
+      settingsActive = false; attachDropdown(); return;
+    }
+    if (!settingsCustomizeLink || !settingsCustomizeLink.isConnected) {
+      const browser = [...document.querySelectorAll('a[href]')].find(link => /^browser preferences$/i.test(link.textContent.trim()));
+      const source = browser || info;
+      const sourceItem = source.closest('li') || (source.parentElement?.children.length === 1 ? source.parentElement : source);
+      settingsCustomizeItem = sourceItem.cloneNode(true);
+      settingsCustomizeLink = settingsCustomizeItem.matches('a') ? settingsCustomizeItem : settingsCustomizeItem.querySelector('a');
+      settingsCustomizeItem.classList.remove('active', 'selected');
+      settingsCustomizeLink.classList.add('larpbux-settings-customize-link');
+      settingsCustomizeLink.textContent = 'Customize';
+      // Keep Roblox on its recognised settings route; the query flag survives reloads.
+      settingsCustomizeLink.href = source.href.split('?')[0] + '?larpbloxCustomize=1';
+      settingsCustomizeLink.removeAttribute('aria-current');
+      sourceItem.after(settingsCustomizeItem);
+      settingsCustomizeLink.addEventListener('click', event => {
+        event.preventDefault(); event.stopPropagation();
+        if (!/larpbloxCustomize=1/i.test(location.hash)) history.pushState({}, '', settingsCustomizeLink.href);
+        updateSettingsRoute();
+      });
+    }
+    const main = document.querySelector('#settings-container, .settings-container, main, [role="main"]');
+    if (!main) return;
+    const active = new URLSearchParams(location.hash.split('?')[1] || '').get('larpbloxCustomize') === '1';
+    if (active) {
+      const content = main.querySelector('.tab-content, [data-testid="settings-content"], .settings-content');
+      const native = content ? [content] : [...main.children].filter(child => child !== settingsSection && !child.contains(settingsCustomizeLink) && !settingsCustomizeItem?.contains(child) && !settingsCustomizeLink.closest('nav, aside, ul, .menu-vertical, [role="navigation"]')?.contains(child) && !(/^h[12]$/i.test(child.tagName) && /settings/i.test(child.textContent.trim())));
+      for (const child of native) {
+        if (!settingsHidden.has(child)) settingsHidden.set(child, child.hidden);
+        child.hidden = true; child.dataset.larpbuxSettingsNative = 'true';
+      }
+      if (!settingsActive) {
+        settingsNav = settingsCustomizeLink.closest('nav, aside, ul, .menu-vertical, [role="navigation"]');
+        settingsNav?.classList.add('larpbux-settings-nav-active');
+        for (const link of settingsNav?.querySelectorAll('a') || []) if (link !== settingsCustomizeLink) {
+          settingsNavState.set(link, {current: link.getAttribute('aria-current')});
+          link.removeAttribute('aria-current');
+        }
+      }
+      settingsCustomizeLink.setAttribute('aria-current', 'page');
+      settingsCustomizeLink.classList.add('active'); settingsCustomizeItem.classList.add('active');
+      if (!settingsSection) {
+        settingsSection = node('section', '', 'larpbux-settings-section');
+        settingsSection.append(node('h2', 'Customize'));
+      }
+      if (!settingsSection.contains(controls)) settingsSection.append(controls);
+      const target = content?.parentElement || main;
+      if (settingsSection.parentElement !== target) target.append(settingsSection);
+      settingsActive = true;
+    } else if (settingsActive || panel.classList.contains('larpbux-settings-panel')) {
+      settingsHidden.forEach((hidden, child) => { if (child.isConnected) child.hidden = hidden; delete child.dataset.larpbuxSettingsNative; });
+      settingsHidden.clear();
+      settingsNavState.forEach((value, link) => { if (link.isConnected && value.current !== null && link.hash.split('?')[0] === location.hash.split('?')[0]) link.setAttribute('aria-current', value.current); });
+      settingsNavState.clear(); settingsNav?.classList.remove('larpbux-settings-nav-active'); settingsCustomizeItem.classList.remove('active'); settingsCustomizeLink.classList.remove('active'); settingsCustomizeLink.removeAttribute('aria-current');
+      if (settingsSection && settingsSection.contains(controls)) panel.insertBefore(controls, panel.querySelector('h3'));
+      settingsSection?.remove();
+      settingsActive = false;
+      attachDropdown();
+    }
+  }
   function nativePrice() {
     const element = document.querySelector('#item-details .item-price-value .text-robux-lg, #item-details .item-price-value, #item-details .price-row-container .text-robux-lg, #item-details-container .item-price-value .text-robux-lg, #item-details-container .item-price-value, #item-details-container .price-row-container .text-robux-lg, .price-row-container .item-price-value');
     const raw = element?.textContent?.trim().replace(/^(?:R\$|Robux|\uE002)\s*/i, '').replace(/\s*(?:R\$|Robux)$/i, '');
@@ -1533,7 +1613,8 @@
     }
     if (!panel) mount();
     if (userId !== id) { closePurchase(); queuedGameCommand = undefined; awaitingGameOutfit = undefined; userId = id; state = read(id); if (bridgeStatus) bridgeStatus.textContent = 'Checking connection…'; render(); }
-    attachDropdown();
+    updateSettingsRoute();
+    if (!settingsActive) attachDropdown();
     updateNames();
     updateHeaderBalance();
     updateItem(); updateAvatar();
@@ -1553,6 +1634,8 @@
       if (!state?.mode || !settingsNameRow(event.target)) return;
       event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();purchaseUsername();
     },true);
+    window.addEventListener('hashchange', updateSettingsRoute);
+    window.addEventListener('popstate', updateSettingsRoute);
     update(); let queued = false;
     new MutationObserver(() => { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; update(); }); }).observe(document.body, {childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ['src', 'srcset', 'sizes', 'data-user-id', 'data-userid']});
     window.addEventListener('storage', event => { if (userId && (event.key === key() || event.key === null)) { closePurchase(); state = read(userId); render(); } });

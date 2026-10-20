@@ -32,6 +32,49 @@ html:is(.rbx2016, .larpblox-modern) .larpbux-dropdown p { color: #606162 !import
 html:is(.rbx2016, .larpblox-modern) .larpbux-robux-menu { min-width: 250px !important; }
 html:is(.rbx2016, .larpblox-modern) .larpbux-dropdown label { color: #191919 !important; }
 
+/* Settings owns the layout here; the same controls are moved into this native tab. */
+html:is(.rbx2016, .larpblox-modern) .larpbux-settings-customize-link { cursor: pointer; }
+html:is(.rbx2016, .larpblox-modern) .larpbux-settings-nav-active :is(.active,.selected):not(:has(.larpbux-settings-customize-link)):not(.larpbux-settings-customize-link) {
+  border-left-color: transparent !important; background-color: transparent !important;
+}
+
+html:is(.rbx2016, .larpblox-modern) .larpbux-settings-customize-link.active,
+html:is(.rbx2016, .larpblox-modern) .larpbux-settings-customize-link[aria-current="page"] {
+  font-weight: 600 !important;
+}
+html:is(.rbx2016, .larpblox-modern) .larpbux-settings-section { width: 100%; min-width: 0; }
+html:is(.rbx2016, .larpblox-modern) .larpbux-settings-section .larpbux-dropdown {
+  border: 0; padding: 0; background: transparent; color: inherit;
+}
+html:is(.rbx2016, .larpblox-modern) .larpbux-settings-section .larpbux-dropdown > label,
+html:is(.rbx2016, .larpblox-modern) .larpbux-settings-section .larpbux-dropdown > form,
+html:is(.rbx2016, .larpblox-modern) .larpbux-settings-section .larpbux-appearance,
+html:is(.rbx2016, .larpblox-modern) .larpbux-settings-section .larpbux-game-connection {
+  width: 100%; box-sizing: border-box; padding: 12px 0; border-bottom: 1px solid #ddd;
+}
+html.larpblox-modern .larpbux-settings-section .larpbux-dropdown { color: var(--larp-text); }
+html.larpblox-modern:is(.dark-theme, :has(body.dark-theme)) .larpbux-settings-section .larpbux-dropdown { color: #f7f7f8; }
+@media (max-width: 700px) {
+  html:is(.rbx2016, .larpblox-modern) .larpbux-settings-section { width: 100%; }
+}
+
+html:is(.rbx2016, .larpblox-modern) .larpbux-settings-section { flex: 1; align-self: flex-start; }
+html:is(.rbx2016, .larpblox-modern) .larpbux-settings-section h2 { margin: 0 0 24px; font-size: 20px; line-height: 28px; font-weight: 700; }
+html:is(.rbx2016, .larpblox-modern) .larpbux-settings-section .larpbux-dropdown { --settings-line: #d5d7dd; --settings-field: #f2f4f5; --settings-muted: #606770; }
+html:is(.rbx2016, .larpblox-modern):is(.dark-theme, :has(body.dark-theme)) .larpbux-settings-section .larpbux-dropdown { --settings-line: #393b42; --settings-field: #272930; --settings-muted: #bcbec8; }
+html:is(.rbx2016, .larpblox-modern) .larpbux-settings-section .larpbux-dropdown > :is(label,form,details) { border-color: var(--settings-line); margin: 0 0 16px; padding: 16px 0; }
+html:is(.rbx2016, .larpblox-modern) .larpbux-settings-section .larpbux-dropdown > label:first-child { padding-top: 0; min-height: 36px; }
+html:is(.rbx2016, .larpblox-modern) .larpbux-settings-section .larpbux-dropdown > p { font-size: 14px; line-height: 20px; color: var(--settings-muted) !important; }
+html:is(.rbx2016, .larpblox-modern) .larpbux-settings-section .larpbux-dropdown input[type=checkbox] { order: 2; margin-left: auto; appearance: none; width: 36px; height: 20px; flex-shrink: 0; border: 0; border-radius: 20px; background: #666b75; position: relative; cursor: pointer; }
+html:is(.rbx2016, .larpblox-modern) .larpbux-settings-section .larpbux-dropdown input[type=checkbox]::before { content: ''; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; background: #fff; border-radius: 50%; }
+html:is(.rbx2016, .larpblox-modern) .larpbux-settings-section .larpbux-dropdown input[type=checkbox]:checked { background: #335fff; }
+html:is(.rbx2016, .larpblox-modern) .larpbux-settings-section .larpbux-dropdown input[type=checkbox]:checked::before { transform: translateX(16px); }
+html:is(.rbx2016, .larpblox-modern) .larpbux-settings-section .larpbux-dropdown input[type=number],
+html:is(.rbx2016, .larpblox-modern) .larpbux-settings-section .larpbux-dropdown select { background: var(--settings-field); color: inherit; border: 1px solid var(--settings-line); border-radius: 8px; padding: 9px 12px; }
+html:is(.rbx2016, .larpblox-modern) .larpbux-settings-section .larpbux-dropdown button { margin-right: 8px; padding: 8px 16px; border-radius: 8px; font-size: 14px; line-height: 20px; }
+html:is(.rbx2016, .larpblox-modern) .larpbux-settings-section .larpbux-dropdown > a { display: block; margin: 20px 0; color: inherit; text-decoration: underline; }
+html:is(.rbx2016, .larpblox-modern) .larpbux-settings-section .larpbux-game-connection summary { color: inherit; font-size: 14px; }
+
 html:is(.rbx2016, .larpblox-modern).larpblox-pretend-mode #nav-robux-amount { max-width: none !important; width: auto !important; white-space: nowrap; text-overflow: clip !important; overflow: visible !important; }
 
 html:is(.rbx2016, .larpblox-modern) .larpbux-item-actions .larpbux-classic-buy,
