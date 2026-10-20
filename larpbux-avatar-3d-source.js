@@ -214,7 +214,7 @@ export async function create(host, descriptorUrl, options = {}) {
       backgroundTexture = await raceAbort(loading, signal);
       ensureAlive();
       backgroundTexture.colorSpace = THREE.SRGBColorSpace;
-      scene.background = backgroundTexture;
+      if (options.background !== false) scene.background = backgroundTexture;
     }
     camera = new THREE.PerspectiveCamera(descriptor.camera?.fov || 35, 1, 0.01, 10000);
     renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });

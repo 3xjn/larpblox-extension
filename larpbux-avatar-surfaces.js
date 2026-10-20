@@ -131,12 +131,12 @@
       if (previews.has(container)) continue;
       const controller = new AbortController(), host = document.createElement('div');
       host.className = 'larpblox-own-profile-preview';
-      host.style.cssText = 'position:absolute;inset:0;z-index:6;background:#fff;pointer-events:auto';
+      host.style.cssText = 'position:absolute;inset:0;z-index:6;pointer-events:auto';
       const record = {key, host, controller, position: container.style.position, hidden: new Map()};
       previews.set(container, record);
       container.style.position = 'relative'; container.append(host);
       try {
-        const viewer = await LarpbloxAvatar3D.create(host, descriptor, {signal: controller.signal, definition});
+        const viewer = await LarpbloxAvatar3D.create(host, descriptor, {signal: controller.signal, definition, background: !wide.includes(container)});
         if (activeKey !== key || controller.signal.aborted || !container.isConnected) { viewer.dispose(); removePreview(container, record); continue; }
         record.viewer = viewer;
         host.querySelector('canvas')?.classList.add('larpblox-own-avatar-canvas');
