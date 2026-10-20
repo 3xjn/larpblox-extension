@@ -18,6 +18,16 @@
       "matches": [
         "https://www.roblox.com/*"
       ],
+      "js": [
+        "larpbux-body-colors.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://www.roblox.com/*"
+      ],
       "css": [
         "era-layout.css",
         "classic.css",

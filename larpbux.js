@@ -200,6 +200,21 @@
     for (const item of selected) if (!assets.some(asset => asset.id === item.id)) assets.push({id: item.id});
     return {...look.definition, assets};
   }
+  function changedBodyColors(original, value, rules = {}) {
+    const source = value?.bodyColor3s || value?.bodyColors || value;
+    const colors = {...original};
+    let changed = false;
+    for (const part of ['head', 'torso', 'leftArm', 'rightArm', 'leftLeg', 'rightLeg']) {
+      const key = `${part}Color`;
+      const value = source?.[`${key}3`] ?? source?.[`${key}Id`] ?? source?.[key];
+      if (value === undefined) continue;
+      const hex = typeof value === 'string' && /^#?[0-9a-f]{6}$/i.test(value) ? value : rules.bodyColorsPalette?.find(entry => entry.brickColorId === value)?.hexColor;
+      if (typeof hex !== 'string' || !/^#?[0-9a-f]{6}$/i.test(hex)) throw new Error('This body color could not be loaded. Try another color.');
+      colors[key] = `#${hex.replace(/^#/, '').toLowerCase()}`; changed = true;
+    }
+    if (!changed) throw new Error('Choose a body color first.');
+    return colors;
+  }
   function gameOutfitMatches(snapshot, command) {
     const defaultSlots = [...animationAssetTypes, ...bodyAssetTypes];
     const requested = new Set(outfitAssets(command.items).map(item => item.assetType === 79 ? 17 : item.assetType));
@@ -215,7 +230,7 @@
     for (const item of outfitAssets(state.items.filter(item => state.equipped.includes(keyFor(item))))) items.set(item.id, item);
     return {version: 1, userId: String(userId), definition, items: definition.assets.map(asset => items.get(asset.id)).filter(Boolean).map(({id, name, assetType}) => ({id, name, assetType, itemType: 'Asset'}))};
   }
-  if (typeof module !== 'undefined' && module.exports) { module.exports = {addToCart, checkoutCart, changeUsername, localNames, amount, formatBalance, collect, equip, outfit, supportsOutfit, previewDefinition, matchesAvatarCategory, mergeGameSnapshot, gamePreviewDefinition, gameCommand, gameOutfitMatches}; return; }
+  if (typeof module !== 'undefined' && module.exports) { module.exports = {changedBodyColors, addToCart, checkoutCart, changeUsername, localNames, amount, formatBalance, collect, equip, outfit, supportsOutfit, previewDefinition, matchesAvatarCategory, mergeGameSnapshot, gamePreviewDefinition, gameCommand, gameOutfitMatches}; return; }
   let state, userId, panel, controls, list, balance, mode, message, exportBox, purchaseDialog, previewElement, previewViewer, previewSignature, previewController;
   const thumbnails = new Map();
   const thumbnailPending = new Map();
@@ -440,6 +455,41 @@
     const {avatar, rules} = await browserAvatarBase.promise;
     if (signal.aborted || account !== userId) throw new Error('Avatar update cancelled.');
     return previewDefinition(avatar, rules, selected);
+  }
+  async function applyBodyColorChange(request) {
+    const account = userId;
+    if (!state?.mode || String(request.userId) !== String(account) || !/^\/my\/avatar\/?$/i.test(location.pathname)) throw new Error('Reopen the avatar editor with Larp mode on.');
+    const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 12000);
+    try {
+      const source = request.colors?.bodyColor3s || request.colors?.bodyColors || request.colors;
+      let rules = {};
+      if (Object.values(source || {}).some(value => typeof value === 'number')) {
+        const response = await fetch('https://avatar.roblox.com/v1/avatar-rules', {credentials:'include', signal:controller.signal});
+        if (!response.ok) throw new Error('Could not load the body color palette. Try again.');
+        rules = await response.json();
+      }
+      // Validate the requested colors before changing or loading the current outfit.
+      const patch = changedBodyColors({}, request.colors, rules);
+      let current = read(account);
+      if (!current.gameLook) {
+        const selected = outfitAssets(current.items.filter(item => current.equipped.includes(keyFor(item)) && supportsOutfit(item)));
+        await loadBrowserPreview(selected, controller.signal);
+      }
+      if (controller.signal.aborted || account !== userId || !state?.mode || !/^\/my\/avatar\/?$/i.test(location.pathname)) throw new Error('Your avatar changed. Try the color again.');
+      current = read(account);
+      if (!current.mode) throw new Error('Turn Larp mode on before changing colors.');
+      let look = current.gameLook;
+      if (!look) {
+        const {avatar, rules:baseRules} = await browserAvatarBase.promise;
+        const selected = outfitAssets(current.items.filter(item => current.equipped.includes(keyFor(item)) && supportsOutfit(item)));
+        const definition = previewDefinition(avatar, baseRules, selected);
+        const known = new Map((avatar.assets || []).map(item => [item.id, {id:item.id, name:item.name || 'Roblox item', assetType:item.assetType?.id, itemType:'Asset'}]));
+        for (const item of selected) known.set(item.id, item);
+        look = {version:1, userId:String(account), definition, items:definition.assets.map(asset => known.get(asset.id)).filter(item => item && Number.isInteger(item.assetType))};
+        current = mergeGameSnapshot(current, look);
+      }
+      save({...current, gameLook:{...look, definition:{...look.definition, bodyColors:{...look.definition.bodyColors, ...patch}}}}, true);
+    } finally {clearTimeout(timeout);}
   }
   async function captureCharacter() {
     const account = userId, current = state;
@@ -1489,6 +1539,16 @@
     updateItem(); updateAvatar();
   }
   function start() {
+    let colorQueue = Promise.resolve();
+    document.addEventListener('larpblox-body-colors-request', event => {
+      let request;
+      try {request = JSON.parse(event.detail);} catch (_) {return;}
+      colorQueue = colorQueue.catch(() => {}).then(async () => {
+        let error;
+        try {await applyBodyColorChange(request);} catch (failure) {error = failure.message; if (message) message.textContent = error;}
+        document.dispatchEvent(new CustomEvent('larpblox-body-colors-response', {detail:JSON.stringify({id:request.id, ok:!error, error})}));
+      });
+    });
     window.addEventListener('click',event=>{
       if (!state?.mode || !settingsNameRow(event.target)) return;
       event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();purchaseUsername();
