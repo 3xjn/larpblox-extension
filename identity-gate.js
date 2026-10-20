@@ -1,6 +1,7 @@
 (() => {
   'use strict';
   const selector = 'a[href="/users/profile"], #navigation a[href*="/profile"], #header a[href*="/profile"], header a[href*="/profile"], .rbx-header a[href*="/profile"]';
+  const profileNames = '#profile-header-title-container-name,.stylistic-alts-username,.profile-header-title,.profile-header-username,.profile-header-display-name,[data-testid="profile-header-title"],[data-testid="profile-header-username"],[data-testid="profile-header-display-name"]';
   function update() {
     const root = document.documentElement;
     if (!root) return;
@@ -11,8 +12,14 @@
     try { state = JSON.parse(localStorage.getItem(`larpblox-cosmetics-v1:${id}`) || 'null'); } catch {}
     const name = state?.mode ? state.names?.username || '' : '';
     const avatar = Boolean(state?.mode && (state.gameLook || state.equipped?.length));
-    for (const [key,value] of [['larpbloxIdentityChecked','true'],['larpbloxIdentityName',name?'true':'false'],['larpbloxIdentityAvatar',String(avatar)]]) {
+    const profile = location.pathname.match(/^\/users\/(\d+)\/profile\/?$/i)?.[1];
+    const ownProfile = /^\/users\/profile\/?$/i.test(location.pathname) || Boolean(profile && profile === String(id));
+    for (const [key,value] of [['larpbloxIdentityChecked','true'],['larpbloxIdentityName',name?'true':'false'],['larpbloxIdentityAvatar',String(avatar)],['larpbloxIdentityOwnProfile',String(ownProfile)]]) {
       if (root.dataset[key] !== value) root.dataset[key] = value;
+    }
+    for (const element of document.querySelectorAll(profileNames)) {
+      const ready = !ownProfile || !name || [name, '@'+name].includes(element.textContent.trim());
+      if (element.dataset.larpbloxAliasReady !== String(ready)) element.dataset.larpbloxAliasReady = String(ready);
     }
     for (const link of document.querySelectorAll(selector)) {
       const label = link.textContent.trim();
