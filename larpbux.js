@@ -1395,7 +1395,7 @@
   }
   function purchaseLoading(dialog, button) {
     button.disabled = true; button.classList.add('is-loading');
-    button.setAttribute('aria-busy', 'true'); button.textContent = 'Loading…';
+    button.setAttribute('aria-busy', 'true');
     dialog.setAttribute('aria-busy', 'true');
     // Local purchases finish instantly; keep processing visible without stacking a delay on slow requests.
     const started = performance.now();
@@ -1566,7 +1566,7 @@
     }
     const modern = globalThis.LarpbloxAppearance?.get?.() === 'modern';
     const limited = owned?.isLimited || owned?.isLimitedUnique || Boolean(document.querySelector('#item-thumbnail-container-frontend .icon-limited-label, #item-thumbnail-container-frontend .icon-limited-unique-label'));
-    const text = owned && !limited ? 'Item Owned' : own._pending ? 'Loading…' : modern ? 'Buy' : 'Buy with R$';
+    const text = owned && !limited ? 'Item Owned' : modern ? 'Buy' : 'Buy with R$';
     if (own._buy.textContent !== text) own._buy.textContent = text;
     own._buy.disabled = Boolean((owned && !limited) || own._pending); own._view.hidden = !owned || limited; own._view.href = avatarUrl();
     own._add.disabled = own._buy.disabled;
