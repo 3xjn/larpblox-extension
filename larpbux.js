@@ -1145,16 +1145,19 @@
     const confirm = node('button', 'Buy', 'larpbux-buy-confirm'); confirm.type = 'button'; confirm.disabled = item.price > state.balance;
     const cancel = node('button', 'Cancel', 'larpbux-buy-cancel'); cancel.type = 'button'; cancel.addEventListener('click', closePurchase);
     footer.append(confirm, cancel);
-    dialog.append(title, balance, close, body, status, footer, node('small', 'Larp mode', 'larpbux-mode-caption'));
+    dialog.append(title, balance, close, body, status, footer);
     dialog.addEventListener('cancel', event => { event.preventDefault(); closePurchase(); });
     document.body.append(dialog); dialog.showModal();
     confirm.addEventListener('click', async () => {
       confirm.disabled = true;
+      confirm.textContent = 'Loading…';
+      confirm.classList.add('is-loading');
+      confirm.setAttribute('aria-busy', 'true');
       try {
-        if (account !== userId || path !== location.pathname || !state?.mode) throw new Error('Larp mode or your account changed. Please reopen the purchase.');
+        if (account !== userId || path !== location.pathname || !state?.mode) throw new Error('Your account or purchase state changed. Please reopen the purchase.');
         const latest = await itemData();
         if (!dialog.open || !latest) return;
-        if (account !== userId || path !== location.pathname || !state?.mode) throw new Error('Larp mode or your account changed. Please reopen the purchase.');
+        if (account !== userId || path !== location.pathname || !state?.mode) throw new Error('Your account or purchase state changed. Please reopen the purchase.');
         if (latest.price !== item.price) { purchase(latest); return; }
         const existing = state.items.some(owned => keyFor(owned) === keyFor(item));
         save(collect(state, latest));
@@ -1164,7 +1167,13 @@
         const view = node('a', 'Customize Character', 'larpbux-buy-confirm'); view.href = avatarUrl();
         const done = node('button', 'Continue Shopping', 'larpbux-buy-cancel'); done.type = 'button'; done.addEventListener('click', closePurchase);
         footer.append(view, done);
-      } catch (error) { status.textContent = error.message; confirm.disabled = false; }
+      } catch (error) {
+        status.textContent = error.message;
+        confirm.disabled = false;
+        confirm.textContent = 'Buy';
+        confirm.classList.remove('is-loading');
+        confirm.removeAttribute('aria-busy');
+      }
     });
   }
   function updateItem() {
