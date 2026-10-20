@@ -1251,7 +1251,7 @@
   function purchase(item) {
     closePurchase();
     const account = userId, path = location.pathname;
-    const dialog = node('dialog', '', 'larpbux-buy-dialog'); purchaseDialog = dialog;
+    const dialog = node('dialog', '', 'larpbux-buy-dialog larpbux-item-buy-dialog'); purchaseDialog = dialog;
     dialog.setAttribute('aria-label', 'Buy Item');
     const title = node('h2', 'Buy Item');
     const balance = node('div', `R$ ${state.balance.toLocaleString('en-US')}`, 'larpbux-purchase-balance');
@@ -1261,15 +1261,18 @@
     const copy = node('div');
     copy.append(node('p', item.name, 'larpbux-purchase-name'));
     copy.append(node('p', `R$ ${item.price.toLocaleString('en-US')}`, 'larpbux-purchase-price'));
-    const summary = node('div', '', 'larpbux-balance-summary');
-    const before = node('p', `Your balance: R$ ${state.balance.toLocaleString('en-US')}`);
-    const after = node('p', item.price <= state.balance ? `Your balance after this purchase will be R$ ${(state.balance - item.price).toLocaleString('en-US')}.` : `You need R$ ${(item.price - state.balance).toLocaleString('en-US')} more to buy this item.`);
-    summary.append(before, after); copy.append(summary); body.append(image, copy);
+    for (const element of [balance, copy.lastElementChild]) {
+      const value = element.textContent.replace(/^R\$\s*/, '');
+      const icon = node('span', '', 'larpbux-robux-symbol'); icon.setAttribute('aria-label', 'Robux');
+      icon.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1 14 4.5v7L8 15l-6-3.5v-7Z" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="m8 4 3.5 2v4L8 12l-3.5-2V6Z" fill="none" stroke="currentColor"/><path d="M6.5 6.5h3v3h-3Z" fill="currentColor"/></svg>';
+      element.replaceChildren(icon, document.createTextNode(value));
+    }
+    body.append(image, copy);
     const status = node('p', '', 'larpbux-purchase-status'); status.setAttribute('role', 'status');
+    if (item.price > state.balance) status.textContent = `You need R$ ${(item.price - state.balance).toLocaleString('en-US')} more to buy this item.`;
     const footer = node('div', '', 'larpbux-purchase-footer');
     const confirm = node('button', 'Buy', 'larpbux-buy-confirm'); confirm.type = 'button'; confirm.disabled = item.price > state.balance;
-    const cancel = node('button', 'Cancel', 'larpbux-buy-cancel'); cancel.type = 'button'; cancel.addEventListener('click', closePurchase);
-    footer.append(confirm, cancel);
+    footer.append(confirm);
     dialog.append(title, balance, close, body, status, footer);
     dialog.addEventListener('cancel', event => { event.preventDefault(); closePurchase(); });
     document.body.append(dialog); dialog.showModal();

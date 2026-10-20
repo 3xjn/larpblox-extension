@@ -288,6 +288,11 @@ html #avatar-web-app .avatar-thumbnail:has(> .larpbux-avatar-look) > .thumbnail-
 html #avatar-web-app .avatar-thumbnail:has(> .larpbux-avatar-look) > .thumbnail-holder .thumbnail-2d-container > img { display:block; width:100% !important; height:100% !important; object-fit:cover; object-position:center; }
 
 .larpbux-username-dialog .larpbux-purchase-body > div { width:100%; }
+html.larpblox-modern .larpbux-item-buy-dialog h2 { font-size:22px; line-height:30px; }
+html.larpblox-modern .larpbux-item-buy-dialog :is(.larpbux-purchase-name,.larpbux-purchase-price) { font-size:14px !important; line-height:22px !important; font-weight:400; }
+.larpbux-item-buy-dialog .larpbux-purchase-status:empty { display:none; }
+.larpbux-item-buy-dialog :is(.larpbux-purchase-price,.larpbux-purchase-balance) { display:flex; align-items:center; gap:4px; }
+.larpbux-robux-symbol { display:inline-flex; flex:none; }
 .larpbux-username-dialog label { display:block; font-size:16px; }
 .larpbux-username-dialog input { display:block; box-sizing:border-box; width:100%; margin:8px 0 18px; padding:10px; border:1px solid #aaa; border-radius:8px; font:inherit; background:inherit; color:inherit; }
 .larpbux-owned-count { display:none; }
