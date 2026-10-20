@@ -159,6 +159,38 @@
     } catch (error) { status.textContent = error.message; log('apply-error', {profile:profile.id, message:error.message}); }
     finally { card.dataset.larpbloxSelecting = 'false'; wear.disabled = false; name.disabled = false; }
   }
+  function confirmUpdate(record, profile) {
+    if (current !== record || record.dialog?.isConnected) return;
+    const dialog = node('dialog', 'larpbux-character-dialog larpbux-character-update');
+    dialog.setAttribute('aria-labelledby', 'larpbux-update-title');
+    const title = node('h2', '', 'Update Character'); title.id = 'larpbux-update-title';
+    const description = node('p', '', "Do you want to update this character? This will overwrite the character with your avatar's current appearance.");
+    description.id = 'larpbux-update-description'; dialog.setAttribute('aria-describedby', description.id);
+    const close = node('button', 'larpbux-update-close', '×'); close.type = 'button'; close.setAttribute('aria-label', 'Close');
+    const footer = node('div', 'larpbux-update-footer');
+    const cancel = node('button', 'larpbux-update-cancel', 'Cancel'), confirm = node('button', 'larpbux-update-confirm', 'Update');
+    cancel.type = confirm.type = 'button';
+    const status = node('p', 'larpbux-update-status'); status.setAttribute('role', 'alert');
+    const dismiss = () => dialog.remove();
+    close.onclick = cancel.onclick = dismiss;
+    dialog.addEventListener('cancel', dismiss);
+    confirm.onclick = async () => {
+      if (confirm.disabled || current !== record) return;
+      confirm.disabled = true; status.textContent = 'Updating…';
+      try {
+        const snapshot = await record.options.capture();
+        if (current !== record || !dialog.isConnected) return;
+        if (!snapshot || typeof snapshot !== 'object' || JSON.stringify(snapshot).length > 90000) throw new Error('Could not save this character snapshot.');
+        const latest = read(record.id), saved = latest.profiles.find(p => p.id === profile.id);
+        if (!saved) throw new Error('This character was deleted.');
+        saved.snapshot = snapshot; delete saved.thumbnail;
+        write(record.id, latest); thumbnails.delete(`${record.id}:${profile.id}`);
+        dismiss(); record.signature = undefined; update(record.options);
+      } catch (error) { status.textContent = error.message; confirm.disabled = false; }
+    };
+    footer.append(cancel, confirm); dialog.append(title, close, description, status, footer);
+    document.body.append(dialog); record.dialog = dialog; dialog.showModal(); cancel.focus();
+  }
   function update(options = {}) {
     const editor = options.editor, id = String(options.userId || '');
     if (!editor || !options.active || !id || !creations(editor)) { clear(); return; }
@@ -241,18 +273,7 @@
       };
       cancel.onclick = () => { menu.hidden = true; gear.setAttribute('aria-expanded','false'); };
       rename.onclick = () => { cancel.onclick(); createDialog(profile); };
-      replace.onclick = async () => {
-        if (current !== record || replace.disabled) return;
-        replace.disabled = true; status.textContent = 'UpdatingÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦';
-        try {
-          const snapshot = await record.options.capture();
-          if (current !== record) return;
-          const latest = read(id), saved = latest.profiles.find(p => p.id === profile.id);
-          if (!saved) throw new Error('This character was deleted.');
-          if (JSON.stringify(snapshot).length > 90000) throw new Error('This character snapshot is too large.');
-          saved.snapshot = snapshot; delete saved.thumbnail; write(id,latest); thumbnails.delete(`${id}:${profile.id}`); record.signature = undefined; update(record.options);
-        } catch (error) { status.textContent = error.message; replace.disabled = false; }
-      };
+      replace.onclick = () => { cancel.onclick(); confirmUpdate(record, profile); };
       remove.onclick = () => {
         if (current !== record) return;
         try { const latest = read(id); latest.profiles = latest.profiles.filter(p => p.id !== profile.id); write(id, latest); record.signature = undefined; update(record.options); }

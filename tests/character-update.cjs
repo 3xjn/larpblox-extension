@@ -1,0 +1,18 @@
+const assert=require('node:assert/strict');const path=require('node:path');const {chromium}=require('playwright');
+(async()=>{const browser=await chromium.launch({channel:'chrome',headless:true});try{
+const page=await browser.newPage({viewport:{width:900,height:600}});
+await page.goto('https://example.com');
+await page.setContent('<html class="larpblox-modern"><body style="background:#111"><main id="avatar-web-app"><div class="breadcrumb">Avatars Creations</div><ul class="items-list avatar-item-list"></ul></main></body></html>');
+await page.evaluate(()=>{localStorage.setItem('larpblox-characters-v1:123',JSON.stringify({profiles:[{id:'one',name:'My outfit',snapshot:{old:true},thumbnail:'https://example.com/old.png'}]}));window.captures=0;window.fail=false;window.options={editor:document.querySelector('main'),userId:'123',active:true,capture:async()=>{captures++;if(fail)throw Error('Try again');return {updated:true}},apply:async()=>{}}});
+await page.addStyleTag({path:path.join(__dirname,'../larpbux.css')});await page.addScriptTag({path:path.join(__dirname,'../larpbux-characters.js')});await page.evaluate(()=>LarpbloxCharacters.update(options));
+const open=async()=>{await page.getByRole('button',{name:'Manage My outfit'}).click();await page.locator('.larpbux-character-menu').getByRole('button',{name:'Update',exact:true}).click()};
+await open();const dialog=page.getByRole('dialog',{name:'Update Character',exact:true});await dialog.waitFor();
+assert.equal(await page.evaluate(()=>captures),0);
+await dialog.getByRole('button',{name:'Cancel',exact:true}).click();assert.equal(await page.evaluate(()=>captures),0);
+await open();await page.screenshot({path:path.join(__dirname,'../../update-character-preview.png')});
+await page.evaluate(()=>fail=true);await dialog.getByRole('button',{name:'Update',exact:true}).click();await dialog.getByRole('alert').filter({hasText:'Try again'}).waitFor();
+assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('larpblox-characters-v1:123')).profiles[0].snapshot),{old:true});
+await page.evaluate(()=>fail=false);await dialog.getByRole('button',{name:'Update',exact:true}).click();await dialog.waitFor({state:'detached'});
+const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('larpblox-characters-v1:123')).profiles[0]);assert.deepEqual(saved.snapshot,{updated:true});assert.equal(saved.name,'My outfit');assert.equal(saved.thumbnail,undefined);
+console.log('PASS: Update confirmation matches text, Cancel preserves outfit, failed capture preserves data, and confirmation replaces current appearance.');
+}finally{await browser.close()}})().catch(e=>{console.error(e);process.exitCode=1});
