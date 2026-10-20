@@ -1409,25 +1409,19 @@
     if (own._add.textContent !== addLabel) own._add.textContent = addLabel;
     const info = box.closest('#item-details, #item-details-container');
     const page = box.closest('#item-details-container') || info;
-    const heading = page?.querySelector('.item-details-name-row') || page?.querySelector('h1')?.parentElement;
-    if (heading) heading.classList.add('larpbux-cart-heading');
+    page?.querySelectorAll('.larpbux-cart-toggle').forEach(element => element.remove());
+    page?.querySelectorAll('.larpbux-native-cart').forEach(element => element.classList.remove('larpbux-native-cart'));
     for (const control of page?.querySelectorAll('button, a, [role="button"]') || []) {
-      if (control.closest('.larpbux-item-actions, .larpbux-cart-toggle')) continue;
+      if (control.closest('.larpbux-item-actions')) continue;
       const label = control.getAttribute('aria-label') || control.textContent.trim();
-      if (/^(?:shopping )?cart(?:\s*\(\d+\))?$/i.test(label) || (heading?.contains(control) && /^\d+$/.test(control.textContent.trim()) && control.querySelector('svg, [class*="cart"]'))) control.classList.add('larpbux-native-cart');
-    }
-    let cart = page?.querySelector('.larpbux-cart-toggle');
-    if (!cart && heading) {
-      cart = node('button', '', 'larpbux-cart-toggle'); cart.type = 'button';
-      cart.innerHTML = '<svg viewBox="0 0 28 28" width="28" height="28" aria-hidden="true"><path d="M2 4h4l4 14h13l3-10H8M11 22a2 2 0 1 0 0 .1M22 22a2 2 0 1 0 0 .1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span></span>';
-      cart.addEventListener('click', showCart); heading.append(cart);
-    }
-    if (cart && heading && cart.parentElement !== heading) heading.append(cart);
-    if (cart) {
-      const quantity = state?.cart?.length || 0;
-      const label = `Shopping cart (${quantity})`;
-      if (cart.getAttribute('aria-label') !== label) cart.setAttribute('aria-label', label);
-      if (cart.lastElementChild.textContent !== String(quantity)) cart.lastElementChild.textContent = String(quantity);
+      if (!/^(?:shopping )?cart(?:\s*\(\d+\))?$/i.test(label)) continue;
+      if (!control._larpbuxCart) {
+        control._larpbuxCart = true;
+        control.addEventListener('click', event => {
+          if (!state?.mode) return;
+          event.preventDefault(); event.stopImmediatePropagation(); event.stopPropagation(); showCart();
+        }, true);
+      }
     }
     let count = info?.querySelector('.larpbux-owned-count');
     if (owned && limited && info) {

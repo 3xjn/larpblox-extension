@@ -70,10 +70,8 @@ assert.deepEqual(insufficient, {...pureStart, cart: [{...ordinary, price: 501, q
     await page.addScriptTag({path: path.join(root, 'larpbux.js')});
 
     await page.addStyleTag({content:'body {background:#111216;color:#f7f7f8;font-family:Arial,sans-serif} #robux-menu {display:none} #item-details {width:514px;margin:30px auto} #item-details h1 {font-size:32px} .item-details-creator-container {padding-bottom:12px;border-bottom:1px solid #494b5a} .price-row-container {margin-top:16px} .item-price-value {display:block;margin-left:150px;font-size:20px;font-weight:bold}'});
-    assert.equal(await page.locator('.larpbux-cart-toggle').count(),1);
-    assert.equal(await page.locator('.item-details-name-row .larpbux-cart-toggle').count(),1);
+    assert.equal(await page.locator('.larpbux-cart-toggle').count(),0);
     assert.equal(await page.locator('#item-details .larpbux-cart-toggle').count(),0);
-    assert.equal(await page.locator('.larpbux-native-cart').isVisible(),false);
     const buyBox = await page.locator('.larpbux-classic-buy').boundingBox();
     const addBox = await page.locator('.larpbux-add-cart').boundingBox();
     assert.equal(buyBox.x, addBox.x);
@@ -105,7 +103,7 @@ assert.deepEqual(insufficient, {...pureStart, cart: [{...ordinary, price: 501, q
       document.documentElement.classList.add('larpblox-modern');
     });
     await page.addScriptTag({path: path.join(root, 'larpbux.js')});
-    const toggle = page.getByRole('button', {name: 'Shopping cart (2)'});
+    const toggle = page.getByRole('button', {name: 'Shopping cart'});
     await toggle.waitFor();
     await toggle.click();
     const cart = page.getByRole('dialog', {name: 'Shopping cart'});
@@ -131,7 +129,7 @@ assert.deepEqual(insufficient, {...pureStart, cart: [{...ordinary, price: 501, q
     });
     await page.addStyleTag({path: path.join(root, 'larpbux.css')});
     await page.addScriptTag({path: path.join(root, 'larpbux.js')});
-    await page.getByRole('button', {name: 'Shopping cart (2)'}).click();
+    await page.getByRole('button', {name: 'Shopping cart'}).click();
     const restoredCart = page.getByRole('dialog', {name: 'Shopping cart'});
     await restoredCart.waitFor();
     await restoredCart.getByRole('button', {name: 'Checkout'}).click();
