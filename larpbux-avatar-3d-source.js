@@ -5,6 +5,20 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 const CDN = /^https:\/\/[a-z0-9-]+\.rbxcdn\.com\/[A-Za-z0-9._~%/-]+$/;
 const HASH = /^[A-Za-z0-9._~-]+$/;
+const backgroundUrls = new Map();
+
+async function backgroundUrl(id, signal) {
+  if (!Number.isSafeInteger(id) || id <= 0) throw new Error('Invalid avatar background');
+  if (backgroundUrls.has(id)) return backgroundUrls.get(id);
+  const response = await fetch(`https://thumbnails.roblox.com/v1/assets?assetIds=${id}&size=420x420&format=Png&isCircular=false`, {signal, credentials: 'omit'});
+  if (!response.ok) throw new Error('Avatar background could not load');
+  const item = (await response.json()).data?.find(item => Number(item.targetId) === id);
+  if (item?.state !== 'Completed' || !item.imageUrl) throw new Error('Avatar background is still processing');
+  const url = checkedUrl(item.imageUrl);
+  if (backgroundUrls.size >= 16) backgroundUrls.delete(backgroundUrls.keys().next().value);
+  backgroundUrls.set(id, url);
+  return url;
+}
 
 function shard(hash) {
   let value = 31;
@@ -102,6 +116,17 @@ export async function create(host, descriptorUrl, options = {}) {
   let resizeObserver;
   let root;
   let animationFrame;
+  let backgroundTexture;
+
+  const fitBackground = aspect => {
+    if (!backgroundTexture) return;
+    const image = backgroundTexture.image;
+    const imageAspect = image.width / image.height;
+    const width = Math.min(1, aspect / imageAspect), height = Math.min(1, imageAspect / aspect);
+    backgroundTexture.repeat.set(width, height);
+    backgroundTexture.offset.set((1 - width) / 2, (1 - height) / 2);
+    backgroundTexture.updateMatrix();
+  };
 
   const ensureAlive = () => { if (disposed || signal.aborted) throw abortError(); };
   const cleanupObject = object => object?.traverse?.(node => {
@@ -158,6 +183,16 @@ export async function create(host, descriptorUrl, options = {}) {
     canvas.style.background = 'transparent';
     host.append(canvas);
     scene = new THREE.Scene();
+    const backgroundId = options.definition?.backgroundRequestModel?.id;
+    if (backgroundId) {
+      const url = await backgroundUrl(backgroundId, signal);
+      const loading = new THREE.TextureLoader().loadAsync(url);
+      loading.then(texture => { if (signal.aborted || disposed) texture.dispose(); }, () => {});
+      backgroundTexture = await raceAbort(loading, signal);
+      ensureAlive();
+      backgroundTexture.colorSpace = THREE.SRGBColorSpace;
+      scene.background = backgroundTexture;
+    }
     camera = new THREE.PerspectiveCamera(descriptor.camera?.fov || 35, 1, 0.01, 10000);
     renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -228,6 +263,7 @@ export async function create(host, descriptorUrl, options = {}) {
       const height = host.clientHeight || 340;
       renderer.setSize(width, height, false);
       camera.aspect = width / height;
+      fitBackground(camera.aspect);
       if (autoFrame) {
         const fitDistance = radius / (Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * Math.min(camera.aspect, 1));
         const offset = camera.position.clone().sub(controls.target);
@@ -275,10 +311,12 @@ export async function create(host, descriptorUrl, options = {}) {
         const previousSize = renderer.getSize(new THREE.Vector2());
         try {
           renderer.setSize(420, 420, false);
+          fitBackground(1);
           renderer.render(scene, photoCamera);
           return canvas.toDataURL('image/png');
         } finally {
           renderer.setSize(previousSize.x, previousSize.y, false);
+          fitBackground(camera.aspect);
           render();
         }
       },
@@ -294,6 +332,7 @@ export async function create(host, descriptorUrl, options = {}) {
         controls?.dispose();
         canvas?.removeEventListener('keydown', keydown);
         cleanupObject(root);
+        backgroundTexture?.dispose();
         renderer?.dispose();
         renderer?.forceContextLoss();
         canvas?.remove();
@@ -308,6 +347,7 @@ export async function create(host, descriptorUrl, options = {}) {
     resizeObserver?.disconnect();
     controls?.dispose();
     cleanupObject(root);
+    backgroundTexture?.dispose();
     renderer?.dispose();
     renderer?.forceContextLoss();
     canvas?.remove();

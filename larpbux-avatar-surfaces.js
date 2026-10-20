@@ -86,20 +86,20 @@
   async function render(definition, userId, signal, thumbnailType = '3d') {
     return LarpbloxAvatarRequests.render(definition, userId, signal, thumbnailType);
   }
-  async function pictures(descriptor, signal) {
+  async function pictures(descriptor, signal, definition) {
     status = {stage: 'capturing', descriptor};
     const host = document.createElement('div');
     host.style.cssText = 'position:fixed;left:-10000px;top:-10000px;width:420px;height:420px;pointer-events:none';
     document.body.append(host);
     let viewer;
     try {
-      viewer = await LarpbloxAvatar3D.create(host, descriptor, {signal, static: true});
+      viewer = await LarpbloxAvatar3D.create(host, descriptor, {signal, static: true, definition});
       const headshot = viewer.capture('headshot'), fullBody = viewer.capture('fullBody');
       if (!headshot?.startsWith('data:image/png') || !fullBody?.startsWith('data:image/png')) throw new Error('Avatar capture failed.');
-      return {descriptor, headshot, fullBody};
+      return {descriptor, headshot, fullBody, definition};
     } finally { viewer?.dispose(); host.remove(); }
   }
-  async function updateProfilePreviews(userId, key, descriptor, backgroundImage) {
+  async function updateProfilePreviews(userId, key, descriptor, definition) {
     const containers = [...document.querySelectorAll('.profile-avatar-thumb, .profile-avatar-left, .profile-avatar')]
       .filter(container => !container.closest('#avatar-web-app') && ownImage(container, userId) && container.querySelector('canvas:not(.larpblox-own-avatar-canvas)'));
     // Use the innermost native canvas wrapper, avoiding nested duplicate viewers.
@@ -114,15 +114,7 @@
       previews.set(container, record);
       container.style.position = 'relative'; container.append(host);
       try {
-        let viewer;
-        if (backgroundImage) {
-          const image = document.createElement('img');
-          image.alt = 'Larp avatar'; image.src = backgroundImage;
-          image.className = 'larpblox-own-avatar-canvas';
-          image.style.cssText = 'width:100%;height:100%;object-fit:contain';
-          host.append(image);
-          viewer = {dispose() { image.remove(); }};
-        } else viewer = await LarpbloxAvatar3D.create(host, descriptor, {signal: controller.signal});
+        const viewer = await LarpbloxAvatar3D.create(host, descriptor, {signal: controller.signal, definition});
         if (activeKey !== key || controller.signal.aborted || !container.isConnected) { viewer.dispose(); removePreview(container, record); continue; }
         record.viewer = viewer;
         host.querySelector('canvas')?.classList.add('larpblox-own-avatar-canvas');
@@ -164,14 +156,7 @@
       status = {stage: 'loading-outfit', userId};
       entry.promise = (async () => {
         const definition = await loadDefinition(controller.signal);
-        const modelDefinition = {...definition};
-        delete modelDefinition.backgroundRequestModel; delete modelDefinition.backgroundId;
-        const result = await pictures(await render(modelDefinition, userId, controller.signal), controller.signal);
-        if (definition.backgroundRequestModel?.id) {
-          result.backgroundImage = await render(definition, userId, controller.signal, '2d');
-          result.fullBody = result.backgroundImage;
-        }
-        return result;
+        return pictures(await render(definition, userId, controller.signal), controller.signal, definition);
       })();
       entry.promise.catch(error => {
         if (cache !== entry) return;
@@ -201,7 +186,7 @@
         if (image.getAttribute('srcset') !== null) image.removeAttribute('srcset');
         image.style.visibility = record.visibility;
       }
-      await updateProfilePreviews(userId, key, result.descriptor, result.backgroundImage);
+      await updateProfilePreviews(userId, key, result.descriptor, result.definition);
       if (activeKey === key) status = {stage: 'applied', images: images.length};
     } catch (error) {
       if (activeKey === key && !cache?.retryAt) status = {stage: 'failed-applying', error: String(error.message)};

@@ -777,9 +777,7 @@
         previewViewer = undefined; previewElement = undefined; previewController = undefined;
         return;
       }
-      // Roblox's native thumbnail renderer applies backgroundRequestModel to 2D
-      // images. The custom 3D model viewer does not know about backgrounds.
-      let renderKind = backgroundId ? '2d' : (threeDimensional && previewRetries < 2 ? '3d' : '2d');
+      let renderKind = threeDimensional && previewRetries < 2 ? '3d' : '2d';
       for (let attempt = 0; attempt < 2; attempt++) {
         let imageUrl;
         try { imageUrl = await LarpbloxAvatarRequests.render(definition, account, signal, renderKind); }
@@ -1422,9 +1420,7 @@
       }
       const definition = temporary.gameLook ? gamePreviewDefinition(temporary) : await loadBrowserPreview(outfitAssets(temporary.items.filter(owned => temporary.equipped.includes(keyFor(owned)) && supportsOutfit(owned))), controller.signal, temporary.backgroundId);
       if (!active()) return;
-      // Backgrounds are rendered by Roblox's native 2D thumbnail path. Keep
-      // ordinary try-on items on their requested 2D/3D path.
-      let renderKind = temporary.backgroundId ? '2d' : kind;
+      let renderKind = kind;
       let imageUrl = await LarpbloxAvatarRequests.render(definition, account, controller.signal, renderKind);
       if (!active()) return;
       surface.textContent = '';
