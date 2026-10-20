@@ -786,6 +786,7 @@
           if (renderKind === '3d' && error.status !== 429 && !signal.aborted) { renderKind = '2d'; continue; }
           throw error;
         }
+        if (account !== userId || signature !== previewSignature || signal.aborted) return;
           if (renderKind === '3d') {
             try {
               if (typeof LarpbloxAvatar3D === 'undefined') throw new Error('3D preview is unavailable.');
