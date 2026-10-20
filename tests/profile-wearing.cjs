@@ -4,10 +4,13 @@ await page.route('https://www.roblox.com/**',r=>r.fulfill({contentType:'text/htm
 await page.route('https://economy.roblox.com/**',r=>{if(r.request().url().includes('/resellers'))return r.fulfill({json:{data:r.request().url().includes('/5/')?[]:[{price:450},{price:500}]}});const id=Number(r.request().url().match(/assets\/(\d+)/)[1]);return r.fulfill({json:{Name:'Item '+id,IsLimitedUnique:id===1,IsLimited:id===4||id===5,IsForSale:id===2,LowestResalePrice:id===1?3000000:null,PriceInRobux:7}})});
 await page.goto('https://www.roblox.com/users/123/profile');await page.addScriptTag({path:path.join(__dirname,'../larpbux-profile-wearing.js')});
 await page.evaluate(()=>LarpbloxProfileWearing.update({userId:123,active:true,signature:'test',items:[{id:1,name:'Known'}],loadDefinition:async()=>({assets:[{id:1},{id:2},{id:3},{id:4},{id:5}]}),thumbnail:()=>{}}));
-assert.equal(await page.locator('.larpbux-currently-wearing .icon-limited-unique-label').count(),1);
-assert.equal(await page.locator('.icon-limited-unique-label').textContent(),'LIMITEDU');
-assert.ok((await page.locator('.icon-limited-unique-label').boundingBox()).height>0,'badge must have a visible height without page sprite CSS');
-assert.equal(await page.locator('.icon-limited-label').count(),2);
+assert.equal(await page.locator('.larpbux-currently-wearing .larpbux-profile-limited-unique').count(),1);
+assert.equal(await page.locator('.larpbux-profile-limited-unique').textContent(),'LIMITEDU');
+assert.ok((await page.locator('.larpbux-profile-limited-unique').boundingBox()).height>0,'badge must have a visible height without page sprite CSS');
+assert.equal(await page.locator('.larpbux-profile-limited').count(),2);
+const badgeBox=await page.locator('.larpbux-profile-limited-unique').boundingBox();
+const imageBox=await page.locator('.thumbnail-2d-container').first().boundingBox();
+assert.equal(badgeBox.y+badgeBox.height,imageBox.y+imageBox.height,'badge must sit on the thumbnail bottom, not below the clipped card');
 assert.deepEqual(await page.locator('.larpbux-currently-wearing .item-card-price').allTextContents(),['3,000,000','7','Off Sale','450','Off Sale']);
 assert.equal(await page.locator('.larpbux-currently-wearing .icon-robux-16x16').count(),3);
 assert.equal(await page.locator('.larpbux-currently-wearing .thumbnail-2d-container').first().evaluate(e=>{const r=e.getBoundingClientRect();return document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.closest('a')?.getAttribute('href')}),'/catalog/1','the middle of the item image must hit its catalog link');

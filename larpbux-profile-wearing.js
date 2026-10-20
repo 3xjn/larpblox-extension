@@ -52,12 +52,12 @@
     const container = document.createElement('div'); container.className = 'item-card-container';
     const holder = document.createElement('div'); holder.className = 'item-card-thumb-container';
     const link = document.createElement('a'); link.className = 'item-card-link'; link.style.cssText = 'display:block;width:100%;height:100%;position:relative'; link.href = `/catalog/${item.id}`;
-    const thumb = document.createElement('span'); thumb.className = 'thumbnail-2d-container'; thumb.style.cssText = 'display:block;width:100%;aspect-ratio:1';
+    const thumb = document.createElement('span'); thumb.className = 'thumbnail-2d-container'; thumb.style.cssText = 'display:block;position:relative;width:100%;aspect-ratio:1';
     const image = document.createElement('img'); image.alt = item.name; image.style.cssText = 'display:block;width:100%;height:100%;object-fit:contain'; thumbnail(image, item);
     thumb.append(image); link.append(thumb); holder.append(link);
     if (item.isLimited || item.isLimitedUnique) {
       const badge = document.createElement('span');
-      badge.className = item.isLimitedUnique ? 'icon-limited-unique-label' : 'icon-limited-label';
+      badge.className = item.isLimitedUnique ? 'larpbux-profile-limited-unique' : 'larpbux-profile-limited';
       badge.setAttribute('role','img'); badge.setAttribute('aria-label',item.isLimitedUnique ? 'Limited Unique' : 'Limited');
       badge.style.cssText = 'position:absolute;bottom:0;left:0;z-index:2;display:inline-flex;align-items:center;width:auto;height:14px;background:#00b06f;color:white;font:700 10px/14px Arial,sans-serif;white-space:nowrap;padding:0 3px;border-radius:0';
       badge.textContent = 'LIMITED';
@@ -66,7 +66,7 @@
         unique.style.cssText = 'display:inline-block;background:#ffdd00;color:#111;padding:0 5px;margin-left:3px;height:14px;line-height:14px';
         badge.append(unique);
       }
-      holder.style.position = 'relative'; link.append(badge);
+      thumb.append(badge);
     }
     const caption = document.createElement('div'); caption.className = 'item-card-caption';
     const title = document.createElement('a'); title.className = 'item-card-name'; title.href = link.href;
