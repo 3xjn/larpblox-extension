@@ -1,12 +1,13 @@
 const assert=require('node:assert/strict');const path=require('node:path');const {chromium}=require('playwright');
 (async()=>{const browser=await chromium.launch({channel:'chrome',headless:true});try{const page=await browser.newPage();
 await page.route('https://www.roblox.com/**',r=>r.fulfill({contentType:'text/html',body:'<section class="profile-currently-wearing"><div class="profile-carousel"><div class="item-card"></div></div></section>'}));
-await page.route('https://economy.roblox.com/**',r=>{const id=Number(r.request().url().match(/assets\/(\d+)/)[1]);return r.fulfill({json:{Name:'Item '+id,IsLimitedUnique:id===1,IsForSale:id===2,LowestResalePrice:id===1?3000000:null,PriceInRobux:7}})});
+await page.route('https://economy.roblox.com/**',r=>{if(r.request().url().includes('/resellers'))return r.fulfill({json:{data:[{price:450},{price:500}]}});const id=Number(r.request().url().match(/assets\/(\d+)/)[1]);return r.fulfill({json:{Name:'Item '+id,IsLimitedUnique:id===1,IsLimited:id===4,IsForSale:id===2,LowestResalePrice:id===1?3000000:null,PriceInRobux:7}})});
 await page.goto('https://www.roblox.com/users/123/profile');await page.addScriptTag({path:path.join(__dirname,'../larpbux-profile-wearing.js')});
-await page.evaluate(()=>LarpbloxProfileWearing.update({userId:123,active:true,signature:'test',items:[{id:1,name:'Known'}],loadDefinition:async()=>({assets:[{id:1},{id:2},{id:3}]}),thumbnail:()=>{}}));
+await page.evaluate(()=>LarpbloxProfileWearing.update({userId:123,active:true,signature:'test',items:[{id:1,name:'Known'}],loadDefinition:async()=>({assets:[{id:1},{id:2},{id:3},{id:4}]}),thumbnail:()=>{}}));
 assert.equal(await page.locator('.larpbux-currently-wearing .icon-limited-unique-label').count(),1);
-assert.deepEqual(await page.locator('.larpbux-currently-wearing .item-card-price').allTextContents(),['3,000,000','7','Off Sale']);
-assert.equal(await page.locator('.larpbux-currently-wearing .icon-robux-16x16').count(),2);
+assert.deepEqual(await page.locator('.larpbux-currently-wearing .item-card-price').allTextContents(),['3,000,000','7','Off Sale','450']);
+assert.equal(await page.locator('.larpbux-currently-wearing .icon-robux-16x16').count(),3);
+assert.equal(await page.locator('.larpbux-currently-wearing .thumbnail-2d-container').first().evaluate(e=>{const r=e.getBoundingClientRect();return document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.closest('a')?.getAttribute('href')}),'/catalog/1','the middle of the item image must hit its catalog link');
 await page.evaluate(()=>LarpbloxProfileWearing.update({active:false}));assert.equal(await page.locator('.larpbux-currently-wearing').count(),0);
 console.log('PASS: profile cards show limited badges, resale and regular prices, Off Sale, and restore native mode.');
 }finally{await browser.close()}})().catch(e=>{console.error(e);process.exitCode=1});

@@ -19,10 +19,30 @@
         if (response.ok) { data = await response.json(); details.set(id, data); }
       } catch (_) { if (signal.aborted) throw _; }
     }
+    const limited = data?.IsLimited || data?.IsLimitedUnique || fallback.isLimited || fallback.isLimitedUnique;
+    let resalePrice = data?.LowestResalePrice;
+    let resaleKnown = Number.isFinite(resalePrice);
+    if (limited && !resaleKnown) {
+      try {
+        const url = data?.CollectibleItemId
+          ? `https://apis.roblox.com/marketplace-sales/v1/item/${data.CollectibleItemId}/resellers?limit=10`
+          : `https://economy.roblox.com/v1/assets/${id}/resellers?limit=10`;
+        const response = await fetch(url, {signal});
+        if (response.ok) {
+          const listings = (await response.json()).data;
+          if (Array.isArray(listings)) {
+            const prices = listings.map(listing => listing.price).filter(price => Number.isFinite(price) && price >= 0);
+            resalePrice = prices.length ? Math.min(...prices) : null;
+            resaleKnown = true;
+          }
+        }
+      } catch (_) { if (signal.aborted) throw _; }
+    }
     return { ...fallback, id, itemType:'Asset', name:data?.Name || fallback.name || `Item ${id}`,
       isLimited:data?.IsLimited ?? fallback.isLimited,
       isLimitedUnique:data?.IsLimitedUnique ?? fallback.isLimitedUnique,
-      price:data ? (data.LowestResalePrice ?? (data.IsForSale ? data.PriceInRobux : null)) : undefined,
+      price:limited ? resalePrice : (data?.IsForSale ? data.PriceInRobux : null),
+      priceLabel:limited ? (resaleKnown ? 'No Resellers' : 'See Item') : 'Off Sale',
       saleKnown:Boolean(data) };
   }
   function card(item, width, thumbnail) {
@@ -31,16 +51,16 @@
     root.dataset.larpAssetId = String(item.id);
     const container = document.createElement('div'); container.className = 'item-card-container';
     const holder = document.createElement('div'); holder.className = 'item-card-thumb-container';
-    const link = document.createElement('a'); link.className = 'item-card-link'; link.href = `/catalog/${item.id}`;
-    const thumb = document.createElement('span'); thumb.className = 'thumbnail-2d-container';
-    const image = document.createElement('img'); image.alt = item.name; thumbnail(image, item);
+    const link = document.createElement('a'); link.className = 'item-card-link'; link.style.cssText = 'display:block;width:100%;height:100%;position:relative'; link.href = `/catalog/${item.id}`;
+    const thumb = document.createElement('span'); thumb.className = 'thumbnail-2d-container'; thumb.style.cssText = 'display:block;width:100%;aspect-ratio:1';
+    const image = document.createElement('img'); image.alt = item.name; image.style.cssText = 'display:block;width:100%;height:100%;object-fit:contain'; thumbnail(image, item);
     thumb.append(image); link.append(thumb); holder.append(link);
     if (item.isLimited || item.isLimitedUnique) {
       const badge = document.createElement('span');
       badge.className = item.isLimitedUnique ? 'icon-limited-unique-label' : 'icon-limited-label';
       badge.setAttribute('role','img'); badge.setAttribute('aria-label',item.isLimitedUnique ? 'Limited Unique' : 'Limited');
       badge.style.cssText = 'position:absolute;bottom:0;left:0;z-index:2';
-      holder.style.position = 'relative'; holder.append(badge);
+      holder.style.position = 'relative'; link.append(badge);
     }
     const caption = document.createElement('div'); caption.className = 'item-card-caption';
     const title = document.createElement('a'); title.className = 'item-card-name'; title.href = link.href;
@@ -50,7 +70,7 @@
       if (Number.isFinite(item.price)) {
         const icon = document.createElement('span'); icon.className = 'icon-robux-16x16'; icon.setAttribute('aria-label','Robux');
         price.append(icon, document.createTextNode(item.price.toLocaleString('en-US')));
-      } else price.textContent = 'Off Sale';
+      } else price.textContent = item.priceLabel;
       caption.append(price);
     }
     container.append(holder, caption); root.append(container); return root;
