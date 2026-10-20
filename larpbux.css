@@ -393,3 +393,6 @@ html[data-larpblox-identity-edit-profile="true"][data-larpblox-identity-avatar="
 img.larpbux-thumbnail:not(.larpbux-thumbnail-ready) { visibility:hidden !important; }
 #avatar-web-app .larpbux-avatar-item .item-card-thumb { position:relative; display:block; }
 #avatar-web-app .larpbux-avatar-item .item-card-thumb:has(img.larpbux-thumbnail:not(.larpbux-thumbnail-ready)) .larpbux-limited-badge { visibility:hidden !important; }
+html dialog.larpbux-character-delete { width:340px; }
+html dialog.larpbux-character-delete .larpbux-update-confirm { background:#30323d; color:#f04438; }
+html dialog.larpbux-character-update button { margin:0; }

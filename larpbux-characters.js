@@ -159,16 +159,17 @@
     } catch (error) { status.textContent = error.message; log('apply-error', {profile:profile.id, message:error.message}); }
     finally { card.dataset.larpbloxSelecting = 'false'; wear.disabled = false; name.disabled = false; }
   }
-  function confirmUpdate(record, profile) {
+  function confirmUpdate(record, profile, deleting = false) {
     if (current !== record || record.dialog?.isConnected) return;
     const dialog = node('dialog', 'larpbux-character-dialog larpbux-character-update');
+    if (deleting) dialog.classList.add('larpbux-character-delete');
     dialog.setAttribute('aria-labelledby', 'larpbux-update-title');
-    const title = node('h2', '', 'Update Character'); title.id = 'larpbux-update-title';
-    const description = node('p', '', "Do you want to update this character? This will overwrite the character with your avatar's current appearance.");
+    const title = node('h2', '', deleting ? 'Delete Character' : 'Update Character'); title.id = 'larpbux-update-title';
+    const description = node('p', '', deleting ? 'Are you sure you want to delete this character?' : "Do you want to update this character? This will overwrite the character with your avatar's current appearance.");
     description.id = 'larpbux-update-description'; dialog.setAttribute('aria-describedby', description.id);
     const close = node('button', 'larpbux-update-close', '×'); close.type = 'button'; close.setAttribute('aria-label', 'Close');
     const footer = node('div', 'larpbux-update-footer');
-    const cancel = node('button', 'larpbux-update-cancel', 'Cancel'), confirm = node('button', 'larpbux-update-confirm', 'Update');
+    const cancel = node('button', 'larpbux-update-cancel', 'Cancel'), confirm = node('button', 'larpbux-update-confirm', deleting ? 'Delete' : 'Update');
     cancel.type = confirm.type = 'button';
     const status = node('p', 'larpbux-update-status'); status.setAttribute('role', 'alert');
     const dismiss = () => dialog.remove();
@@ -176,8 +177,14 @@
     dialog.addEventListener('cancel', dismiss);
     confirm.onclick = async () => {
       if (confirm.disabled || current !== record) return;
-      confirm.disabled = true; status.textContent = 'Updating…';
+      confirm.disabled = true; status.textContent = deleting ? 'Deleting…' : 'Updating…';
       try {
+        if (deleting) {
+          const latest = read(record.id);
+          latest.profiles = latest.profiles.filter(saved => saved.id !== profile.id);
+          write(record.id, latest); thumbnails.delete(`${record.id}:${profile.id}`);
+          dismiss(); record.signature = undefined; update(record.options); return;
+        }
         const snapshot = await record.options.capture();
         if (current !== record || !dialog.isConnected) return;
         if (!snapshot || typeof snapshot !== 'object' || JSON.stringify(snapshot).length > 90000) throw new Error('Could not save this character snapshot.');
@@ -275,9 +282,7 @@
       rename.onclick = () => { cancel.onclick(); createDialog(profile); };
       replace.onclick = () => { cancel.onclick(); confirmUpdate(record, profile); };
       remove.onclick = () => {
-        if (current !== record) return;
-        try { const latest = read(id); latest.profiles = latest.profiles.filter(p => p.id !== profile.id); write(id, latest); record.signature = undefined; update(record.options); }
-        catch (error) { status.textContent = error.message; }
+        cancel.onclick(); confirmUpdate(record, profile, true);
       };
       if (options.thumbnail) {
         if (profile.thumbnail) { image.src = profile.thumbnail; image.style.visibility = 'visible'; }
