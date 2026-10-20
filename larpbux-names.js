@@ -4,7 +4,7 @@
   const records = new Map();
   const profileNames = '#profile-header-title-container-name, .stylistic-alts-username, .profile-header-title, .profile-header-username, .profile-header-display-name, [data-testid="profile-header-title"], [data-testid="profile-header-username"], [data-testid="profile-header-display-name"]';
   const accountNames = '#account-username, #account-name, .account-username, .account-name';
-  const skip = 'input, textarea, select, button, [contenteditable="true"], [data-larpbux], .larpbux-dropdown, .larpbux-panel, #larpbux-root, #larpblox-root';
+  const skip = 'script, style, input, textarea, select, button, [contenteditable="true"], [data-larpbux], .larpbux-dropdown, .larpbux-panel, .larpbux-buy-dialog, #larpbux-root, #larpblox-root';
 
   function textNodes(root) {
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
@@ -43,7 +43,9 @@
     }
     found.push(...document.querySelectorAll('.rbx2016-welcome h1'));
     if (ownProfile(userId)) found.push(...document.querySelectorAll(profileNames));
-    if (ownSettings()) found.push(...document.querySelectorAll(accountNames));
+    // Account Info also renders plain text without the legacy account field IDs.
+    // Only exact real-name text is replaced below; labels and form fields stay intact.
+    if (ownSettings()) found.push(document.body);
     return found;
   }
 
