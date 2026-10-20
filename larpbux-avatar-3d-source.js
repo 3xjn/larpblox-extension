@@ -287,7 +287,7 @@ export async function create(host, descriptorUrl, options = {}) {
     if (!options.static) animationFrame = requestAnimationFrame(animate);
     external?.removeEventListener('abort', abort);
     return {
-      capture(kind = 'fullBody') {
+      capture(kind = 'fullBody', options = {}) {
         ensureAlive();
         const photoCamera = camera.clone();
         photoCamera.aspect = 1;
@@ -309,17 +309,21 @@ export async function create(host, descriptorUrl, options = {}) {
         }
         photoCamera.updateProjectionMatrix();
         const previousSize = renderer.getSize(new THREE.Vector2());
+        const previousBackground = scene.background;
         try {
+          if (options.background === false) scene.background = null;
           renderer.setSize(420, 420, false);
           fitBackground(1);
           renderer.render(scene, photoCamera);
           return canvas.toDataURL('image/png');
         } finally {
+          scene.background = previousBackground;
           renderer.setSize(previousSize.x, previousSize.y, false);
           fitBackground(camera.aspect);
           render();
         }
       },
+      getBackgroundUrl: () => backgroundTexture?.image?.currentSrc || backgroundTexture?.image?.src || '',
       getView: () => viewState(camera, controls),
       getDiagnostics: () => ({version: 1, descriptorUrl, descriptor, objText, mtlText, avatarDefinition: options.definition, view: viewState(camera, controls)}),
       dispose() {

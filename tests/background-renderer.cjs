@@ -39,6 +39,13 @@ const {chromium}=require('playwright');
    return [[1,1],[1,copy.height/2],[copy.width-2,copy.height-2]].map(([x,y])=>Array.from(g.getImageData(x,y,1,1).data));
   });
   for(const pixel of edges)assert.deepEqual(pixel,[0,255,0,255],'background must cover the tall preview without bars or stretching');
+  const alpha=await page.evaluate(async()=>{
+   const image=new Image();image.src=viewer.capture('fullBody',{background:false});await image.decode();
+   const c=document.createElement('canvas');c.width=c.height=420;const g=c.getContext('2d');g.drawImage(image,0,0);
+   return g.getImageData(1,1,1,1).data[3];
+  });
+  assert.equal(alpha,0,'the centered profile avatar must have transparent corners');
+  assert.equal(await page.evaluate(()=>viewer.getBackgroundUrl()),'https://tr.rbxcdn.com/background.png');
   await page.evaluate(()=>viewer.dispose());
   assert.equal(await page.locator('#preview canvas').count(),0);
   console.log('PASS: real WebGL background covers the editor, preserves spin and dragging, captures, and disposes.');

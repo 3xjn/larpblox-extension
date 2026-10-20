@@ -3,7 +3,7 @@
   'use strict';
   function createSurfaces(peer = false) {
   const imageSelector = '.avatar img, .avatar-card-image img, .avatar-headshot img, .profile-avatar-thumb img, .profile-avatar-image img, .profile-avatar-headshot img, .profile-avatar-left img, a[href*="/users/"] img, .rbx2016-welcome-avatar, #nav-profile img, #navbar-avatar img';
-  const records = new Map(), previews = new Map(), hiddenCanvases = new Map();
+  const records = new Map(), previews = new Map(), hiddenCanvases = new Map(), banners = new Map();
   let cache, retryTimer, activeKey = '', activeAccount = '', lastFailure = '';
   let status = {stage: 'not-started'};
   const numericId = value => /^[1-9]\d*$/.test(String(value || ''));
@@ -79,6 +79,22 @@
     for (const [container, record] of previews) removePreview(container, record);
     for (const [canvas, visibility] of hiddenCanvases) canvas.style.visibility = visibility;
     hiddenCanvases.clear();
+    updateBanners('', null);
+  }
+  function updateBanners(userId, result) {
+    const wanted = result?.backgroundUrl ? [...document.querySelectorAll('.currently-wearing-avatar-with-background .profile-avatar-left')].filter(element => ownImage(element, userId)) : [];
+    for (const [element, styles] of banners) if (!wanted.includes(element)) {
+      for (const [key, original] of Object.entries(styles)) {
+        if (original.value) element.style.setProperty(key, original.value, original.priority);
+        else element.style.removeProperty(key);
+      }
+      banners.delete(element);
+    }
+    for (const element of wanted) {
+      const styles = {'background-image':`url("${result.backgroundUrl}")`, 'background-position':'50% 64%', 'background-size':'cover', 'background-repeat':'no-repeat'};
+      if (!banners.has(element)) banners.set(element, Object.fromEntries(Object.keys(styles).map(key => [key, {value:element.style.getPropertyValue(key),priority:element.style.getPropertyPriority(key)}])));
+      for (const [key, value] of Object.entries(styles)) if (element.style.getPropertyValue(key) !== value || element.style.getPropertyPriority(key) !== 'important') element.style.setProperty(key, value, 'important');
+    }
   }
   async function waitForRender(signal) {
     return LarpbloxAvatarRequests.waitForRender(signal);
@@ -96,14 +112,18 @@
       viewer = await LarpbloxAvatar3D.create(host, descriptor, {signal, static: true, definition});
       const headshot = viewer.capture('headshot'), fullBody = viewer.capture('fullBody');
       if (!headshot?.startsWith('data:image/png') || !fullBody?.startsWith('data:image/png')) throw new Error('Avatar capture failed.');
-      return {descriptor, headshot, fullBody, definition};
+      const backgroundUrl = viewer.getBackgroundUrl?.();
+      const transparentBody = backgroundUrl ? viewer.capture('fullBody', {background:false}) : fullBody;
+      return {descriptor, headshot, fullBody, transparentBody, backgroundUrl, definition};
     } finally { viewer?.dispose(); host.remove(); }
   }
   async function updateProfilePreviews(userId, key, descriptor, definition) {
     const containers = [...document.querySelectorAll('.profile-avatar-thumb, .profile-avatar-left, .profile-avatar')]
       .filter(container => !container.closest('#avatar-web-app') && ownImage(container, userId) && container.querySelector('canvas:not(.larpblox-own-avatar-canvas)'));
-    // Use the innermost native canvas wrapper, avoiding nested duplicate viewers.
-    const wanted = containers.filter(container => !containers.some(other => other !== container && container.contains(other)));
+    const wide = definition?.backgroundRequestModel?.id ? containers.filter(container => container.matches('.currently-wearing-avatar-with-background .profile-avatar-left')) : [];
+    const candidates = containers.filter(container => !wide.some(banner => banner !== container && banner.contains(container)));
+    // Background previews use the whole banner; other previews keep the native canvas wrapper.
+    const wanted = candidates.filter(container => !candidates.some(other => other !== container && container.contains(other)));
     for (const [container, record] of previews) if (!wanted.includes(container) || record.key !== key) removePreview(container, record);
     for (const container of wanted) {
       if (previews.has(container)) continue;
@@ -176,11 +196,13 @@
       const result = await cache.promise;
       if (activeKey !== key) return;
       clearTimeout(retryTimer); retryTimer = undefined; lastFailure = '';
+      updateBanners(userId, result);
       for (const image of images) {
         if (!image.isConnected || !ownImage(image, userId)) continue;
         const record = remember(image);
         const headshot = /^\/users\/profile\/edit\/?$/i.test(location.pathname) || image.classList.contains('rbx2016-welcome-avatar') || selfProfileLink(image) || image.closest('.avatar-headshot, .avatar-headshot-xs, .avatar-headshot-sm, .avatar-headshot-md, .avatar-headshot-lg, .avatar-headshot-xl, .avatar-card-headshot, .profile-avatar-image, .profile-avatar-headshot, #nav-profile, #navbar-avatar');
-        const value = headshot ? result.headshot : result.fullBody;
+        const banner = image.closest('.currently-wearing-avatar-with-background .profile-avatar-left');
+        const value = headshot ? result.headshot : (banners.has(banner) ? result.transparentBody : result.fullBody);
         record.applied = value;
         if (image.getAttribute('src') !== value) image.setAttribute('src', value);
         if (image.getAttribute('srcset') !== null) image.removeAttribute('srcset');
