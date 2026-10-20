@@ -31,7 +31,7 @@ assert.equal(initial.balance,1500);
  assert.equal(await page.locator('#account-name').textContent(),'NewAlias');assert.equal(await page.locator('#account-username').textContent(),'NewAlias');
  assert.equal(await page.evaluate(()=>window.nativeClicks),0);assert.equal(realMutations,0);
  await page.waitForFunction(()=>window.bridgeCalls.some(([action,,value])=>action==='publishNames'&&value.names.name==='NewAlias'));
- await page.getByRole('button',{name:'Done',exact:true}).click();
+ await page.getByRole('button',{name:'OK',exact:true}).click();
  await page.locator('#username-pencil').click();assert.equal(await page.getByRole('button',{name:'Buy',exact:true}).isDisabled(),true);
  await page.getByRole('button',{name:'Cancel',exact:true}).click();
  await page.evaluate(()=>{const k='larpblox-cosmetics-v1:123',s=JSON.parse(localStorage.getItem(k));s.mode=false;localStorage.setItem(k,JSON.stringify(s));dispatchEvent(new StorageEvent('storage',{key:k}));});

@@ -356,3 +356,13 @@ html dialog.larpbux-character-update .larpbux-update-cancel { background:#30323d
 html dialog.larpbux-character-update .larpbux-update-confirm { background:#335fff; }
 html dialog.larpbux-character-update .larpbux-update-status:empty { display:none; }
 html dialog.larpbux-character-update button:disabled { opacity:.6; cursor:wait; }
+html:is(.rbx2016,.larpblox-modern) dialog.larpbux-purchase-complete { width:480px; max-width:calc(100vw - 32px); padding:0; border-radius:17px; background:#191a1f; color:#f7f7f8; border:1px solid #292b32; }
+html:is(.rbx2016,.larpblox-modern) .larpbux-purchase-complete h2 { font-size:24px; line-height:30px; font-weight:700; padding:16px 125px 14px 20px; border:0; }
+html:is(.rbx2016,.larpblox-modern) .larpbux-purchase-complete .larpbux-purchase-balance { position:absolute; top:22px; right:62px; display:flex; align-items:center; gap:5px; font-size:14px; font-weight:600; }
+html:is(.rbx2016,.larpblox-modern) .larpbux-complete-body { text-align:center; padding:8px 20px 20px; }
+html:is(.rbx2016,.larpblox-modern) .larpbux-complete-check { margin:0 auto 20px; height:44px; }
+html:is(.rbx2016,.larpblox-modern) .larpbux-complete-body p { margin:0; font-size:16px; line-height:22px; font-weight:600; }
+html:is(.rbx2016,.larpblox-modern) .larpbux-purchase-complete .larpbux-purchase-footer { padding:0 20px 20px; }
+html:is(.rbx2016,.larpblox-modern) .larpbux-purchase-complete .larpbux-buy-confirm { width:100%; min-height:48px; margin:0; border:0; border-radius:8px; background:#335fff; color:#fff; font-size:16px; font-weight:600; }
+html:is(.rbx2016,.larpblox-modern) dialog.larpbux-purchase-complete { font-family:"Builder Sans",Arial,sans-serif; }
+html:is(.rbx2016,.larpblox-modern) .larpbux-purchase-complete .larpbux-modal-close { color:#f7f7f8; }

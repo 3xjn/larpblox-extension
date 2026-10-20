@@ -1362,10 +1362,7 @@
         const realName=document.querySelector('meta[name="user-data"]')?.getAttribute('data-name') || '';
         if (next.names.username.toLowerCase()===realName.toLowerCase()) throw new Error('Choose a different username.');
         save(next);
-        title.textContent='Purchase Complete';dialog.setAttribute('aria-label','Purchase Complete');
-        copy.replaceChildren(node('p',`Your username and display name are now ${state.names.username}.`),node('p',`Your balance is now R$ ${state.balance.toLocaleString('en-US')}.`));
-        status.textContent='';footer.replaceChildren();
-        const done=node('button','Done','larpbux-buy-cancel');done.type='button';done.addEventListener('click',closePurchase);footer.append(done);
+        purchaseComplete(dialog, `Your username and display name are now ${state.names.username}.`);
       } catch(error) {status.textContent=error.message;confirm.disabled=false;}
     });
     input.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();confirm.click();}});
@@ -1383,6 +1380,23 @@
       if (row.matches('#account-username, .account-username, [data-testid="account-username"]')) return true;
     }
     return false;
+  }
+  function purchaseComplete(dialog, message) {
+    dialog.classList.add('larpbux-purchase-complete');
+    dialog.setAttribute('aria-label', 'Purchase Complete');
+    const title = node('h2', 'Purchase Complete');
+    const balance = node('div', '', 'larpbux-purchase-balance');
+    const icon = node('span', '', 'larpbux-robux-symbol'); icon.setAttribute('aria-label', 'Robux');
+    icon.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1 14 4.5v7L8 15l-6-3.5v-7Z" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="m8 4 3.5 2v4L8 12l-3.5-2V6Z" fill="none" stroke="currentColor"/></svg>';
+    balance.append(icon, document.createTextNode(state.balance.toLocaleString('en-US')));
+    const close = node('button', '×', 'larpbux-modal-close'); close.type = 'button'; close.setAttribute('aria-label', 'Close purchase'); close.addEventListener('click', closePurchase);
+    const body = node('div', '', 'larpbux-complete-body');
+    const check = node('div', '', 'larpbux-complete-check'); check.setAttribute('aria-hidden', 'true');
+    check.innerHTML = '<svg width="44" height="44" viewBox="0 0 44 44" fill="none"><circle cx="22" cy="22" r="19.5" stroke="currentColor" stroke-width="3"/><path d="m14 22 5 5 11-11" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    body.append(check, node('p', message));
+    const footer = node('div', '', 'larpbux-purchase-footer');
+    const done = node('button', 'OK', 'larpbux-buy-confirm'); done.type = 'button'; done.addEventListener('click', closePurchase); footer.append(done);
+    dialog.replaceChildren(title, balance, close, body, footer); done.focus();
   }
   function purchase(item) {
     closePurchase();
@@ -1429,12 +1443,7 @@
         if (!current.mode) throw new Error('Turn Larp mode on before buying this item.');
         const repeatable = latest.isLimited || latest.isLimitedUnique || current.items.some(owned => keyFor(owned) === keyFor(latest) && (owned.isLimited || owned.isLimitedUnique));
         save(collect(current, latest));
-        title.textContent = 'Purchase Complete'; dialog.setAttribute('aria-label', 'Purchase Complete');
-        copy.replaceChildren(node('p', existing && !repeatable ? 'You already own this item. Your account has not been charged.' : `You have successfully purchased “${item.name}”.`), node('p', `Your balance is now R$ ${state.balance.toLocaleString('en-US')}.`));
-        footer.replaceChildren(); status.textContent = '';
-        const view = node('a', 'Customize Character', 'larpbux-buy-confirm'); view.href = avatarUrl();
-        const done = node('button', 'Continue Shopping', 'larpbux-buy-cancel'); done.type = 'button'; done.addEventListener('click', closePurchase);
-        footer.append(view, done);
+        purchaseComplete(dialog, existing && !repeatable ? 'You already own this item. Your account has not been charged.' : `You have successfully bought ${item.name}`);
       } catch (error) {
         status.textContent = error.message;
         confirm.disabled = false;
@@ -1482,8 +1491,7 @@
           const current = read(account);
           if (!current.mode) throw new Error('Turn Larp mode on before buying.');
           if (JSON.stringify(current.cart) !== JSON.stringify(state.cart)) throw new Error('Your cart changed. Reopen it to review your purchase.');
-          save(checkoutCart(current)); title.textContent = 'Purchase Complete'; rows.replaceChildren(node('p', `You have successfully purchased your cart. Your balance is now R$ ${state.balance.toLocaleString('en-US')}.`)); status.textContent = ''; footer.replaceChildren();
-          const done = node('button', 'Continue Shopping', 'larpbux-buy-cancel'); done.type = 'button'; done.addEventListener('click', closePurchase); footer.append(done);
+          save(checkoutCart(current)); purchaseComplete(dialog, 'You have successfully bought the items in your cart');
         } catch (failure) { status.textContent = failure.message; buy.disabled = false; }
       });
       footer.append(buy);
