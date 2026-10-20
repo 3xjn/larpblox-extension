@@ -21,6 +21,7 @@
   }
   function ownImage(image, userId, doc = document, win = window) {
     if (!image || !numericId(userId)) return false;
+    if (!peer && /^\/users\/profile\/edit\/?$/i.test(win.location?.pathname || '') && image === (doc.querySelector('.avatar-card-image img') || doc.querySelector('main img, #content img, .content img'))) return true;
     if (image.classList?.contains('rbx2016-welcome-avatar')) return !peer;
     for (let node = image, depth = 0; node && depth < 10; node = node.parentElement, depth++) {
       for (const key of ['data-user-id', 'data-userid', 'data-target-user-id', 'data-target-userid']) {
@@ -35,7 +36,7 @@
     const owner = String(win.location?.pathname || '').match(/^\/users\/(\d+)\/profile\/?$/i)?.[1];
     return owner === String(userId) && !!image.closest?.('.user-profile-header-details-avatar-container, .profile-avatar-thumb, .profile-avatar-image, .profile-avatar-headshot, .profile-avatar-left, .profile-header .avatar-card-image, .profile-header-top .avatar-card-image, .profile-header .avatar-headshot, .profile-header-top .avatar-headshot');
   }
-  const findOwnImages = (userId, doc = document, win = window) => [...doc.querySelectorAll(imageSelector)].filter(image => !image.closest?.('#avatar-web-app') && ownImage(image, userId, doc, win));
+  const findOwnImages = (userId, doc = document, win = window) => [...doc.querySelectorAll(imageSelector + (/^\/users\/profile\/edit\/?$/i.test(win.location?.pathname || '') ? ', main img, #content img, .content img' : ''))].filter(image => !image.closest?.('#avatar-web-app') && ownImage(image, userId, doc, win));
   function remember(image) {
     const src = image.getAttribute('src'), srcset = image.getAttribute('srcset'), sizes = image.getAttribute('sizes');
     let record = records.get(image);
@@ -168,7 +169,7 @@
       for (const image of images) {
         if (!image.isConnected || !ownImage(image, userId)) continue;
         const record = remember(image);
-        const headshot = image.classList.contains('rbx2016-welcome-avatar') || selfProfileLink(image) || image.closest('.avatar-headshot, .avatar-headshot-xs, .avatar-headshot-sm, .avatar-headshot-md, .avatar-headshot-lg, .avatar-headshot-xl, .avatar-card-headshot, .profile-avatar-image, .profile-avatar-headshot, #nav-profile, #navbar-avatar');
+        const headshot = /^\/users\/profile\/edit\/?$/i.test(location.pathname) || image.classList.contains('rbx2016-welcome-avatar') || selfProfileLink(image) || image.closest('.avatar-headshot, .avatar-headshot-xs, .avatar-headshot-sm, .avatar-headshot-md, .avatar-headshot-lg, .avatar-headshot-xl, .avatar-card-headshot, .profile-avatar-image, .profile-avatar-headshot, #nav-profile, #navbar-avatar');
         const value = headshot ? result.headshot : result.fullBody;
         record.applied = value;
         if (image.getAttribute('src') !== value) image.setAttribute('src', value);

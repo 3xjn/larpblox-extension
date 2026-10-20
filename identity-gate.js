@@ -14,6 +14,20 @@
     const avatar = Boolean(state?.mode && (state.gameLook || state.equipped?.length));
     const profile = location.pathname.match(/^\/users\/(\d+)\/profile\/?$/i)?.[1];
     const ownProfile = /^\/users\/profile\/?$/i.test(location.pathname) || Boolean(profile && profile === String(id));
+    const editProfile = /^\/users\/profile\/edit\/?$/i.test(location.pathname);
+    if (root.dataset.larpbloxIdentityEditProfile !== String(editProfile)) root.dataset.larpbloxIdentityEditProfile = String(editProfile);
+    if (editProfile) {
+      const image = document.querySelector('.avatar-card-image img') || document.querySelector('main img, #content img, .content img');
+      if (image) image.dataset.larpbloxEditAvatar = 'true';
+      const realNames = [meta?.getAttribute('data-name'), meta?.getAttribute('data-displayname')].filter(Boolean);
+      for (const element of document.querySelectorAll('main span, #content span, .content span')) {
+        if (element.children.length) continue;
+        const value = element.textContent.trim();
+        if (![...realNames, ...realNames.map(value => '@'+value), name, '@'+name].includes(value)) continue;
+        element.dataset.larpbloxEditName = 'true';
+        element.dataset.larpbloxAliasReady = String(!name || value === name || value === '@'+name);
+      }
+    }
     for (const [key,value] of [['larpbloxIdentityChecked','true'],['larpbloxIdentityName',name?'true':'false'],['larpbloxIdentityAvatar',String(avatar)],['larpbloxIdentityOwnProfile',String(ownProfile)]]) {
       if (root.dataset[key] !== value) root.dataset[key] = value;
     }

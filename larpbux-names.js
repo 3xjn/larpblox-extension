@@ -10,7 +10,8 @@
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     const result = [];
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-      if (node.parentElement && !node.parentElement.closest(skip)) result.push(node);
+      const excluded = /^\/users\/profile\/edit\/?$/i.test(location.pathname) ? skip.replace('button, ', '') : skip;
+      if (node.parentElement && !node.parentElement.closest(excluded)) result.push(node);
     }
     return result;
   }
@@ -45,7 +46,7 @@
     if (ownProfile(userId)) found.push(...document.querySelectorAll(profileNames));
     // Account Info also renders plain text without the legacy account field IDs.
     // Only exact real-name text is replaced below; labels and form fields stay intact.
-    if (ownSettings()) found.push(document.body);
+    if (ownSettings() || /^\/users\/profile\/edit\/?$/i.test(location.pathname)) found.push(document.body);
     return found;
   }
 

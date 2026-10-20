@@ -379,3 +379,5 @@ html[data-larpblox-identity-own-profile="true"][data-larpblox-identity-avatar="t
 
 html:is(.rbx2016,.larpblox-modern) .larpbux-buy-dialog .larpbux-buy-confirm { transition:background-color .1s cubic-bezier(.2,0,0,1),color .1s cubic-bezier(.2,0,0,1); }
 html:is(.rbx2016,.larpblox-modern) .larpbux-buy-dialog .larpbux-buy-confirm.is-loading { background:#25262d !important; border-color:transparent !important; color:#898a91; opacity:1; cursor:default; }
+html[data-larpblox-identity-edit-profile="true"][data-larpblox-identity-name="true"] [data-larpblox-edit-name="true"]:not([data-larpblox-alias-ready="true"]) { visibility:hidden !important; }
+html[data-larpblox-identity-edit-profile="true"][data-larpblox-identity-avatar="true"] img[data-larpblox-edit-avatar="true"]:is(:not([src^="data:image/png"]),[srcset]) { visibility:hidden !important; }
