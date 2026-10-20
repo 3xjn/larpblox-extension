@@ -39,10 +39,10 @@
       } catch (_) { if (signal.aborted) throw _; }
     }
     return { ...fallback, id, itemType:'Asset', name:data?.Name || fallback.name || `Item ${id}`,
-      isLimited:data?.IsLimited ?? fallback.isLimited,
-      isLimitedUnique:data?.IsLimitedUnique ?? fallback.isLimitedUnique,
+      isLimited:Boolean(data?.IsLimited || fallback.isLimited),
+      isLimitedUnique:Boolean(data?.IsLimitedUnique || fallback.isLimitedUnique),
       price:limited ? resalePrice : (data?.IsForSale ? data.PriceInRobux : null),
-      priceLabel:limited ? (resaleKnown ? 'No Resellers' : 'See Item') : 'Off Sale',
+      priceLabel:limited ? (resaleKnown ? 'Off Sale' : 'See Item') : 'Off Sale',
       saleKnown:Boolean(data) };
   }
   function card(item, width, thumbnail) {
@@ -59,7 +59,13 @@
       const badge = document.createElement('span');
       badge.className = item.isLimitedUnique ? 'icon-limited-unique-label' : 'icon-limited-label';
       badge.setAttribute('role','img'); badge.setAttribute('aria-label',item.isLimitedUnique ? 'Limited Unique' : 'Limited');
-      badge.style.cssText = 'position:absolute;bottom:0;left:0;z-index:2';
+      badge.style.cssText = 'position:absolute;bottom:0;left:0;z-index:2;display:inline-flex;align-items:center;width:auto;height:14px;background:#00b06f;color:white;font:700 10px/14px Arial,sans-serif;white-space:nowrap;padding:0 3px;border-radius:0';
+      badge.textContent = 'LIMITED';
+      if (item.isLimitedUnique) {
+        const unique = document.createElement('span'); unique.textContent = 'U';
+        unique.style.cssText = 'display:inline-block;background:#ffdd00;color:#111;padding:0 5px;margin-left:3px;height:14px;line-height:14px';
+        badge.append(unique);
+      }
       holder.style.position = 'relative'; link.append(badge);
     }
     const caption = document.createElement('div'); caption.className = 'item-card-caption';
