@@ -40,11 +40,15 @@
   }
   function collect(state, item) {
     const key = keyFor(item);
-    if (state.items.some(existing => keyFor(existing) === key)) return state;
+    const existing = state.items.find(existing => keyFor(existing) === key);
+    const limited = item.isLimited || item.isLimitedUnique || existing?.isLimited || existing?.isLimitedUnique;
+    if (existing && !limited) return state;
     const price = amount(item.price || 0);
     if (price > state.balance) throw new Error('Add more Larpbux first.');
-    if (state.items.length >= 2000) throw new Error('Your cosmetic inventory is full.');
-    const items = [...state.items, {...item, price}];
+    if (!existing && state.items.length >= 2000) throw new Error('Your cosmetic inventory is full.');
+    const quantity = existing && Number.isSafeInteger(existing.quantity) && existing.quantity > 0 ? existing.quantity : 1;
+    if (existing && quantity >= MAX) throw new Error('Your item quantity is full.');
+    const items = existing ? state.items.map(owned => owned === existing ? {...owned, quantity:quantity + 1} : owned) : [...state.items, {...item, price, quantity:1}];
     if (isBodyBundle(item)) for (const part of item.assets.filter(isWearableAsset)) if (!items.some(owned => keyFor(owned) === keyFor(part))) items.push({...part, price:0, source:'bundle', assetTypeVerified:true});
     return {...state, balance: state.balance - price, items};
   }
@@ -1118,7 +1122,9 @@
       gear:19, gears:19,
     }[normalizedType] || {head:8,hair:41,face:42,neck:43,shoulder:44,front:45,back:46,waist:47,eyebrow:76,eyelash:77}[normalizedType.replace(/accessor(?:y|ies)/g, '')] || 0;
     const image = document.querySelector('#item-thumbnail-container-frontend img');
-    return {id: Number(match[2]), itemType: match[1] === 'bundles' ? 'Bundle' : 'Asset', assetType, name: name.slice(0, 128), price, thumbnail: image?.currentSrc || image?.src || undefined};
+    const isLimitedUnique = Boolean(document.querySelector('#item-thumbnail-container-frontend .icon-limited-unique-label, #item-details .icon-limited-unique-label'));
+    const isLimited = isLimitedUnique || Boolean(document.querySelector('#item-thumbnail-container-frontend .icon-limited-label, #item-details .icon-limited-label'));
+    return {id: Number(match[2]), itemType: match[1] === 'bundles' ? 'Bundle' : 'Asset', assetType, isLimited, isLimitedUnique, name: name.slice(0, 128), price, thumbnail: image?.currentSrc || image?.src || undefined};
   }
   async function itemData() {
     // A local quote must not wait on a remote service when the page has the details.
@@ -1246,6 +1252,7 @@
     dialog.addEventListener('cancel', event => { event.preventDefault(); closePurchase(); });
     document.body.append(dialog); dialog.showModal();
     confirm.addEventListener('click', async () => {
+      if (confirm.disabled) return;
       confirm.disabled = true;
       confirm.textContent = 'Loading…';
       confirm.classList.add('is-loading');
@@ -1257,9 +1264,12 @@
         if (account !== userId || path !== location.pathname || !state?.mode) throw new Error('Your account or purchase state changed. Please reopen the purchase.');
         if (latest.price !== item.price) { purchase(latest); return; }
         const existing = state.items.some(owned => keyFor(owned) === keyFor(item));
-        save(collect(state, latest));
+        const current = read(account);
+        if (!current.mode) throw new Error('Turn Larp mode on before buying this item.');
+        const repeatable = latest.isLimited || latest.isLimitedUnique || current.items.some(owned => keyFor(owned) === keyFor(latest) && (owned.isLimited || owned.isLimitedUnique));
+        save(collect(current, latest));
         title.textContent = 'Purchase Complete'; dialog.setAttribute('aria-label', 'Purchase Complete');
-        copy.replaceChildren(node('p', existing ? 'You already own this item. Your account has not been charged.' : `You have successfully purchased “${item.name}”.`), node('p', `Your balance is now R$ ${state.balance.toLocaleString('en-US')}.`));
+        copy.replaceChildren(node('p', existing && !repeatable ? 'You already own this item. Your account has not been charged.' : `You have successfully purchased “${item.name}”.`), node('p', `Your balance is now R$ ${state.balance.toLocaleString('en-US')}.`));
         footer.replaceChildren(); status.textContent = '';
         const view = node('a', 'Customize Character', 'larpbux-buy-confirm'); view.href = avatarUrl();
         const done = node('button', 'Continue Shopping', 'larpbux-buy-cancel'); done.type = 'button'; done.addEventListener('click', closePurchase);
@@ -1304,9 +1314,28 @@
       }
     }
     const modern = globalThis.LarpbloxAppearance?.get?.() === 'modern';
-    const text = owned ? 'Item Owned' : own._pending ? 'Loading…' : modern ? 'Buy' : 'Buy with R$';
+    const limited = owned?.isLimited || owned?.isLimitedUnique || Boolean(document.querySelector('#item-thumbnail-container-frontend .icon-limited-label, #item-thumbnail-container-frontend .icon-limited-unique-label'));
+    const text = owned && !limited ? 'Item Owned' : own._pending ? 'Loading…' : modern ? 'Buy' : 'Buy with R$';
     if (own._buy.textContent !== text) own._buy.textContent = text;
-    own._buy.disabled = Boolean(owned || own._pending); own._view.hidden = !owned; own._view.href = avatarUrl();
+    own._buy.disabled = Boolean((owned && !limited) || own._pending); own._view.hidden = !owned || limited; own._view.href = avatarUrl();
+    const info = box.closest('#item-details, #item-details-container');
+    let count = info?.querySelector('.larpbux-owned-count');
+    if (owned && limited && info) {
+      for (const label of info.querySelectorAll('span, a')) {
+        if (label.closest('.larpbux-owned-count') || !/^Owned Items\s*\(\d+\)$/i.test(label.textContent.trim())) continue;
+        label.classList.add('larpbux-native-owned-count');
+      }
+      if (!count) {
+        count = node('span', '', 'larpbux-owned-count');
+        const creator = info.querySelector('.item-details-creator-container, .item-details-creator, .creator-name');
+        if (creator) creator.append(count); else box.before(count);
+      }
+      const label = `Owned Items (${Number.isSafeInteger(owned.quantity) && owned.quantity > 0 ? owned.quantity : 1})`;
+      if (count.textContent !== label) count.textContent = label;
+    } else {
+      count?.remove();
+      for (const label of info?.querySelectorAll('.larpbux-native-owned-count') || []) label.classList.remove('larpbux-native-owned-count');
+    }
   }
   function updateHeaderBalance() {
     for (const element of document.querySelectorAll('#nav-robux-amount, #nav-robux-balance')) {

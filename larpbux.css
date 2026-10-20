@@ -277,3 +277,7 @@ html #avatar-web-app .avatar-thumbnail:has(> .larpbux-avatar-look) > .thumbnail-
 .larpbux-username-dialog .larpbux-purchase-body > div { width:100%; }
 .larpbux-username-dialog label { display:block; font-size:16px; }
 .larpbux-username-dialog input { display:block; box-sizing:border-box; width:100%; margin:8px 0 18px; padding:10px; border:1px solid #aaa; border-radius:8px; font:inherit; background:inherit; color:inherit; }
+.larpbux-owned-count { display:none; }
+html.larpblox-pretend-mode .larpbux-native-owned-count { display:none !important; }
+html.larpblox-pretend-mode .larpbux-owned-count { display:inline-flex; align-items:center; gap:6px; margin-left:16px; color:inherit; font-size:16px; font-weight:600; white-space:nowrap; }
+.larpbux-owned-count::before { content:'✓'; display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:50%; background:#00b870; color:#102c22; font-size:13px; font-weight:700; }
