@@ -347,6 +347,10 @@ export async function create(host, descriptorUrl, options = {}) {
         }
       },
       getBackgroundUrl: () => backgroundTexture?.image?.currentSrc || backgroundTexture?.image?.src || '',
+      getBackgroundAspect: () => {
+        const image = backgroundTexture?.image;
+        return image?.width > 0 && image?.height > 0 ? image.width / image.height : 1;
+      },
       getView: () => viewState(camera, controls),
       getDiagnostics: () => ({version: 1, descriptorUrl, descriptor, objText, mtlText, avatarDefinition: options.definition, view: viewState(camera, controls)}),
       dispose() {

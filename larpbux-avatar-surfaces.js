@@ -91,7 +91,8 @@
       banners.delete(element);
     }
     for (const element of wanted) {
-      const styles = {'background-image':`url("${result.backgroundUrl}")`, 'background-position':'50% 64%', 'background-size':'auto 250%', 'background-repeat':'no-repeat'};
+      const nativeWidth = element.clientHeight * 2.5 * (result.backgroundAspect || 1);
+      const styles = {'background-image':`url("${result.backgroundUrl}")`, 'background-position':'50% 64%', 'background-size':`max(100%, ${nativeWidth}px) auto`, 'background-repeat':'no-repeat'};
       if (!banners.has(element)) banners.set(element, Object.fromEntries(Object.keys(styles).map(key => [key, {value:element.style.getPropertyValue(key),priority:element.style.getPropertyPriority(key)}])));
       for (const [key, value] of Object.entries(styles)) if (element.style.getPropertyValue(key) !== value || element.style.getPropertyPriority(key) !== 'important') element.style.setProperty(key, value, 'important');
     }
@@ -114,7 +115,8 @@
       if (!headshot?.startsWith('data:image/png') || !fullBody?.startsWith('data:image/png')) throw new Error('Avatar capture failed.');
       const backgroundUrl = viewer.getBackgroundUrl?.();
       const transparentBody = backgroundUrl ? viewer.capture('fullBody', {background:false}) : fullBody;
-      return {descriptor, headshot, fullBody, transparentBody, backgroundUrl, definition};
+      const backgroundAspect = viewer.getBackgroundAspect?.() || 1;
+      return {descriptor, headshot, fullBody, transparentBody, backgroundUrl, backgroundAspect, definition};
     } finally { viewer?.dispose(); host.remove(); }
   }
   async function updateProfilePreviews(userId, key, descriptor, definition) {
@@ -129,7 +131,7 @@
       if (previews.has(container)) continue;
       const controller = new AbortController(), host = document.createElement('div');
       host.className = 'larpblox-own-profile-preview';
-      host.style.cssText = 'position:absolute;inset:0;z-index:2;background:#fff';
+      host.style.cssText = 'position:absolute;inset:0;z-index:6;background:#fff;pointer-events:auto';
       const record = {key, host, controller, position: container.style.position, hidden: new Map()};
       previews.set(container, record);
       container.style.position = 'relative'; container.append(host);

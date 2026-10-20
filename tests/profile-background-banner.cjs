@@ -4,7 +4,7 @@ await page.route('https://www.roblox.com/**',r=>r.fulfill({contentType:'text/htm
 await page.evaluate(()=>{window.LarpbloxAvatarRequests={render:async()=> 'descriptor'};window.LarpbloxAvatar3D={create:async()=>({capture:(kind,options)=>'data:image/png;base64,'+(options?.background===false?'AQ==':'AA=='),getBackgroundUrl:()=> 'https://tr.rbxcdn.com/background.png',dispose(){}})}});
 await page.evaluate(()=>LarpbloxAvatarSurfaces.update({userId:'123',active:true,signature:'background',backgroundId:92,loadDefinition:async()=>({backgroundRequestModel:{id:92}})}));
 assert.match(await page.locator('.profile-avatar-left').evaluate(e=>e.style.backgroundImage),/background\.png/,'the background must extend across the native wide banner');
-assert.equal(await page.locator('.profile-avatar-left').evaluate(e=>e.style.backgroundSize),'auto 250%');
+assert.match(await page.locator('.profile-avatar-left').evaluate(e=>e.style.backgroundSize),/max\(100%, 750px\)/,'square backgrounds must fill the banner even when native zoom is narrower');
 assert.equal(await page.locator('.profile-avatar-left').evaluate(e=>e.style.backgroundPosition),'50% 64%');
 assert.equal(await page.locator('.profile-avatar-left').evaluate(e=>e.style.backgroundRepeat),'no-repeat');
 assert.equal(await page.locator('#avatar').getAttribute('src'),'data:image/png;base64,AQ==','the centered avatar must not contain a square background');

@@ -48,8 +48,25 @@ const {chromium}=require('playwright');
   });
   assert.equal(alpha,0,'the centered profile avatar must have transparent corners');
   assert.equal(await page.evaluate(()=>viewer.getBackgroundUrl()),'https://tr.rbxcdn.com/original-background.png','use the original background ImageId, not its square catalog thumbnail');
+  assert.equal(await page.evaluate(()=>viewer.getBackgroundAspect()),2);
   await page.evaluate(()=>viewer.dispose());
   assert.equal(await page.locator('#preview canvas').count(),0);
+  await page.setViewportSize({width:1100,height:500});
+  await page.evaluate(()=>{
+   history.replaceState({},'', '/users/123/profile');
+   document.body.innerHTML='<div class="currently-wearing-avatar-with-background"><div class="profile-avatar-left" style="width:970px;height:300px;position:relative"><div class="thumbnail-holder-position" style="position:absolute;inset:0;z-index:5"><div class="avatar-card-image profile-avatar-thumb" style="width:300px;height:300px;margin:auto"><canvas></canvas></div></div></div></div>';
+   const original=LarpbloxAvatar3D.create;
+   window.LarpbloxAvatar3D={...LarpbloxAvatar3D,create:async(host,url,options)=>{const result=await original(host,url,options);if(host.className==='larpblox-own-profile-preview')window.profileViewer=result;return result}};
+   window.LarpbloxAvatarRequests={render:async()=> 'https://tr.rbxcdn.com/descriptor'};
+  });
+  await page.addScriptTag({path:path.join(__dirname,'../larpbux-avatar-surfaces.js')});
+  await page.evaluate(()=>LarpbloxAvatarSurfaces.update({userId:'123',active:true,signature:'profile',loadDefinition:async()=>({backgroundRequestModel:{id:92}})}));
+  assert.equal(await page.evaluate(()=>document.elementFromPoint(450,150)?.classList.contains('larpblox-own-avatar-canvas')),true,'native thumbnail layer must not intercept profile dragging');
+  const profileBefore=await page.evaluate(()=>profileViewer.getView());
+  await page.mouse.move(450,150);await page.mouse.down();await page.mouse.move(550,155,{steps:5});await page.mouse.up();
+  const profileAfter=await page.evaluate(()=>profileViewer.getView().position);
+  assert.ok(Math.hypot(...profileAfter.map((n,i)=>n-profileBefore.position[i]))>1,'profile dragging must turn the avatar beyond its small automatic spin');
+  await page.evaluate(()=>LarpbloxAvatarSurfaces.update({active:false}));
   console.log('PASS: real WebGL background covers the editor, preserves spin and dragging, captures, and disposes.');
  }finally{await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1});
