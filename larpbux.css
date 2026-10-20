@@ -245,6 +245,8 @@ html[data-larpblox-identity-avatar="true"] :is(a[href="/users/profile"],#navigat
 .larpbux-character-gear-fallback .icon-settings { display:inline-block; width:16px; height:16px; }
 .larpbux-character-menu { position:absolute; inset:0; z-index:4; display:flex; flex-direction:column; align-items:center; justify-content:center; border-radius:inherit; background:rgba(0,0,0,.55); }
 .larpbux-character-menu button { display:block; width:auto; padding:0; margin:0; border:0; background:transparent; color:#fff; cursor:pointer; font:600 12px/22px inherit; font-family:inherit; font-size:12px; font-weight:600; line-height:22px; text-align:center; }
+html .larpbux-character-menu button { box-sizing:border-box; width:calc(100% - 12px); border:1px solid transparent; border-radius:8px; line-height:20px; }
+html .larpbux-character-menu button:is(:hover, :focus-visible) { background:#666; border-color:#fff; outline:none; }
 
 /* The thumbnail and caption are both real outfit selection controls. */
 html #avatar-web-app .larpbux-character-card,
