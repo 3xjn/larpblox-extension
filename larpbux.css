@@ -248,6 +248,14 @@ html #avatar-web-app .larpbux-character-card :is(.item-card-container,.item-card
 html #avatar-web-app .larpbux-character-card .item-card-thumb { display:block; width:100%; aspect-ratio:1; overflow:hidden; border-radius:inherit; }
 html #avatar-web-app .larpbux-character-card .item-card-thumb .thumbnail-2d-container { display:block; width:100%; height:100%; }
 html #avatar-web-app .larpbux-character-card .item-card-thumb img { display:block; width:100%; height:100%; object-fit:contain; }
+
+/* The temporary avatar replaces only the viewer, keeping native controls usable. */
+#item-thumbnail-container-frontend .thumbnail-holder.larpbux-catalog-preview { position:relative; }
+#item-thumbnail-container-frontend .larpbux-catalog-preview > :not(.larpbux-catalog-try-on),
+#item-thumbnail-container-frontend .larpbux-catalog-preview > :not(.larpbux-catalog-try-on) * { visibility:hidden !important; }
+#item-thumbnail-container-frontend .larpbux-catalog-try-on { position:absolute; inset:0; z-index:2; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+#item-thumbnail-container-frontend .larpbux-catalog-try-on img,
+#item-thumbnail-container-frontend .larpbux-catalog-try-on canvas { width:100%; height:100%; object-fit:contain; }
 html #avatar-web-app .larpbux-character-card .item-card-thumb:hover .thumbnail-2d-container { filter:brightness(.96); }
 html #avatar-web-app .larpbux-character-card button.item-card-name-link { padding:0; margin:0; border:0; background:transparent; color:inherit; font:inherit; text-align:left; }
 html #avatar-web-app .larpbux-character-card button.item-card-name-link:hover { text-decoration:underline; }

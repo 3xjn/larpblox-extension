@@ -232,6 +232,10 @@
   }
   if (typeof module !== 'undefined' && module.exports) { module.exports = {changedBodyColors, addToCart, checkoutCart, changeUsername, localNames, amount, formatBalance, collect, equip, outfit, supportsOutfit, previewDefinition, matchesAvatarCategory, mergeGameSnapshot, gamePreviewDefinition, gameCommand, gameOutfitMatches}; return; }
   let state, userId, panel, controls, list, balance, mode, message, exportBox, purchaseDialog, previewElement, previewViewer, previewSignature, previewController;
+  // Catalog Try On is deliberately separate from the saved Larp outfit.  It is
+  // a disposable render only: no save(), bridge message, purchase, or equip is
+  // performed for the item being previewed.
+  let catalogTryOn = {generation:0};
   let settingsCustomizeLink, settingsCustomizeItem, settingsSection, settingsNav, settingsHidden = new Map(), settingsNavState = new Map(), settingsActive = false;
   const thumbnails = new Map();
   const thumbnailPending = new Map();
@@ -1327,6 +1331,90 @@
     const image = document.querySelector('#item-thumbnail-container-frontend img');
     return {...item, price, thumbnail: image?.currentSrc || image?.src || undefined};
   }
+  function catalogControls() {
+    const root = document.querySelector('#item-thumbnail-container-frontend');
+    const buttons = [...(root?.querySelectorAll('.thumbnail-button-container button, .thumbnail-button-container [role="button"]') || [])];
+    return {root, holder:root?.querySelector('.thumbnail-holder'),
+      tryButton:buttons.find(button => /^(try\s*on|take\s*off)$/i.test(button.textContent.trim())),
+      dimension:buttons.find(button => /^(2d|3d)$/i.test(button.textContent.trim()))};
+  }
+  function clearCatalogTryOn() {
+    const record = catalogTryOn;
+    catalogTryOn = {generation:record.generation + 1};
+    record.controller?.abort(); record.viewer?.dispose(); record.element?.remove();
+    record.holder?.classList.remove('larpbux-catalog-preview');
+    if (record.tryButton?.isConnected) record.tryButton.textContent = record.tryLabel;
+    if (record.dimension?.isConnected) record.dimension.textContent = record.dimensionLabel;
+  }
+  async function catalogTryOnItem(suppliedItem, requestedKind) {
+    if (!state?.mode || !userId) return;
+    const previous = catalogTryOn, controls = catalogControls();
+    const kind = requestedKind || (/^3d$/i.test(controls.dimension?.textContent.trim() || '') ? '2d' : '3d');
+    const tryLabel = previous.tryLabel || controls.tryButton?.textContent || 'Try On';
+    const dimensionLabel = previous.dimensionLabel || controls.dimension?.textContent;
+    clearCatalogTryOn();
+    const {root, holder, tryButton, dimension} = controls;
+    if (!root || !holder) return;
+    const account = userId, path = location.pathname, controller = new AbortController();
+    const surface = node('div', 'Updating avatar…', 'larpbux-catalog-try-on');
+    surface.setAttribute('role', 'status');
+    const record = {account,path,controller,holder,element:surface,tryButton,tryLabel,dimension,dimensionLabel,generation:catalogTryOn.generation};
+    catalogTryOn = record;
+    holder.classList.add('larpbux-catalog-preview'); holder.append(surface);
+    if (tryButton) tryButton.textContent = 'Take Off';
+    if (dimension) dimension.textContent = kind === '3d' ? '2D' : '3D';
+    const active = () => catalogTryOn === record && !controller.signal.aborted && account === userId && path === location.pathname && state?.mode && surface.isConnected;
+    try {
+      const match = path.match(/^\/(catalog|bundles)\/(\d+)/);
+      if (!match) return;
+      let item = suppliedItem;
+      if (!item) {
+        const id = Number(match[2]), itemType = match[1] === 'bundles' ? 'Bundle' : 'Asset';
+        const response = await fetch(itemType === 'Asset' ? `https://economy.roblox.com/v2/assets/${id}/details` : `https://catalog.roblox.com/v1/bundles/${id}/details`, {signal:controller.signal});
+        if (!response.ok) throw new Error('Item details could not load. Take off and try again.');
+        const data = await response.json();
+        item = {id,itemType,name:String((itemType === 'Asset' ? data.Name : data.name) || 'Item').slice(0,128),assetType:itemType === 'Asset' ? Number(data.AssetTypeId) : 0,bundleType:data.bundleType,assets:itemType === 'Bundle' ? await bundleAssets(data, controller.signal) : undefined};
+      }
+      if (!active()) return;
+      if (!supportsOutfit(item)) throw new Error('This item does not support avatar Try On.');
+      record.item = item;
+      const current = read(account);
+      let temporary = {...current,items:[...current.items],equipped:[...current.equipped]};
+      for (const part of expandOutfitItem(item)) {
+        const index = temporary.items.findIndex(owned => keyFor(owned) === keyFor(part));
+        if (index < 0) temporary.items.push(part);
+        else temporary.items[index] = {...temporary.items[index], ...part};
+        if (!temporary.equipped.includes(keyFor(part))) temporary = equip(temporary, keyFor(part));
+      }
+      const definition = temporary.gameLook ? gamePreviewDefinition(temporary) : await loadBrowserPreview(outfitAssets(temporary.items.filter(owned => temporary.equipped.includes(keyFor(owned)) && supportsOutfit(owned))), controller.signal);
+      if (!active()) return;
+      let renderKind = kind;
+      let imageUrl = await LarpbloxAvatarRequests.render(definition, account, controller.signal, renderKind);
+      if (!active()) return;
+      surface.textContent = '';
+      if (renderKind === '3d') {
+        try {
+          if (typeof LarpbloxAvatar3D === 'undefined') throw new Error('3D unavailable');
+          record.viewer = await LarpbloxAvatar3D.create(surface,imageUrl,{signal:controller.signal,definition});
+        } catch (error) {
+          if (!active()) return;
+          surface.replaceChildren(); renderKind = '2d';
+          imageUrl = await LarpbloxAvatarRequests.render(definition,account,controller.signal,renderKind);
+        }
+      }
+      if (!active()) { record.viewer?.dispose(); return; }
+      if (renderKind === '2d') {
+        const image = node('img'); image.alt = `Your Larp avatar trying on ${item.name}`;
+        image.src = imageUrl; surface.append(image);
+      }
+    } catch (error) {
+      if (active()) surface.textContent = error.message || 'Preview could not load. Take off and try again.';
+    }
+  }
+  function updateCatalogTryOn() {
+    const record = catalogTryOn;
+    if (record.controller && (!state?.mode || record.path !== location.pathname || record.account !== userId || !record.element?.isConnected)) clearCatalogTryOn();
+  }
   function closePurchase() {
     if (!purchaseDialog) return;
     const dialog = purchaseDialog; purchaseDialog = undefined;
@@ -1528,6 +1616,7 @@
     dialog.addEventListener('cancel', event => {event.preventDefault(); closePurchase();}); document.body.append(dialog); dialog.showModal();
   }
   function updateItem() {
+    updateCatalogTryOn();
     const box = document.querySelector('#item-details .price-row-container, #item-details-container .price-row-container');
     if (!box) return;
     let own = box.querySelector('.larpbux-item-actions');
@@ -1633,13 +1722,14 @@
     if (!/^[1-9]\d*$/.test(id || '')) {
       userId = undefined; state = undefined;
       document.documentElement.classList.remove('larpblox-pretend-mode');
+      clearCatalogTryOn();
       if (panel) { panel.hidden = true; controls.remove(); }
       closePurchase(); updateAvatar();
       updateHeaderBalance(); updateNames();
       return;
     }
     if (!panel) mount();
-    if (userId !== id) { closePurchase(); queuedGameCommand = undefined; awaitingGameOutfit = undefined; userId = id; state = read(id); if (bridgeStatus) bridgeStatus.textContent = 'Checking connection…'; render(); }
+    if (userId !== id) { closePurchase(); clearCatalogTryOn(); queuedGameCommand = undefined; awaitingGameOutfit = undefined; userId = id; state = read(id); if (bridgeStatus) bridgeStatus.textContent = 'Checking connection…'; render(); }
     updateSettingsRoute();
     updateNames();
     updateHeaderBalance();
@@ -1657,11 +1747,28 @@
       });
     });
     window.addEventListener('click',event=>{
+      if (state?.mode && /^\/(?:catalog|bundles)\/\d+/.test(location.pathname)) {
+        const control = event.target?.closest?.('button, [role="button"]');
+        if (control?.closest('#item-thumbnail-container-frontend .thumbnail-button-container')) {
+          const label = control.textContent.trim();
+          if (/^(try\s*on|take\s*off)$/i.test(label)) {
+            event.preventDefault(); event.stopImmediatePropagation(); event.stopPropagation();
+            if (catalogTryOn.controller) clearCatalogTryOn(); else catalogTryOnItem();
+            return;
+          }
+          if (catalogTryOn.controller && /^(2d|3d)$/i.test(label)) {
+            event.preventDefault(); event.stopImmediatePropagation(); event.stopPropagation();
+            if (catalogTryOn.item) catalogTryOnItem(catalogTryOn.item,label.toLowerCase());
+            return;
+          }
+        }
+      }
       if (!state?.mode || !settingsNameRow(event.target)) return;
       event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();purchaseUsername();
     },true);
     window.addEventListener('hashchange', updateSettingsRoute);
     window.addEventListener('popstate', updateSettingsRoute);
+    window.addEventListener('popstate', updateCatalogTryOn);
     update(); let queued = false;
     new MutationObserver(() => { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; update(); }); }).observe(document.body, {childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ['src', 'srcset', 'sizes', 'data-user-id', 'data-userid']});
     window.addEventListener('storage', event => { if (userId && (event.key === key() || event.key === null)) { closePurchase(); state = read(userId); render(); } });
