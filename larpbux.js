@@ -407,6 +407,11 @@
   }
   function thumbnail(image, item) {
     image.alt = item.name;
+    image.classList.add('larpbux-thumbnail');
+    const ready = () => image.classList.toggle('larpbux-thumbnail-ready', image.complete && image.naturalWidth > 0);
+    image.addEventListener('load', ready);
+    image.addEventListener('error', ready);
+    ready();
     if (item.thumbnail) { image.src = item.thumbnail; return; }
     const key = keyFor(item);
     if (!thumbnails.has(key)) {
