@@ -268,3 +268,8 @@ html.larpblox-modern #avatar-web-app .larpbux-limited-badge > span { display:inl
 
 html #avatar-web-app .larpbux-character-card .larpbux-character-gear { display:flex; align-items:center; justify-content:center; width:24px; height:24px; padding:3px; border:0; background:transparent; color:inherit; line-height:1; }
 html #avatar-web-app .larpbux-character-gear svg { display:block; width:18px; height:18px; pointer-events:none; }
+
+/* Roblox's fallback PNG already includes its backdrop. Fill the whole preview
+   frame so a second, unrelated backdrop cannot show underneath it. */
+html #avatar-web-app .avatar-thumbnail:has(> .larpbux-avatar-look) > .thumbnail-holder .thumbnail-2d-container { position:absolute; inset:0; width:100%; height:100%; }
+html #avatar-web-app .avatar-thumbnail:has(> .larpbux-avatar-look) > .thumbnail-holder .thumbnail-2d-container > img { display:block; width:100% !important; height:100% !important; object-fit:cover; object-position:center; }
