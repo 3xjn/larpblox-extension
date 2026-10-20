@@ -1,0 +1,45 @@
+name: Update main source release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: main-source-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Package source
+        run: git archive --format=zip --prefix=larpblox-extension/ --output=Larpblox-Extension-main.zip "$GITHUB_SHA"
+
+      - name: Update rolling main release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git tag -f main-latest "$GITHUB_SHA"
+          git push --force origin refs/tags/main-latest
+
+          if gh release view main-latest >/dev/null 2>&1; then
+            gh release edit main-latest \
+              --title "Larpblox Extension — Main (latest)" \
+              --notes "Latest source snapshot from the main branch. This rolling prerelease is updated automatically after each push to main." \
+              --prerelease
+            gh release upload main-latest Larpblox-Extension-main.zip --clobber
+          else
+            gh release create main-latest Larpblox-Extension-main.zip \
+              --target "$GITHUB_SHA" \
+              --title "Larpblox Extension — Main (latest)" \
+              --notes "Latest source snapshot from the main branch. This rolling prerelease is updated automatically after each push to main." \
+              --prerelease \
+              --latest=false
+          fi
