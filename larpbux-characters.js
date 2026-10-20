@@ -135,7 +135,7 @@
           if (!saved) throw new Error('This character was deleted.');
           saved.name = name;
         } else {
-          if (latest.profiles.length >= 12) throw new Error('Your character library is full.');
+          if (latest.profiles.length >= 50) throw new Error('Your character library is full.');
           latest.profiles.push({id: `${Date.now()}-${Math.random()}`, name, snapshot});
         }
         write(record.id, latest); dialog.remove();
