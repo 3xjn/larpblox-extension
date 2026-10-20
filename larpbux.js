@@ -1356,7 +1356,7 @@
     const {root, holder, tryButton, dimension} = controls;
     if (!root || !holder) return;
     const account = userId, path = location.pathname, controller = new AbortController();
-    const surface = node('div', 'Updating avatar…', 'larpbux-catalog-try-on');
+    const surface = node('div', '', 'larpbux-catalog-try-on');
     surface.setAttribute('role', 'status');
     const record = {account,path,controller,holder,element:surface,tryButton,tryLabel,dimension,dimensionLabel,generation:catalogTryOn.generation};
     catalogTryOn = record;
