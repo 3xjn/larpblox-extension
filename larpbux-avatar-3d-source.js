@@ -10,11 +10,34 @@ const backgroundUrls = new Map();
 async function backgroundUrl(id, signal) {
   if (!Number.isSafeInteger(id) || id <= 0) throw new Error('Invalid avatar background');
   if (backgroundUrls.has(id)) return backgroundUrls.get(id);
-  const response = await fetch(`https://thumbnails.roblox.com/v1/assets?assetIds=${id}&size=420x420&format=Png&isCircular=false`, {signal, credentials: 'omit'});
-  if (!response.ok) throw new Error('Avatar background could not load');
-  const item = (await response.json()).data?.find(item => Number(item.targetId) === id);
-  if (item?.state !== 'Completed' || !item.imageUrl) throw new Error('Avatar background is still processing');
-  const url = checkedUrl(item.imageUrl);
+  let url;
+  try {
+    // Match ProfilePlatform: resolve the background's ImageId instead of using
+    // the square catalog thumbnail, which loses the original image proportions.
+    const delivery = await fetch(`https://assetdelivery.roblox.com/v2/assetId/${id}`, {signal, credentials:'include'});
+    if (!delivery.ok) throw new Error('Background definition unavailable');
+    const location = (await delivery.json()).locations?.[0]?.location;
+    const response = await fetch(checkedUrl(location), {signal, credentials:'omit'});
+    if (!response.ok) throw new Error('Background definition unavailable');
+    const xml = new DOMParser().parseFromString(await response.text(), 'application/xml');
+    const image = [...xml.querySelectorAll('Item[class="IntValue"]')].find(item => item.querySelector('Properties > string[name="Name"]')?.textContent.trim() === 'ImageId');
+    const imageId = Number(image?.querySelector('Properties > int64[name="Value"], Properties > int[name="Value"]')?.textContent.trim());
+    if (!Number.isSafeInteger(imageId) || imageId <= 0) throw new Error('Invalid background image');
+    // Resolve the original image to its CDN location so WebGL can load it
+    // without sending account cookies with the texture request.
+    const imageDelivery = await fetch(`https://assetdelivery.roblox.com/v2/assetId/${imageId}`, {signal, credentials:'include'});
+    if (!imageDelivery.ok) throw new Error('Background image unavailable');
+    url = checkedUrl((await imageDelivery.json()).locations?.[0]?.location);
+  } catch (error) {
+    if (signal.aborted) throw error;
+  }
+  if (!url) {
+    const response = await fetch(`https://thumbnails.roblox.com/v1/assets?assetIds=${id}&size=420x420&format=Png&isCircular=false`, {signal, credentials: 'omit'});
+    if (!response.ok) throw new Error('Avatar background could not load');
+    const item = (await response.json()).data?.find(item => Number(item.targetId) === id);
+    if (item?.state !== 'Completed' || !item.imageUrl) throw new Error('Avatar background is still processing');
+    url = checkedUrl(item.imageUrl);
+  }
   if (backgroundUrls.size >= 16) backgroundUrls.delete(backgroundUrls.keys().next().value);
   backgroundUrls.set(id, url);
   return url;
