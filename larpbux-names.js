@@ -3,6 +3,7 @@
 
   const records = new Map();
   const profileNames = '#profile-header-title-container-name, .stylistic-alts-username, .profile-header-title, .profile-header-username, .profile-header-display-name, [data-testid="profile-header-title"], [data-testid="profile-header-username"], [data-testid="profile-header-display-name"]';
+  const accountNames = '#account-username, #account-name, .account-username, .account-name';
   const skip = 'input, textarea, select, button, [contenteditable="true"], [data-larpbux], .larpbux-dropdown, .larpbux-panel, #larpbux-root, #larpblox-root';
 
   function textNodes(root) {
@@ -18,6 +19,10 @@
     const path = String(location.pathname || '');
     const numeric = path.match(/^\/users\/(\d+)\/profile\/?$/i);
     return numeric ? numeric[1] === String(userId) : /^\/users\/profile\/?$/i.test(path);
+  }
+
+  function ownSettings() {
+    return /^\/my\/account\/?$/i.test(String(location.pathname || ''));
   }
 
   function ownAccountLink(anchor, userId) {
@@ -38,6 +43,7 @@
     }
     found.push(...document.querySelectorAll('.rbx2016-welcome h1'));
     if (ownProfile(userId)) found.push(...document.querySelectorAll(profileNames));
+    if (ownSettings()) found.push(...document.querySelectorAll(accountNames));
     return found;
   }
 
@@ -73,6 +79,7 @@
       if (root.matches?.(skip)) continue;
       const usernameField = root.matches('.stylistic-alts-username, .profile-header-username, [data-testid="profile-header-username"]');
       const displayField = root.matches('#profile-header-title-container-name, .profile-header-title, .profile-header-display-name, [data-testid="profile-header-title"], [data-testid="profile-header-display-name"]');
+      const accountField = root.matches(accountNames);
       for (const node of textNodes(root)) {
         const original = records.get(node)?.real ?? node.nodeValue;
         const text = original.trim();
@@ -85,6 +92,7 @@
         if (ownLink && /^(profile|view profile|my profile)$/i.test(text)) continue;
         if (usernameField) alias = username;
         else if (displayField) alias = username;
+        else if (accountField && (text === realUsername || text === '@' + realUsername || (realDisplayName && text === realDisplayName))) alias = username;
         else if (text === realUsername || text === '@' + realUsername) alias = username;
         else if (realDisplayName && text === realDisplayName) alias = username;
         else if (ownLink && /[\p{L}\p{N}]/u.test(text)) alias = username;

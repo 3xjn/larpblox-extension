@@ -273,3 +273,7 @@ html #avatar-web-app .larpbux-character-gear svg { display:block; width:18px; he
    frame so a second, unrelated backdrop cannot show underneath it. */
 html #avatar-web-app .avatar-thumbnail:has(> .larpbux-avatar-look) > .thumbnail-holder .thumbnail-2d-container { position:absolute; inset:0; width:100%; height:100%; }
 html #avatar-web-app .avatar-thumbnail:has(> .larpbux-avatar-look) > .thumbnail-holder .thumbnail-2d-container > img { display:block; width:100% !important; height:100% !important; object-fit:cover; object-position:center; }
+
+.larpbux-username-dialog .larpbux-purchase-body > div { width:100%; }
+.larpbux-username-dialog label { display:block; font-size:16px; }
+.larpbux-username-dialog input { display:block; box-sizing:border-box; width:100%; margin:8px 0 18px; padding:10px; border:1px solid #aaa; border-radius:8px; font:inherit; background:inherit; color:inherit; }

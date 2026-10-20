@@ -8,7 +8,7 @@
     event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation();
     window.open(new URL(itemPathFor(item), location.origin).href, '_blank', 'noopener');
   }
-  window.addEventListener('mousedown', event => {
+  if (typeof window !== 'undefined') window.addEventListener('mousedown', event => {
     if (event.target.closest?.('a[href]')) return;
     if (event.button !== 1 || !event.target.closest?.('#avatar-web-app .larpbux-avatar-item, #avatar-web-app .larpbux-native-item')) return;
     event.preventDefault();
@@ -17,6 +17,13 @@
     const username = typeof value?.username === 'string' ? value.username.trim() : '';
     if (username && !/^[A-Za-z0-9_]{3,20}$/.test(username)) throw new Error('Use 3–20 letters, numbers, or underscores for the Larp username.');
     return {username};
+  }
+  function changeUsername(current, value) {
+    const names = localNames({username:value});
+    if (!names.username) throw new Error('Enter your new username.');
+    if (names.username.toLowerCase() === (current.names?.username || '').toLowerCase()) throw new Error('Choose a different username.');
+    if (current.balance < 1000) throw new Error('You need R$ 1,000 to change your username.');
+    return {...current, names, balance:current.balance - 1000};
   }
   function amount(value) {
     const number = Number(value);
@@ -183,9 +190,8 @@
     for (const item of outfitAssets(state.items.filter(item => state.equipped.includes(keyFor(item))))) items.set(item.id, item);
     return {version: 1, userId: String(userId), definition, items: definition.assets.map(asset => items.get(asset.id)).filter(Boolean).map(({id, name, assetType}) => ({id, name, assetType, itemType: 'Asset'}))};
   }
-  if (typeof module !== 'undefined' && module.exports) { module.exports = {localNames, amount, formatBalance, collect, equip, outfit, supportsOutfit, previewDefinition, matchesAvatarCategory, mergeGameSnapshot, gamePreviewDefinition, gameCommand, gameOutfitMatches}; return; }
+  if (typeof module !== 'undefined' && module.exports) { module.exports = {changeUsername, localNames, amount, formatBalance, collect, equip, outfit, supportsOutfit, previewDefinition, matchesAvatarCategory, mergeGameSnapshot, gamePreviewDefinition, gameCommand, gameOutfitMatches}; return; }
   let state, userId, panel, controls, list, balance, mode, message, exportBox, purchaseDialog, previewElement, previewViewer, previewSignature, previewController;
-  let nameUsername;
   const thumbnails = new Map();
   const thumbnailPending = new Map();
   let thumbnailTimer, thumbnailBusy = false, thumbnailBlockedUntil = 0;
@@ -994,7 +1000,6 @@
     document.documentElement.classList.toggle('larpblox-pretend-mode', state.mode);
     updateHeaderBalance();
     mode.checked = state.mode; balance.value = String(state.balance);
-    nameUsername.value = state.names?.username || '';
     updateNames();
     inventoryCards(list);
     exportBox.value = outfit(state, userId);
@@ -1047,21 +1052,8 @@
     appearanceLabel.append(appearance);
     controls.append(appearanceLabel,node('p','Changes the website look only. Switching reloads this page.'));
 
-    const names = node('form', '', 'larpbux-names');
-    names.append(node('h3', 'Larp name'));
-    const usernameLabel = node('label', 'Name');
-    nameUsername = node('input'); nameUsername.type = 'text'; nameUsername.maxLength = 20;
-    nameUsername.autocomplete = 'off'; nameUsername.placeholder = 'Keep real username'; nameUsername.setAttribute('aria-label', 'Larp name');
-    usernameLabel.append(nameUsername);
-    const applyNames = node('button', 'Save names'); applyNames.type = 'submit';
-    const restoreNames = node('button', 'Restore real names'); restoreNames.type = 'button';
-    names.addEventListener('submit', event => { event.preventDefault(); action(() => {
-      save({...state, names: localNames({username: nameUsername.value})});
-      message.textContent = state.mode ? 'Larp names saved for this browser.' : 'Names saved. Turn Larp mode on to show them.';
-    }); });
-    restoreNames.addEventListener('click', () => action(() => { save({...state, names: localNames()}); message.textContent = 'Real browser names restored.'; }));
-    names.append(usernameLabel, applyNames, restoreNames, node('p', 'Visible only to you while Larp mode is on. Connected games update automatically through the local helper.'));
-    controls.append(names);
+    const nameSettings = node('a', 'Change Larp username · R$ 1,000'); nameSettings.href = '/my/account#!/info';
+    controls.append(nameSettings);
     const connection = node('details', '', 'larpbux-game-connection');
     connection.append(node('summary', 'Game connection'));
     connection.append(node('p', 'Open the Larpblox app and run Larpblox in your game. The connection is automatic.'));
@@ -1169,6 +1161,63 @@
   function closePurchase() {
     if (!purchaseDialog) return;
     purchaseDialog.close(); purchaseDialog.remove(); purchaseDialog = undefined;
+  }
+  function purchaseUsername() {
+    if (!state?.mode || !userId) return;
+    closePurchase();
+    const account=userId, path=location.pathname;
+    const dialog=node('dialog','','larpbux-buy-dialog larpbux-username-dialog'); purchaseDialog=dialog;
+    dialog.setAttribute('aria-label','Change Username');
+    const title=node('h2','Change Username');
+    const close=node('button','×','larpbux-modal-close'); close.type='button'; close.setAttribute('aria-label','Close purchase'); close.addEventListener('click',closePurchase);
+    const body=node('div','','larpbux-purchase-body');
+    const copy=node('div');
+    const label=node('label','New username');
+    const input=node('input'); input.type='text'; input.maxLength=20; input.autocomplete='off'; input.required=true;
+    input.setAttribute('aria-label','New username'); input.value=state.names?.username || '';
+    label.append(input);
+    copy.append(label,node('p','R$ 1,000','larpbux-purchase-price'),node('p','Your display name will match your username.'));
+    const summary=node('div','','larpbux-balance-summary');
+    summary.append(node('p',`Your balance: R$ ${state.balance.toLocaleString('en-US')}`),node('p',state.balance>=1000 ? `Your balance after this purchase will be R$ ${(state.balance-1000).toLocaleString('en-US')}.` : `You need R$ ${(1000-state.balance).toLocaleString('en-US')} more to change your username.`));
+    copy.append(summary);body.append(copy);
+    const status=node('p','','larpbux-purchase-status');status.setAttribute('role','status');
+    const footer=node('div','','larpbux-purchase-footer');
+    const confirm=node('button','Buy','larpbux-buy-confirm');confirm.type='button';confirm.disabled=state.balance<1000;
+    const cancel=node('button','Cancel','larpbux-buy-cancel');cancel.type='button';cancel.addEventListener('click',closePurchase);
+    footer.append(confirm,cancel);dialog.append(title,node('div',`R$ ${state.balance.toLocaleString('en-US')}`,'larpbux-purchase-balance'),close,body,status,footer);
+    dialog.addEventListener('cancel',event=>{event.preventDefault();closePurchase();});
+    document.body.append(dialog);dialog.showModal();input.focus();
+    confirm.addEventListener('click',()=>{
+      if (confirm.disabled) return;
+      confirm.disabled=true;
+      try {
+        if (!dialog.open || userId!==account || path!==location.pathname || !state?.mode) throw new Error('Your account or purchase state changed. Please reopen the purchase.');
+        const current=read(account);
+        if (!current.mode) throw new Error('Turn Larp mode on before changing your username.');
+        const next=changeUsername(current,input.value);
+        const realName=document.querySelector('meta[name="user-data"]')?.getAttribute('data-name') || '';
+        if (next.names.username.toLowerCase()===realName.toLowerCase()) throw new Error('Choose a different username.');
+        save(next);
+        title.textContent='Purchase Complete';dialog.setAttribute('aria-label','Purchase Complete');
+        copy.replaceChildren(node('p',`Your username and display name are now ${state.names.username}.`),node('p',`Your balance is now R$ ${state.balance.toLocaleString('en-US')}.`));
+        status.textContent='';footer.replaceChildren();
+        const done=node('button','Done','larpbux-buy-cancel');done.type='button';done.addEventListener('click',closePurchase);footer.append(done);
+      } catch(error) {status.textContent=error.message;confirm.disabled=false;}
+    });
+    input.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();confirm.click();}});
+  }
+  function settingsNameRow(target) {
+    if (!/^\/my\/account\/?$/i.test(location.pathname)) return false;
+    const button=target.closest?.('button, a, [role="button"]');
+    if (!button || button.closest('.larpbux-buy-dialog, .larpbux-dropdown')) return false;
+    if (button.matches('#account-username-edit, [data-testid="username-edit"], [aria-label="Edit Username"], [aria-label="Edit username"]')) return true;
+    let row=button.parentElement;
+    for(let depth=0;row && depth<4;depth++,row=row.parentElement) {
+      if (row.querySelectorAll('button, [role="button"]').length>1) break;
+      if ([...row.querySelectorAll('label, .text-label, .font-header-2, b, strong')].some(label=>/^username\s*:?$/i.test(label.textContent.trim()))) return true;
+      if (row.matches('#account-username, .account-username, [data-testid="account-username"]')) return true;
+    }
+    return false;
   }
   function purchase(item) {
     closePurchase();
@@ -1306,6 +1355,10 @@
     updateItem(); updateAvatar();
   }
   function start() {
+    document.addEventListener('click',event=>{
+      if (!state?.mode || !settingsNameRow(event.target)) return;
+      event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();purchaseUsername();
+    },true);
     update(); let queued = false;
     new MutationObserver(() => { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; update(); }); }).observe(document.body, {childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ['src', 'srcset', 'sizes', 'data-user-id', 'data-userid']});
     window.addEventListener('storage', event => { if (userId && (event.key === key() || event.key === null)) { closePurchase(); state = read(userId); render(); } });
