@@ -190,7 +190,7 @@ html.larpblox-modern .larpbux-item-actions p:empty { display:none; }
 .larpbux-cart-toggle { display:none; }
 html.larpblox-pretend-mode .larpbux-native-cart { display:none !important; }
 html.larpblox-pretend-mode .larpbux-cart-toggle { display:inline-flex; position:absolute; right:0; top:8px; padding:6px; background:transparent; color:inherit; border:0; cursor:pointer; }
-html.larpblox-pretend-mode :is(#item-details,#item-info-container-frontend,.item-details-name-row) { position:relative; }
+html.larpblox-pretend-mode .larpbux-cart-heading { position:relative; }
 .larpbux-cart-toggle > span { position:absolute; top:-4px; right:-2px; min-width:20px; height:20px; padding:0 2px; border:2px solid white; border-radius:14px; background:#335fff; color:white; font:700 12px/20px Arial,sans-serif; text-align:center; }
 .larpbux-cart-items { max-height:55vh; overflow:auto; margin-top:20px; }
 .larpbux-cart-row { display:flex; align-items:center; gap:16px; padding:12px 0; border-bottom:1px solid #8885; }

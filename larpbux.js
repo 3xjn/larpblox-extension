@@ -1408,17 +1408,21 @@
     const addLabel = inCart && !limited ? 'Added to cart' : 'Add to cart';
     if (own._add.textContent !== addLabel) own._add.textContent = addLabel;
     const info = box.closest('#item-details, #item-details-container');
-    for (const control of info?.querySelectorAll('button, a, [role="button"]') || []) {
+    const page = box.closest('#item-details-container') || info;
+    const heading = page?.querySelector('.item-details-name-row') || page?.querySelector('h1')?.parentElement;
+    if (heading) heading.classList.add('larpbux-cart-heading');
+    for (const control of page?.querySelectorAll('button, a, [role="button"]') || []) {
       if (control.closest('.larpbux-item-actions, .larpbux-cart-toggle')) continue;
       const label = control.getAttribute('aria-label') || control.textContent.trim();
-      if (/^(?:shopping )?cart(?:\s*\(\d+\))?$/i.test(label)) control.classList.add('larpbux-native-cart');
+      if (/^(?:shopping )?cart(?:\s*\(\d+\))?$/i.test(label) || (heading?.contains(control) && /^\d+$/.test(control.textContent.trim()) && control.querySelector('svg, [class*="cart"]'))) control.classList.add('larpbux-native-cart');
     }
-    let cart = info?.querySelector('.larpbux-cart-toggle');
-    if (!cart && info) {
+    let cart = page?.querySelector('.larpbux-cart-toggle');
+    if (!cart && heading) {
       cart = node('button', '', 'larpbux-cart-toggle'); cart.type = 'button';
       cart.innerHTML = '<svg viewBox="0 0 28 28" width="28" height="28" aria-hidden="true"><path d="M2 4h4l4 14h13l3-10H8M11 22a2 2 0 1 0 0 .1M22 22a2 2 0 1 0 0 .1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span></span>';
-      cart.addEventListener('click', showCart); (info.querySelector('.item-details-name-row') || info).append(cart);
+      cart.addEventListener('click', showCart); heading.append(cart);
     }
+    if (cart && heading && cart.parentElement !== heading) heading.append(cart);
     if (cart) {
       const quantity = state?.cart?.length || 0;
       const label = `Shopping cart (${quantity})`;

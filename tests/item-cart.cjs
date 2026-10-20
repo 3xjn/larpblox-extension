@@ -45,12 +45,11 @@ assert.deepEqual(insufficient, {...pureStart, cart: [{...ordinary, price: 501, q
         <meta name="user-data" data-userid="123">
         <div id="robux-menu"></div>
         <div id="item-thumbnail-container-frontend">${limitedLabel}</div>
-        <div id="item-details">
-          <h1>${item.name}</h1>
+        <div id="item-details-container"><div class="item-details-name-row"><h1>${item.name}</h1><button aria-label="Shopping cart">0</button></div><div id="item-details">
           <div class="item-details-creator-container">By Roblox</div>
           <div id="type-content">${item.assetType === 46 ? 'Back Accessories' : 'Neck Accessories'}</div>
           <div class="price-row-container"><span class="item-price-value">${item.price}</span><div class="item-purchase-btns-container"><button>Native Buy</button></div></div>
-        </div>`});
+        </div></div>`});
     });
     await context.route('https://economy.roblox.com/**', route => {
       const id = Number(new URL(route.request().url()).pathname.match(/assets\/(\d+)/)?.[1]);
@@ -71,6 +70,10 @@ assert.deepEqual(insufficient, {...pureStart, cart: [{...ordinary, price: 501, q
     await page.addScriptTag({path: path.join(root, 'larpbux.js')});
 
     await page.addStyleTag({content:'body {background:#111216;color:#f7f7f8;font-family:Arial,sans-serif} #robux-menu {display:none} #item-details {width:514px;margin:30px auto} #item-details h1 {font-size:32px} .item-details-creator-container {padding-bottom:12px;border-bottom:1px solid #494b5a} .price-row-container {margin-top:16px} .item-price-value {display:block;margin-left:150px;font-size:20px;font-weight:bold}'});
+    assert.equal(await page.locator('.larpbux-cart-toggle').count(),1);
+    assert.equal(await page.locator('.item-details-name-row .larpbux-cart-toggle').count(),1);
+    assert.equal(await page.locator('#item-details .larpbux-cart-toggle').count(),0);
+    assert.equal(await page.locator('.larpbux-native-cart').isVisible(),false);
     const buyBox = await page.locator('.larpbux-classic-buy').boundingBox();
     const addBox = await page.locator('.larpbux-add-cart').boundingBox();
     assert.equal(buyBox.x, addBox.x);
