@@ -179,10 +179,23 @@ html.larpblox-modern #avatar-web-app .larpbux-native-item[data-larpbux-equipped=
 .larpbux-character-dialog h2 { margin:0; font-size:22px; }
 .larpbux-character-status { font-size:12px; }
 
-/* Current purchase action stays a single-line button beside the price. */
-html.larpblox-modern :is(#item-details,#item-details-container) .larpbux-item-actions { flex:0 0 auto; width:180px; max-width:100%; margin-left:auto; }
-html.larpblox-modern .larpbux-item-actions .larpbux-classic-buy { display:flex; align-items:center; justify-content:center; min-height:40px; padding:8px 16px; margin:0; font-size:16px; font-weight:600; line-height:22px; white-space:nowrap; }
+/* Match the current catalog's two stacked actions beneath the price. */
+html.larpblox-modern.larpblox-pretend-mode :is(#item-details,#item-details-container) .price-row-container { flex-wrap:wrap; }
+html.larpblox-modern :is(#item-details,#item-details-container) .larpbux-item-actions { flex:0 0 calc(100% - 150px); width:calc(100% - 150px); max-width:100%; margin:10px 0 0 auto; }
+html.larpblox-modern .larpbux-item-actions :is(.larpbux-classic-buy,.larpbux-add-cart) { display:flex; align-items:center; justify-content:center; width:100%; box-sizing:border-box; height:52px; min-height:52px; padding:10px 16px; margin:0; border:0; border-radius:8px; font-family:inherit; font-size:20px; font-weight:600; line-height:28px; white-space:nowrap; }
+html.larpblox-modern .larpbux-item-actions .larpbux-add-cart { margin-top:10px; background:#fff !important; color:#17191e !important; font-weight:400; }
+html.larpblox-modern .larpbux-item-actions .larpbux-add-cart:disabled { opacity:.55; cursor:default; }
+html:is(.rbx2016,.larpblox-modern) .larpbux-item-actions .larpbux-add-cart { box-sizing:border-box; }
 html.larpblox-modern .larpbux-item-actions p:empty { display:none; }
+.larpbux-cart-toggle { display:none; }
+html.larpblox-pretend-mode .larpbux-native-cart { display:none !important; }
+html.larpblox-pretend-mode .larpbux-cart-toggle { display:inline-flex; position:absolute; right:0; top:8px; padding:6px; background:transparent; color:inherit; border:0; cursor:pointer; }
+html.larpblox-pretend-mode :is(#item-details,#item-info-container-frontend,.item-details-name-row) { position:relative; }
+.larpbux-cart-toggle > span { position:absolute; top:-4px; right:-2px; min-width:20px; height:20px; padding:0 2px; border:2px solid white; border-radius:14px; background:#335fff; color:white; font:700 12px/20px Arial,sans-serif; text-align:center; }
+.larpbux-cart-items { max-height:55vh; overflow:auto; margin-top:20px; }
+.larpbux-cart-row { display:flex; align-items:center; gap:16px; padding:12px 0; border-bottom:1px solid #8885; }
+.larpbux-cart-row > span:first-child { flex:1; }
+@media(max-width:600px) { html.larpblox-modern :is(#item-details,#item-details-container) .larpbux-item-actions { flex-basis:100%; width:100%; } }
 
 /* Applied at document_start, before the page can paint the account identity. */
 html:not([data-larpblox-identity-checked]) :is(a[href="/users/profile"],#navigation a[href*="/profile"],#header a[href*="/profile"],header a[href*="/profile"],.rbx-header a[href*="/profile"]),

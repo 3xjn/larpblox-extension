@@ -52,6 +52,27 @@
     if (isBodyBundle(item)) for (const part of item.assets.filter(isWearableAsset)) if (!items.some(owned => keyFor(owned) === keyFor(part))) items.push({...part, price:0, source:'bundle', assetTypeVerified:true});
     return {...state, balance: state.balance - price, items};
   }
+  function addToCart(current, item) {
+    const cart = current.cart || [];
+    const existing = cart.find(entry => keyFor(entry) === keyFor(item));
+    if (existing && !item.isLimited && !item.isLimitedUnique) return current;
+    if (!existing && cart.length >= 2000) throw new Error('Your cart is full.');
+    const quantity = existing ? amount(existing.quantity + 1) : 1;
+    return {...current, cart:existing ? cart.map(entry => entry === existing ? {...item, quantity} : entry) : [...cart, {...item, quantity}]};
+  }
+  function checkoutCart(current) {
+    let next = current;
+    for (const entry of current.cart || []) {
+      const previous = next.items.find(item => keyFor(item) === keyFor(entry));
+      const limited = entry.isLimited || entry.isLimitedUnique || previous?.isLimited || previous?.isLimitedUnique;
+      const quantity = limited ? amount(entry.quantity || 1) : 1;
+      if (previous && !limited) continue;
+      const count = amount((Number.isSafeInteger(previous?.quantity) && previous.quantity > 0 ? previous.quantity : previous ? 1 : 0) + quantity);
+      next = collect(next, {...entry, price:amount(entry.price * quantity)});
+      next = {...next, items:next.items.map(item => keyFor(item) === keyFor(entry) ? {...item, price:entry.price, quantity:count} : item)};
+    }
+    return {...next, cart:[]};
+  }
   const bodyAssetTypes = [17, 18, 27, 28, 29, 30, 31, 79];
   const wearableAssetTypes = [17, 18, 27, 28, 29, 30, 31, 79, 2, 8, 11, 12, 19, 41, 42, 43, 44, 45, 46, 47, 48, 50, 51, 52, 53, 54, 55, 56, 64, 65, 66, 67, 68, 69, 70, 71, 72, 76, 77];
   const animationAssetTypes = [48, 50, 51, 52, 53, 54, 55, 56];
@@ -194,7 +215,7 @@
     for (const item of outfitAssets(state.items.filter(item => state.equipped.includes(keyFor(item))))) items.set(item.id, item);
     return {version: 1, userId: String(userId), definition, items: definition.assets.map(asset => items.get(asset.id)).filter(Boolean).map(({id, name, assetType}) => ({id, name, assetType, itemType: 'Asset'}))};
   }
-  if (typeof module !== 'undefined' && module.exports) { module.exports = {changeUsername, localNames, amount, formatBalance, collect, equip, outfit, supportsOutfit, previewDefinition, matchesAvatarCategory, mergeGameSnapshot, gamePreviewDefinition, gameCommand, gameOutfitMatches}; return; }
+  if (typeof module !== 'undefined' && module.exports) { module.exports = {addToCart, checkoutCart, changeUsername, localNames, amount, formatBalance, collect, equip, outfit, supportsOutfit, previewDefinition, matchesAvatarCategory, mergeGameSnapshot, gamePreviewDefinition, gameCommand, gameOutfitMatches}; return; }
   let state, userId, panel, controls, list, balance, mode, message, exportBox, purchaseDialog, previewElement, previewViewer, previewSignature, previewController;
   const thumbnails = new Map();
   const thumbnailPending = new Map();
@@ -225,7 +246,8 @@
     if (saved?.gameLook && typeof LarpbloxGameBridge !== 'undefined') {
       try { gameLook = LarpbloxGameBridge.validateSnapshot(saved.gameLook, id); } catch (_) {}
     }
-    return {version: 1, names, mode: saved?.mode === true, pendingOutfit: saved?.mode === true && saved?.pendingOutfit === true, balance: Number.isSafeInteger(saved?.balance) && saved.balance >= 0 ? saved.balance : 0, items, equipped: Array.isArray(saved?.equipped) ? saved.equipped.filter(value => items.some(item => keyFor(item) === value)).slice(0, 100) : [], ...(gameLook ? {gameLook} : {})};
+    const cart = Array.isArray(saved?.cart) ? saved.cart.filter(item => Number.isSafeInteger(item.id) && item.id > 0 && ['Asset', 'Bundle'].includes(item.itemType) && typeof item.name === 'string' && Number.isSafeInteger(item.price) && item.price >= 0 && Number.isSafeInteger(item.quantity) && item.quantity > 0).slice(0, 2000) : [];
+    return {version: 1, cart, names, mode: saved?.mode === true, pendingOutfit: saved?.mode === true && saved?.pendingOutfit === true, balance: Number.isSafeInteger(saved?.balance) && saved.balance >= 0 ? saved.balance : 0, items, equipped: Array.isArray(saved?.equipped) ? saved.equipped.filter(value => items.some(item => keyFor(item) === value)).slice(0, 100) : [], ...(gameLook ? {gameLook} : {})};
   }
   const avatarUrl = () => '/my/avatar';
   async function syncNames() {
@@ -1283,6 +1305,53 @@
       }
     });
   }
+  function showCart() {
+    if (!state?.mode || !userId) return;
+    closePurchase();
+    const account = userId;
+    const dialog = node('dialog', '', 'larpbux-buy-dialog larpbux-cart-dialog'); purchaseDialog = dialog;
+    dialog.setAttribute('aria-label', 'Shopping cart');
+    const title = node('h2', 'Shopping cart');
+    const close = node('button', '×', 'larpbux-modal-close'); close.type = 'button'; close.setAttribute('aria-label', 'Close cart'); close.addEventListener('click', closePurchase);
+    const rows = node('div', '', 'larpbux-cart-items');
+    const status = node('p', '', 'larpbux-purchase-status'); status.setAttribute('role', 'status');
+    const footer = node('div', '', 'larpbux-purchase-footer');
+    let confirming = false;
+    const draw = () => {
+      rows.replaceChildren(); footer.replaceChildren();
+      for (const item of state.cart || []) {
+        const row = node('div', '', 'larpbux-cart-row');
+        row.append(node('span', `${item.name} × ${item.quantity}`), node('span', `R$ ${(item.price * item.quantity).toLocaleString('en-US')}`));
+        const remove = node('button', 'Remove', 'larpbux-buy-cancel'); remove.type = 'button'; remove.setAttribute('aria-label', `Remove ${item.name}`);
+        remove.addEventListener('click', () => {
+          if (userId !== account || !state?.mode) return;
+          const current = read(account); save({...current, cart:current.cart.filter(entry => keyFor(entry) !== keyFor(item))}); confirming = false; draw();
+        });
+        row.append(remove); rows.append(row);
+      }
+      let next, error;
+      try { next = checkoutCart(state); } catch (failure) { error = failure.message; }
+      const cost = next ? state.balance - next.balance : (state.cart || []).reduce((sum, item) => sum + item.price * item.quantity, 0);
+      rows.append(node('p', `Total: R$ ${cost.toLocaleString('en-US')}`), node('p', `Your balance: R$ ${state.balance.toLocaleString('en-US')}`));
+      const buy = node('button', confirming ? 'Buy' : 'Checkout', 'larpbux-buy-confirm'); buy.type = 'button'; buy.disabled = !state.cart?.length || Boolean(error);
+      status.textContent = error || (confirming ? 'Confirm your purchase with Larp Robux.' : '');
+      buy.addEventListener('click', () => {
+        if (!confirming) { confirming = true; draw(); return; }
+        buy.disabled = true;
+        try {
+          if (!dialog.open || userId !== account || !state?.mode) throw new Error('Your account changed. Reopen your cart.');
+          const current = read(account);
+          if (!current.mode) throw new Error('Turn Larp mode on before buying.');
+          if (JSON.stringify(current.cart) !== JSON.stringify(state.cart)) throw new Error('Your cart changed. Reopen it to review your purchase.');
+          save(checkoutCart(current)); title.textContent = 'Purchase Complete'; rows.replaceChildren(node('p', `You have successfully purchased your cart. Your balance is now R$ ${state.balance.toLocaleString('en-US')}.`)); status.textContent = ''; footer.replaceChildren();
+          const done = node('button', 'Continue Shopping', 'larpbux-buy-cancel'); done.type = 'button'; done.addEventListener('click', closePurchase); footer.append(done);
+        } catch (failure) { status.textContent = failure.message; buy.disabled = false; }
+      });
+      footer.append(buy);
+    };
+    draw(); dialog.append(title, close, rows, status, footer);
+    dialog.addEventListener('cancel', event => {event.preventDefault(); closePurchase();}); document.body.append(dialog); dialog.showModal();
+  }
   function updateItem() {
     const box = document.querySelector('#item-details .price-row-container, #item-details-container .price-row-container');
     if (!box) return;
@@ -1290,9 +1359,21 @@
     if (!own) {
       own = node('div', '', 'larpbux-item-actions');
       const buy = node('button', 'Buy with R$', 'larpbux-classic-buy'); buy.type = 'button';
+      const add = node('button', 'Add to cart', 'larpbux-add-cart'); add.type = 'button';
       const view = node('a', 'Customize Character', 'larpbux-owned-link'); view.hidden = true;
       const status = node('p'); status.setAttribute('role', 'status');
-      own.append(buy, view, status); own._buy = buy; own._view = view; own._status = status; own._pending = false; box.append(own);
+      own.append(buy, add, view, status); own._buy = buy; own._add = add; own._view = view; own._status = status; own._pending = false; box.append(own);
+      add.addEventListener('click', async () => {
+        if (own._pending || !state?.mode) return;
+        own._pending = true; add.disabled = true;
+        try {
+          const account = userId, path = location.pathname, item = await itemData();
+          if (!item || account !== userId || path !== location.pathname || !state?.mode) return;
+          const current = read(account); if (!current.mode) return;
+          save(addToCart(current, item)); status.textContent = 'Added to cart';
+        } catch (error) {status.textContent = error.message;}
+        finally {own._pending = false; updateItem();}
+      });
       buy.addEventListener('click', async () => {
         if (own._pending) return;
         own._pending = true; buy.disabled = true; status.textContent = 'Loading item…';
@@ -1318,7 +1399,29 @@
     const text = owned && !limited ? 'Item Owned' : own._pending ? 'Loading…' : modern ? 'Buy' : 'Buy with R$';
     if (own._buy.textContent !== text) own._buy.textContent = text;
     own._buy.disabled = Boolean((owned && !limited) || own._pending); own._view.hidden = !owned || limited; own._view.href = avatarUrl();
+    own._add.disabled = own._buy.disabled;
+    const inCart = state?.cart?.some(item => keyFor(item) === itemKey);
+    own._add.disabled ||= Boolean(inCart && !limited);
+    const addLabel = inCart && !limited ? 'Added to cart' : 'Add to cart';
+    if (own._add.textContent !== addLabel) own._add.textContent = addLabel;
     const info = box.closest('#item-details, #item-details-container');
+    for (const control of info?.querySelectorAll('button, a, [role="button"]') || []) {
+      if (control.closest('.larpbux-item-actions, .larpbux-cart-toggle')) continue;
+      const label = control.getAttribute('aria-label') || control.textContent.trim();
+      if (/^(?:shopping )?cart(?:\s*\(\d+\))?$/i.test(label)) control.classList.add('larpbux-native-cart');
+    }
+    let cart = info?.querySelector('.larpbux-cart-toggle');
+    if (!cart && info) {
+      cart = node('button', '', 'larpbux-cart-toggle'); cart.type = 'button';
+      cart.innerHTML = '<svg viewBox="0 0 28 28" width="28" height="28" aria-hidden="true"><path d="M2 4h4l4 14h13l3-10H8M11 22a2 2 0 1 0 0 .1M22 22a2 2 0 1 0 0 .1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span></span>';
+      cart.addEventListener('click', showCart); (info.querySelector('.item-details-name-row') || info).append(cart);
+    }
+    if (cart) {
+      const quantity = state?.cart?.length || 0;
+      const label = `Shopping cart (${quantity})`;
+      if (cart.getAttribute('aria-label') !== label) cart.setAttribute('aria-label', label);
+      if (cart.lastElementChild.textContent !== String(quantity)) cart.lastElementChild.textContent = String(quantity);
+    }
     let count = info?.querySelector('.larpbux-owned-count');
     if (owned && limited && info) {
       for (const label of info.querySelectorAll('span, a')) {
