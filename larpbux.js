@@ -690,7 +690,7 @@
     const selected = editingLarp() ? state.items.filter(item => state.equipped.includes(keyFor(item)) && supportsOutfit(item)) : [];
     const holder = editor?.querySelector('.avatar-thumbnail');
     const gameLook = editingLarp() && state.gameLook;
-    holder?.classList.toggle('larpbux-local-preview', Boolean(editingLarp() && (selected.length || gameLook) && previewElement && !previewElement.hidden));
+    holder?.classList.toggle('larpbux-local-preview', Boolean(editingLarp() && (selected.length || gameLook)));
     if (!holder || (!selected.length && !gameLook)) {
       clearTimeout(previewRetryTimer); previewRetryKey = undefined;
       previewFeedback(editor, '');

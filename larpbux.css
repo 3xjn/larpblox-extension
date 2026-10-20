@@ -269,6 +269,11 @@ html #avatar-web-app .larpbux-character-card :is(.item-card-thumb,.item-card-nam
 #avatar-web-app .larpbux-avatar-hats img { width:100%; height:100%; object-fit:contain; cursor:pointer; }
 html.larpblox-modern #avatar-web-app .larpbux-avatar-hats { background:var(--larp-panel,#fff); }
 
+/* Gate the native preview before the asynchronous Larp renderer starts. */
+html:not([data-larpblox-identity-checked]) #avatar-web-app .avatar-thumbnail > :not(.larpbux-avatar-look):not(.larpbux-avatar-hats),
+html:not([data-larpblox-identity-checked]) #avatar-web-app .avatar-thumbnail > :not(.larpbux-avatar-look):not(.larpbux-avatar-hats) *,
+html[data-larpblox-identity-avatar="true"] #avatar-web-app:not([data-larpbux-avatar-view="real"]) .avatar-thumbnail > :not(.larpbux-avatar-look):not(.larpbux-avatar-hats),
+html[data-larpblox-identity-avatar="true"] #avatar-web-app:not([data-larpbux-avatar-view="real"]) .avatar-thumbnail > :not(.larpbux-avatar-look):not(.larpbux-avatar-hats) *,
 #avatar-web-app .avatar-thumbnail.larpbux-local-preview > :not(.larpbux-avatar-look):not(.larpbux-avatar-hats),
 #avatar-web-app .avatar-thumbnail.larpbux-local-preview > :not(.larpbux-avatar-look):not(.larpbux-avatar-hats) * { visibility:hidden !important; }
 #avatar-web-app .avatar-thumbnail.larpbux-local-preview > :not(.larpbux-avatar-look):not(.larpbux-avatar-hats) .toggle-three-dee,

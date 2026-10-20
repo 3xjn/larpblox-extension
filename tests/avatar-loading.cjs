@@ -1,0 +1,20 @@
+const assert=require('node:assert/strict');
+const path=require('node:path');
+const {chromium}=require('playwright');
+(async()=>{const browser=await chromium.launch({channel:'chrome',headless:true});try{
+ const page=await browser.newPage();
+ await page.route('https://www.roblox.com/**',r=>r.fulfill({contentType:'text/html',body:'<meta name="user-data" data-userid="123"><main id="avatar-web-app"><div class="avatar-thumbnail"><div class="thumbnail-holder"><canvas id="real-avatar"></canvas></div></div></main>'}));
+ await page.goto('https://www.roblox.com/my/avatar');
+ await page.evaluate(()=>localStorage.setItem('larpblox-cosmetics-v1:123',JSON.stringify({mode:true,equipped:['Asset:808']})));
+ await page.addStyleTag({path:path.join(__dirname,'../larpbux.css')});
+ await page.addScriptTag({path:path.join(__dirname,'../identity-gate.js')});
+ const visible=()=>page.locator('#real-avatar').evaluate(e=>getComputedStyle(e).visibility);
+ assert.equal(await visible(),'hidden','real avatar must be hidden before the Larp renderer starts');
+ await page.evaluate(()=>document.querySelector('#avatar-web-app').dataset.larpbuxAvatarView='larp');
+ assert.equal(await visible(),'hidden','slow or failed rendering must not expose real avatar');
+ await page.evaluate(()=>document.querySelector('#avatar-web-app').dataset.larpbuxAvatarView='real');
+ assert.equal(await visible(),'visible','explicit Real avatar choice remains available');
+ await page.evaluate(()=>{localStorage.setItem('larpblox-cosmetics-v1:123',JSON.stringify({mode:false}));LarpbloxIdentityGate.update()});
+ assert.equal(await visible(),'visible');
+ console.log('PASS: real avatar stays hidden during Larp startup/loading and remains visible in Real avatar or mode off.');
+}finally{await browser.close()}})().catch(e=>{console.error(e);process.exitCode=1});
