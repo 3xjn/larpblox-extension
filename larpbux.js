@@ -1660,7 +1660,8 @@
       const add = node('button', 'Add to cart', 'larpbux-add-cart'); add.type = 'button';
       const view = node('a', 'Customize Character', 'larpbux-owned-link'); view.hidden = true;
       const status = node('p'); status.setAttribute('role', 'status');
-      own.append(buy, add, view, status); own._buy = buy; own._add = add; own._view = view; own._status = status; own._pending = false; box.append(own);
+      const notice = node('span', 'This item is available in your inventory.', 'larpbux-owned-notice');
+      own.append(buy, add, notice, view, status); own._notice = notice; own._buy = buy; own._add = add; own._view = view; own._status = status; own._pending = false; box.append(own);
       add.addEventListener('click', async () => {
         if (own._pending || !state?.mode) return;
         own._pending = true; add.disabled = true;
@@ -1697,6 +1698,15 @@
     const text = owned && !limited ? 'Item Owned' : modern ? 'Buy' : 'Buy with R$';
     if (own._buy.textContent !== text) own._buy.textContent = text;
     own._buy.disabled = Boolean((owned && !limited) || own._pending); own._view.hidden = !owned || limited; own._view.href = avatarUrl();
+    const singleOwned = Boolean(state?.mode && modern && owned && !limited);
+    box.classList.toggle('larpbux-single-owned', singleOwned);
+    own._notice.hidden = !singleOwned;
+    if (singleOwned && !own._view.querySelector('svg')) {
+      own._view.textContent = '';
+      own._view.setAttribute('aria-label', 'Customize Character');
+      own._view.title = 'Customize Character';
+      own._view.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="9" y="2" width="6" height="7" rx="3"/><path d="M8 9H6a2 2 0 0 0-2 2v6l4 2V12m8-3h2a2 2 0 0 1 2 2v6l-4 2v-7M8 10v10a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V10M12 15v7"/></svg>';
+    } else if (!singleOwned && own._view.querySelector('svg')) own._view.textContent = 'Customize Character';
     own._add.disabled = own._buy.disabled;
     const inCart = state?.cart?.some(item => keyFor(item) === itemKey);
     own._add.disabled ||= Boolean(inCart && !limited);
@@ -1719,9 +1729,9 @@
       }
     }
     let count = info?.querySelector('.larpbux-owned-count');
-    if (owned && limited && info) {
+    if (owned && (limited || singleOwned) && info) {
       for (const label of info.querySelectorAll('span, a')) {
-        if (label.closest('.larpbux-owned-count') || !/^Owned Items\s*\(\d+\)$/i.test(label.textContent.trim())) continue;
+        if (label.closest('.larpbux-owned-count') || !/^(?:Owned Items\s*\(\d+\)|Item Owned)$/i.test(label.textContent.trim())) continue;
         label.classList.add('larpbux-native-owned-count');
       }
       if (!count) {
@@ -1729,7 +1739,7 @@
         const creator = info.querySelector('.item-details-creator-container, .item-details-creator, .creator-name');
         if (creator) creator.append(count); else box.before(count);
       }
-      const label = `Owned Items (${Number.isSafeInteger(owned.quantity) && owned.quantity > 0 ? owned.quantity : 1})`;
+      const label = singleOwned ? 'Item Owned' : `Owned Items (${Number.isSafeInteger(owned.quantity) && owned.quantity > 0 ? owned.quantity : 1})`;
       if (count.textContent !== label) count.textContent = label;
     } else {
       count?.remove();

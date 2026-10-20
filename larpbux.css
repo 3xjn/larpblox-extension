@@ -400,3 +400,13 @@ img.larpbux-thumbnail:not(.larpbux-thumbnail-ready) { visibility:hidden !importa
 html dialog.larpbux-character-delete { width:340px; }
 html dialog.larpbux-character-delete .larpbux-update-confirm { background:#30323d; color:#f04438; }
 html dialog.larpbux-character-update button { margin:0; }
+
+/* Non-limited ownership uses the native inventory message instead of purchase buttons. */
+.larpbux-owned-notice[hidden] { display:none !important; }
+html.larpblox-modern.larpblox-pretend-mode .price-row-container.larpbux-single-owned { display:block; border-top:1px solid #494b5a; padding-top:12px; }
+html.larpblox-modern.larpblox-pretend-mode .larpbux-single-owned > :not(.larpbux-item-actions),
+html.larpblox-modern .larpbux-single-owned .larpbux-item-actions > :is(.larpbux-classic-buy,.larpbux-add-cart) { display:none !important; }
+html.larpblox-modern :is(#item-details,#item-details-container) .larpbux-single-owned .larpbux-item-actions { flex-basis:100%; display:flex; align-items:flex-start; justify-content:space-between; gap:16px; width:100%; margin:0; }
+html.larpblox-modern .larpbux-single-owned .larpbux-owned-notice { font-size:16px; line-height:22px; }
+html.larpblox-modern .larpbux-single-owned .larpbux-owned-link { display:flex; align-items:center; justify-content:center; flex:0 0 48px; width:48px; height:48px; box-sizing:border-box; margin:0; border:0; border-radius:8px; background:#272930; color:#bfc1c7; text-decoration:none; }
+html.larpblox-modern .larpbux-single-owned .larpbux-owned-link:hover { background:#34363f; }
