@@ -2,6 +2,14 @@
   'use strict';
   const selector = 'a[href="/users/profile"], #navigation a[href*="/profile"], #header a[href*="/profile"], header a[href*="/profile"], .rbx-header a[href*="/profile"]';
   const profileNames = '#profile-header-title-container-name,.stylistic-alts-username,.profile-header-title,.profile-header-username,.profile-header-display-name,[data-testid="profile-header-title"],[data-testid="profile-header-username"],[data-testid="profile-header-display-name"]';
+  function editProfileImage(doc = document) {
+    const back = [...doc.querySelectorAll('a,button')].find(element => /^back to profile$/i.test(element.textContent.trim()));
+    for (let root = back?.parentElement; root && root !== doc.body; root = root.parentElement) {
+      const image = [...root.querySelectorAll('img')].find(image => !image.closest('header,nav,#header,#navigation'));
+      if (image) return image;
+    }
+    return [...doc.querySelectorAll('.avatar-card-image img,main img,#content img,.content img')].find(image => !image.closest('header,nav,#header,#navigation'));
+  }
   function update() {
     const root = document.documentElement;
     if (!root) return;
@@ -17,7 +25,7 @@
     const editProfile = /^\/users\/profile\/edit\/?$/i.test(location.pathname);
     if (root.dataset.larpbloxIdentityEditProfile !== String(editProfile)) root.dataset.larpbloxIdentityEditProfile = String(editProfile);
     if (editProfile) {
-      const image = document.querySelector('.avatar-card-image img') || document.querySelector('main img, #content img, .content img');
+      const image = editProfileImage();
       if (image) image.dataset.larpbloxEditAvatar = 'true';
       const realNames = [meta?.getAttribute('data-name'), meta?.getAttribute('data-displayname')].filter(Boolean);
       for (const element of document.querySelectorAll('main span, #content span, .content span')) {
@@ -41,7 +49,7 @@
       if (link.dataset.larpbloxAliasReady !== String(ready)) link.dataset.larpbloxAliasReady = String(ready);
     }
   }
-  globalThis.LarpbloxIdentityGate = {update};
+  globalThis.LarpbloxIdentityGate = {update, editProfileImage};
   update();
   new MutationObserver(update).observe(document, {childList:true,characterData:true,subtree:true,attributes:true,attributeFilter:['href','src','srcset','data-userid','data-user-id']});
   document.addEventListener('DOMContentLoaded',update,{once:true});
