@@ -33,7 +33,14 @@
     if (signal?.aborted) throw cancelled();
   }
   async function run(definition, userId, thumbnailType, signal) {
-    const body = JSON.stringify({avatarDefinition: definition, thumbnailConfig: {thumbnailId: Number(userId), thumbnailType, size: '420x420'}});
+    const avatarDefinition = {...definition};
+    // The interactive viewer loads the backdrop separately. Request only avatar
+    // geometry here; the native background request belongs to flat thumbnails.
+    if (thumbnailType === '3d') {
+      delete avatarDefinition.backgroundRequestModel;
+      delete avatarDefinition.backgroundId;
+    }
+    const body = JSON.stringify({avatarDefinition, thumbnailConfig: {thumbnailId: Number(userId), thumbnailType, size: '420x420'}});
     let token = globalThis.LarpbloxRenderToken || document.querySelector('meta[name="csrf-token"]')?.getAttribute('data-token');
     for (let attempt = 0; attempt < 12; attempt++) {
       await waitForRender(signal);

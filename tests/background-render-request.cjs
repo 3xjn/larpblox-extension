@@ -1,0 +1,19 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const vm=require('node:vm');
+const sent=[];
+const context={AbortController,setTimeout,clearTimeout,Date,localStorage:{getItem(){return null}},document:{querySelector(){return null}},fetch:async(url,options)=>{sent.push(JSON.parse(options.body));return {ok:true,status:200,headers:{get(){return null}},json:async()=>({state:'Completed',imageUrl:'https://tr.rbxcdn.com/avatar'})}}};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(path.join(__dirname,'../larpblox-avatar-requests.js'),'utf8'),context);
+(async()=>{
+ const definition={assets:[{id:123}],bodyColors:{headColor:'ffffff'},backgroundId:92,backgroundRequestModel:{id:92}};
+ await context.LarpbloxAvatarRequests.render(definition,'123',new AbortController().signal,'3d');
+ assert.equal(sent[0].avatarDefinition.backgroundRequestModel,undefined,'3D geometry must request the avatar alone; its backdrop is loaded separately');
+ assert.equal(sent[0].avatarDefinition.backgroundId,undefined);
+ assert.deepEqual(sent[0].avatarDefinition.assets,[{id:123}]);
+ assert.equal(definition.backgroundRequestModel.id,92,'rendering must preserve saved background selection');
+ await context.LarpbloxAvatarRequests.render(definition,'123',new AbortController().signal,'2d');
+ assert.deepEqual(sent[1].avatarDefinition.backgroundRequestModel,{id:92},'flat previews still use the native background renderer');
+ console.log('PASS: 3D requests avatar geometry separately while 2D keeps its native background.');
+})().catch(error=>{console.error(error);process.exitCode=1});
