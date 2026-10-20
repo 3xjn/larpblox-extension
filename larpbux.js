@@ -1231,8 +1231,8 @@
   }
   function update() {
     const id = document.querySelector('meta[name="user-data"]')?.getAttribute('data-userid');
-    globalThis.LarpbloxSharedUsers?.update({userId:id, mode:state?.mode === true});
     if (!/^[1-9]\d*$/.test(id || '')) {
+      globalThis.LarpbloxSharedUsers?.update({userId:id, mode:false});
       userId = undefined; state = undefined;
       document.documentElement.classList.remove('larpblox-pretend-mode');
       if (panel) { panel.hidden = true; controls.remove(); }
@@ -1242,6 +1242,7 @@
     }
     if (!panel) mount();
     if (userId !== id) { closePurchase(); queuedGameCommand = undefined; awaitingGameOutfit = undefined; userId = id; state = read(id); if (bridgeStatus) bridgeStatus.textContent = 'Checking connection…'; render(); }
+    globalThis.LarpbloxSharedUsers?.update({userId, mode:state?.mode === true});
     attachDropdown();
     updateNames();
     updateHeaderBalance();

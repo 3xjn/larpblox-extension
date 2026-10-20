@@ -2,11 +2,16 @@
 importScripts('larpbux-game-bridge.js');
 const ROOT = 'http://127.0.0.1:38261';
 const SOCKET = 'ws://127.0.0.1:38261/v1/socket';
-const storageKey = userId => `larpblox-game-pair:${userId}`;
 const pausedKey = userId => `larpblox-game-paused:${userId}`;
 const sockets = new Map();
 const tabs = new Map();
+const tokens = new Map();
+const pairRetryAt = new Map();
 const socketTimeout = 2500;
+const legacyPairCleanup = chrome.storage.local.get(null).then(saved => {
+  const legacy = Object.keys(saved || {}).filter(key => key.startsWith('larpblox-game-pair:'));
+  return legacy.length ? chrome.storage.local.remove(legacy) : undefined;
+}).catch(() => {});
 function notify(userId, snapshot) {
   const tabId = tabs.get(String(userId));
   if (tabId == null || !chrome.tabs?.sendMessage) return;
@@ -34,11 +39,12 @@ function socketFor(userId, token) {
     let ws;
     try { ws = new WebSocket(SOCKET); } catch (_) { schedule(); return; }
     entry.ws = ws;
-    ws.onopen = () => { entry.reconnects = 0; ws.send(JSON.stringify({version: 1, type: 'auth', token, userId, role: 'browser'})); };
+    ws.onopen = () => { ws.send(JSON.stringify({version: 1, type: 'auth', token, userId, role: 'browser'})); };
     ws.onmessage = event => {
       let message; try { message = JSON.parse(event.data); } catch (_) { return; }
       if (message?.type === 'ready') {
         entry.ready = true;
+        entry.reconnects = 0;
         if (!entry.keepalive) entry.keepalive = setInterval(() => { try { ws.send(JSON.stringify({type: 'ping'})); } catch (_) {} }, 20000);
         // Replay the latest desired value for each channel after a helper restart.
         for (const [channel, value] of entry.lastValues) {
@@ -58,7 +64,7 @@ function socketFor(userId, token) {
     ws.onerror = () => { try { ws.close(); } catch (_) {} };
     ws.onclose = () => { entry.ready = false; if (entry.keepalive) { clearInterval(entry.keepalive); entry.keepalive = null; } for (const waiter of entry.pending.values()) { clearTimeout(waiter.timer); waiter.reject(new Error('socket closed')); } entry.pending.clear(); schedule(); };
   };
-  const schedule = () => { if (entry.closed || entry.timer) return; entry.timer = setTimeout(() => { entry.timer = null; if (entry.reconnects++ < 6) connect(); }, Math.min(1000 * 2 ** entry.reconnects, 15000)); };
+  const schedule = () => { if (entry.closed || entry.timer) return; entry.timer = setTimeout(() => { entry.timer = null; entry.reconnects++; connect(); }, Math.min(1000 * 2 ** Math.min(entry.reconnects, 4), 15000)); };
   const pump = channel => {
     if (!entry.ready || entry.pending.has(channel)) return;
     const queue = entry.queues.get(channel); const waiter = queue?.[0];
@@ -90,45 +96,63 @@ async function call(path, token, body) {
   const timer = setTimeout(() => controller.abort(), 4000);
   try {
     const response = await fetch(ROOT + path, {method: body ? 'POST' : 'GET', credentials: 'omit', cache: 'no-store', signal: controller.signal,
-      headers: {Authorization: `Bearer ${token}`, ...(body ? {'Content-Type': 'application/json'} : {})}, ...(body ? {body: JSON.stringify(body)} : {})});
+      headers: {...(token ? {Authorization: `Bearer ${token}`} : {}), ...(body ? {'Content-Type': 'application/json'} : {})}, ...(body ? {body: JSON.stringify(body)} : {})});
     if (response.status === 404) return null;
-    if (response.status === 401) throw new Error('Connection code rejected. Check the code shown by the helper.');
-    if (!response.ok) throw new Error('The local helper rejected the outfit data.');
+    if (response.status === 401) { const error = new Error('Connection code rejected.'); error.codeRejected = true; throw error; }
+    if (!response.ok) throw new Error('The local helper rejected the connection request.');
     return await response.json();
   } catch (error) {
-    if (error instanceof TypeError || error.name === 'AbortError') throw new Error('Waiting for the local helper. Your pairing is saved and will reconnect automatically.');
+    if (error instanceof TypeError || error.name === 'AbortError') throw new Error('Waiting for the local helper. The extension will retry automatically.');
     throw error;
   } finally { clearTimeout(timer); }
 }
+async function localCall(userId, path, body, forcePair = false) {
+  let token = await localToken(userId, forcePair);
+  try { return await call(path, token, body); }
+  catch (error) {
+    if (!error.codeRejected) throw error;
+    tokens.delete(userId);
+    pairRetryAt.delete(userId);
+    token = await localToken(userId, true);
+    return await call(path, token, body);
+  }
+}
 async function localToken(userId, retry = false) {
-  const key = storageKey(userId), paused = pausedKey(userId);
-  const saved = await chrome.storage.local.get([key, paused]);
+  await legacyPairCleanup;
+  const paused = pausedKey(userId);
+  const saved = await chrome.storage.local.get(paused);
   if (saved[paused] && !retry) return null;
-  if (saved[key] && !retry) return saved[key];
-  const pair = await call('/v1/pair', '');
-  if (!/^[0-9a-f]{32}$/.test(pair?.code || '')) throw new Error('Open the Larpblox app to connect.');
-  await chrome.storage.local.set({[key]: pair.code, [paused]: false});
+  if (tokens.has(userId) && !retry) return tokens.get(userId);
+  if (!retry && Date.now() < (pairRetryAt.get(userId) || 0)) throw new Error('Waiting for the local helper. The extension will retry automatically.');
+  let pair;
+  try { pair = await call('/v1/pair', ''); }
+  catch (error) { pairRetryAt.set(userId, Date.now() + 5000); throw error; }
+  if (!/^[0-9a-f]{32}$/.test(pair?.code || '')) {
+    pairRetryAt.set(userId, Date.now() + 5000);
+    throw new Error('Open the Larpblox app to connect. The extension will retry automatically.');
+  }
+  tokens.set(userId, pair.code);
+  pairRetryAt.delete(userId);
+  await chrome.storage.local.set({[paused]: false});
   return pair.code;
 }
 async function handle(message, sender) {
   if (!/^https:\/\/www\.roblox\.com\//.test(sender.url || '') || sender.id !== chrome.runtime.id) throw new Error('Connection is available only on Roblox.');
   const userId = String(message.userId || '');
   if (!/^[1-9]\d{0,15}$/.test(userId) || !Number.isSafeInteger(Number(userId))) throw new Error('Invalid Roblox account.');
-  const key = storageKey(userId);
   if (sender.tab?.id != null) tabs.set(userId, sender.tab.id);
   if (message.action === 'disconnect') {
-    const token = (await chrome.storage.local.get(key))[key];
-    if (token) await call(`/v1/names/${userId}`, token, {version: 1, userId, enabled: false, name: ''});
-    await chrome.storage.local.remove(key);
+    const token = tokens.get(userId);
     await chrome.storage.local.set({[pausedKey(userId)]: true});
+    if (token) try { await call(`/v1/names/${userId}`, token, {version: 1, userId, enabled: false, name: ''}); } catch (_) {}
+    tokens.delete(userId); pairRetryAt.delete(userId);
     const entry = sockets.get(userId); if (entry) { entry.closed = true; if (entry.timer) clearTimeout(entry.timer); if (entry.keepalive) clearInterval(entry.keepalive); try { entry.ws?.close(); } catch (_) {} sockets.delete(userId); }
     return {connected: false};
   }
   if (message.action === 'connect') {
-    const code = await localToken(userId, true);
-    const status = await call('/v1/status', code);
-    if (!status?.connected || status.version !== 1) throw new Error('Unsupported local helper.');
-    await chrome.storage.local.set({[key]: code});
+    const status = await localCall(userId, '/v1/status', undefined, true);
+    if (!status?.connected || status.version !== 1 || status.websocket !== true || typeof status.instanceId !== 'string' || !status.instanceId) throw new Error('Unsupported local helper.');
+    await chrome.storage.local.set({[pausedKey(userId)]: false});
     return {connected: true};
   }
   const token = await localToken(userId);
@@ -136,30 +160,32 @@ async function handle(message, sender) {
   const socketValue = message.action === 'publish' ? LarpbloxGameBridge.validateSnapshot(message.snapshot, userId) : message.action === 'publishNames' ? LarpbloxGameBridge.validateNames(message.names, userId) : message.action === 'publishImage' ? LarpbloxGameBridge.validateImage(message.image, userId) : undefined;
   if (message.action === 'read') {
     let snapshot;
-    try { snapshot = await socketRequest(userId, token, 'game', undefined, true); } catch (_) { snapshot = await call(`/v1/game/${userId}`, token); }
+    try { snapshot = await socketRequest(userId, token, 'game', undefined, true); } catch (_) { snapshot = await localCall(userId, `/v1/game/${userId}`); }
     return {connected: true, snapshot: snapshot && LarpbloxGameBridge.validateSnapshot(snapshot, userId)};
   }
   if (message.action === 'publish') {
-    try { await socketRequest(userId, token, 'browser', {version: 1, userId, definition: socketValue.definition, items: socketValue.items}); } catch (_) { await call(`/v1/browser/${userId}`, token, {version: 1, userId, definition: socketValue.definition, items: socketValue.items}); }
+    try { await socketRequest(userId, token, 'browser', {version: 1, userId, definition: socketValue.definition, items: socketValue.items}); } catch (_) { await localCall(userId, `/v1/browser/${userId}`, {version: 1, userId, definition: socketValue.definition, items: socketValue.items}); }
     return {connected: true};
   }
   if (message.action === 'publishNames') {
-    try { await socketRequest(userId, token, 'names', socketValue); } catch (_) { await call(`/v1/names/${userId}`, token, socketValue); }
+    try { await socketRequest(userId, token, 'names', socketValue); } catch (_) { await localCall(userId, `/v1/names/${userId}`, socketValue); }
     return {connected: true};
   }
   if (message.action === 'publishImage') {
-    try { await socketRequest(userId, token, 'image', socketValue); } catch (_) { await call(`/v1/image/${userId}`, token, socketValue); }
+    try { await socketRequest(userId, token, 'image', socketValue); } catch (_) { await localCall(userId, `/v1/image/${userId}`, socketValue); }
     return {connected: true};
   }
   throw new Error('Unsupported connection action.');
 }
 chrome.runtime.onMessage.addListener((message, sender, respond) => {
   if (message?.type === 'larpblox-shared-users') {
-    if (!/^https:\/\/www\.roblox\.com\//.test(sender.url || '') || sender.id !== chrome.runtime.id || !Array.isArray(message.userIds) || message.userIds.length > 50 || !message.userIds.length || message.userIds.some(id => !/^[1-9]\d{0,15}$/.test(String(id)))) {
+    if (!/^https:\/\/www\.roblox\.com\//.test(sender.url || '') || sender.id !== chrome.runtime.id || !Array.isArray(message.userIds) || message.userIds.length > 50 || !message.userIds.length || message.userIds.some(id => !/^[1-9]\d{0,15}$/.test(String(id)) || !Number.isSafeInteger(Number(id)))) {
       respond({ok:false}); return false;
     }
     const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 5000);
-    fetch('https://larp.3xjn.dev/v1/players?userIds=' + message.userIds.join(','), {credentials:'omit',cache:'no-store',signal:controller.signal})
+    const userIds = [...new Set(message.userIds.map(String))];
+    if (userIds.length > 50) { respond({ok:false}); return false; }
+    fetch('https://larp.3xjn.dev/v1/players?userIds=' + userIds.join(','), {credentials:'omit',cache:'no-store',signal:controller.signal})
       .then(response => { if (!response.ok) throw new Error('Unavailable'); return response.json(); })
       .then(data => respond({ok:true,data}), () => respond({ok:false}))
       .finally(() => clearTimeout(timer));

@@ -28,10 +28,20 @@
   function validateImage(value, userId) {
     if (!value || value.version !== 1 || String(value.userId) !== String(userId) || typeof value.imageUrl !== 'string' || !value.definition) throw new Error('Invalid avatar image.');
     validateSnapshot({version: 1, userId: String(userId), definition: value.definition, items: value.items || []}, userId);
-    let parsed;
-    try { parsed = new URL(value.imageUrl); } catch (_) { throw new Error('Invalid avatar image.'); }
-    if (parsed.protocol !== 'https:' || !/^(tr|t[0-7])\.rbxcdn\.com$/i.test(parsed.hostname) || parsed.username || parsed.password || parsed.port || parsed.search || parsed.hash || !(/\.png$/i.test(parsed.pathname) || /\/Png\/[^/]*$/i.test(parsed.pathname))) throw new Error('Invalid avatar image.');
+    if (!validImageUrl(value.imageUrl)) throw new Error('Invalid avatar image.');
     return {version: 1, userId: String(userId), definition: value.definition, imageUrl: value.imageUrl};
+  }
+  function validImageUrl(value) {
+    let parsed;
+    try { parsed = new URL(value); } catch (_) { return false; }
+    return parsed.protocol === 'https:' && /^(tr|t[0-7])\.rbxcdn\.com$/i.test(parsed.hostname) && !parsed.username && !parsed.password && !parsed.port && !parsed.search && !parsed.hash && (/\.png$/i.test(parsed.pathname) || /\/Png\/[^/]*$/i.test(parsed.pathname));
+  }
+  function validateSharedRecord(record, visibleIds, currentUserId) {
+    const userId = String(record?.userId || '');
+    if (record?.version !== 1 || !/^[1-9]\d{0,15}$/.test(userId) || !Number.isSafeInteger(Number(userId)) || !visibleIds.has(userId) || userId === String(currentUserId)) return null;
+    validateSnapshot(record.snapshot, userId);
+    if (record.name && (typeof record.name.enabled !== 'boolean' || typeof record.name.username !== 'string' || record.name.username.length > 20 || (record.name.username && !/^[A-Za-z0-9_]{3,20}$/.test(record.name.username)) || typeof record.name.displayName !== 'string' || record.name.displayName.length > 50 || (record.name.enabled && (!record.name.username || !record.name.displayName.trim())))) throw new Error('Invalid shared name.');
+    return {...record, userId, imageUrl: validImageUrl(record.imageUrl) ? record.imageUrl : undefined};
   }
   async function request(action, userId, extra = {}) {
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) throw new Error('Reload the extension to enable the game connection.');
@@ -39,7 +49,7 @@
     if (!result?.ok) throw new Error(result?.error || 'The game connection is unavailable.');
     return result.data;
   }
-  const api = {validateSnapshot, validateNames, validateImage, request};
+  const api = {validateSnapshot, validateNames, validateImage, validImageUrl, validateSharedRecord, request};
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else globalThis.LarpbloxGameBridge = api;
 })();
