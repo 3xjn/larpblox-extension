@@ -2,6 +2,16 @@
   'use strict';
   const MAX = Number.MAX_SAFE_INTEGER;
   const keyFor = item => `${item.itemType}:${item.id}`;
+  const itemPathFor = item => `/${item.itemType === 'Bundle' ? 'bundles' : 'catalog'}/${item.id}`;
+  function openItemOnMiddleClick(event, item) {
+    if (event.button !== 1) return;
+    event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation();
+    window.open(new URL(itemPathFor(item), location.origin).href, '_blank', 'noopener');
+  }
+  window.addEventListener('mousedown', event => {
+    if (event.button !== 1 || !event.target.closest?.('#avatar-web-app .larpbux-avatar-item, #avatar-web-app .larpbux-native-item')) return;
+    event.preventDefault();
+  }, true);
   function localNames(value = {}) {
     const username = typeof value?.username === 'string' ? value.username.trim() : '';
     if (username && !/^[A-Za-z0-9_]{3,20}$/.test(username)) throw new Error('Use 3–20 letters, numbers, or underscores for the Larp username.');
@@ -857,6 +867,7 @@
         button.setAttribute('aria-pressed', String(equipped));
         const thumb = node('span', '', 'thumbnail-2d-container'); const image = node('img'); thumbnail(image, item); thumb.append(image); button.append(thumb);
         button.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); action(() => save(equip(state, keyFor(item)), true)); });
+        button.addEventListener('auxclick', event => openItemOnMiddleClick(event, item));
         holder.append(button);
         updateLimitedBadge(button, item);
         updateEquipped(holder, equipped);
@@ -912,6 +923,13 @@
       }
       const holder = card.querySelector('.item-card-thumb-container, .thumbnail-2d-container');
       if (holder) updateEquipped(holder, equipped);
+      if (!card._larpbuxNativeAuxclick) {
+        card.addEventListener('auxclick', event => {
+          if (event.button !== 1 || !event.target.closest?.('.item-card-thumb, .item-card-thumb-container, button')) return;
+          openItemOnMiddleClick(event, native);
+        }, true);
+        card._larpbuxNativeAuxclick = true;
+      }
       if (card._larpbuxNativeClick) continue;
       const click = event => {
         if (!editingLarp() || account !== userId) return;
