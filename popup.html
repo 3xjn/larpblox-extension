@@ -28,6 +28,39 @@
         </div>
         <small id="balance-help">Local to this browser. Does not change real Robux.</small>
       </form>
+      <section id="avatar-settings" hidden>
+        <label class="field-label" for="avatar-view">Avatar to edit</label>
+        <select id="avatar-view">
+          <option value="real">Real avatar</option>
+          <option value="larp">Larp avatar</option>
+        </select>
+        <p id="preview-status" role="status"></p>
+        <button id="retry-preview" type="button" hidden>Retry avatar preview</button>
+      </section>
+      <details>
+        <summary>Profile counts</summary>
+        <p class="help">Choose the follower and following counts other Larpblox users see while Larp mode is on.</p>
+        <form id="counts-form" class="stacked-form">
+          <label for="followers">Followers</label>
+          <input id="followers" type="number" min="0" step="1">
+          <label for="following">Following</label>
+          <input id="following" type="number" min="0" step="1">
+          <div class="button-row"><button type="submit">Save profile counts</button><button id="reset-counts" type="button" class="secondary">Use Roblox counts</button></div>
+        </form>
+        <p id="counts-status" role="status"></p>
+      </details>
+      <form id="username-form" class="stacked-form">
+        <label for="username">Larp username <span>R$ 1,000</span></label>
+        <input id="username" type="text" maxlength="20" autocomplete="off">
+        <small class="help">Your Larp display name will match.</small>
+        <button type="submit">Change Larp username</button>
+      </form>
+      <details>
+        <summary>Game connection</summary>
+        <p class="help">Open the Larpblox app and run Larpblox in your game. The connection is automatic.</p>
+        <div class="button-row"><button id="connect-game" type="button">Reconnect</button><button id="disconnect-game" type="button" class="secondary">Disconnect</button></div>
+        <p id="game-status" role="status"></p>
+      </details>
       <label class="appearance-setting" for="appearance">
         <span>Website appearance</span>
         <select id="appearance">

@@ -1,5 +1,5 @@
 * { box-sizing: border-box; }
-body { width: 360px; margin: 0; color: #24252a; background: #fff; font: 14px/1.4 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+body { width: 380px; max-height: 600px; overflow-y: auto; margin: 0; color: #24252a; background: #fff; font: 14px/1.4 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 main { padding: 18px; }
 header { display: flex; align-items: center; gap: 10px; padding-bottom: 14px; border-bottom: 1px solid #e4e5e9; }
 header img { width: 30px; height: 30px; object-fit: contain; }
@@ -7,6 +7,7 @@ h1 { margin: 0; font-size: 18px; line-height: 24px; }
 #status { margin: 14px 0 0; color: #60646c; }
 #status[data-error="true"] { color: #b42318; }
 #controls[hidden] { display: none; }
+#avatar-settings[hidden] { display: none; }
 .mode-toggle { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 14px; padding: 14px 0; border-bottom: 1px solid #e4e5e9; cursor: pointer; }
 .mode-toggle span { display: grid; gap: 3px; }
 .mode-toggle small, #balance-help { color: #656a73; font-size: 12px; }
@@ -22,3 +23,15 @@ button:disabled, input:disabled { opacity: .55; cursor: default; }
 .appearance-setting { display: grid; gap: 8px; margin-top: 18px; padding-top: 16px; border-top: 1px solid #e4e5e9; font-weight: 600; }
 .appearance-setting select { width: 100%; height: 40px; padding: 0 10px; border: 1px solid #c9cbd2; border-radius: 6px; color: inherit; background: #fff; font: inherit; }
 .appearance-help { display: block; margin-top: 6px; color: #656a73; font-size: 12px; }
+#avatar-settings, main > details, #username-form { margin-top: 14px; padding-top: 14px; border-top: 1px solid #e4e5e9; }
+#avatar-settings { display: grid; gap: 8px; }
+.field-label, .stacked-form > label { font-weight: 600; }
+#avatar-view, .stacked-form input { width: 100%; height: 38px; box-sizing: border-box; padding: 0 10px; border: 1px solid #c9cbd2; border-radius: 6px; color: inherit; background: #fff; font: inherit; }
+main > details > summary { cursor: pointer; font-weight: 600; }
+.stacked-form { display: grid; gap: 8px; margin-top: 12px; }
+.stacked-form > label > span { float: right; color: #656a73; font-weight: 400; }
+.help, #preview-status, #counts-status, #game-status { color: #656a73; font-size: 12px; }
+main > details > .help { margin: 8px 0; }
+.button-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.secondary { border: 1px solid #c9cbd2; color: #24252a; background: #fff; }
+#preview-status:empty, #counts-status:empty, #game-status:empty { display: none; }
