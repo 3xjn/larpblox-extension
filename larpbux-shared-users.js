@@ -167,7 +167,7 @@
   function renderSearch() {
     let root = document.getElementById('larpblox-people-results');
     if (!context.mode || !searchKeyword() || !searchRecords.size) { root?.remove(); return; }
-    const native = document.querySelector('.people-list, .users-list, .people-search-results, #people-search-container .section-content');
+    const native = document.querySelector('[data-testid="player-search-results"], .player-search-results-grid, .people-list, .users-list, .people-search-results, #people-search-container .section-content');
     if (!native) return;
     if (!root) {
       root = document.createElement('div'); root.id = 'larpblox-people-results';
