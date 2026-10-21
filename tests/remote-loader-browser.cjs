@@ -90,7 +90,7 @@ const executablePath = process.env.LARPBLOX_TEST_CHROME || path.join(process.env
     bundle.popup.js += `;document.documentElement.dataset.popupRelease=${JSON.stringify(nextVersion)};`;
     bundle.scripts.push({name:'remote-test.js', code:`document.documentElement.dataset.remoteWebsite = ${JSON.stringify(nextVersion)};`});
     let body = Buffer.from(JSON.stringify(bundle));
-    let metadata = {schema:1, loaderApi:1, version:bundle.version, size:body.length,
+    let metadata = {schema:1, loaderApi:bundle.loaderApi, version:bundle.version, size:body.length,
       sha256:crypto.createHash('sha256').update(body).digest('hex'),
       url:`https://github.com/3xjn/larpblox-extension/releases/download/v${nextVersion}/website-${nextVersion}.json`};
     let mode = 'good', requests = [];
