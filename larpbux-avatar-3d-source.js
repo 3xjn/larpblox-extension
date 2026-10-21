@@ -130,12 +130,21 @@ export function avatarMaterials(mtlText, manager) {
   materials.preload();
   for (const [name, material] of Object.entries(materials.materials)) {
     const info = materials.materialsInfo[name];
+    const overlay = material.map && info.rbx_alphamode?.trim().toLowerCase() === 'overlay';
     // Roblox atlases already contain clothing and skin colors. Applying the
     // exported part's Kd tint again recolors the entire atlas (e.g. white sleeves tan).
-    if (material.map) material.color.setHex(0xffffff);
+    if (overlay) {
+      // Dynamic heads use texture alpha to blend a face over the Kd skin color,
+      // not to cut holes in the head. Keep material opacity independent of it.
+      material.onBeforeCompile = shader => {
+        shader.fragmentShader = shader.fragmentShader.replace('#include <map_fragment>',
+          THREE.ShaderChunk.map_fragment.replace('diffuseColor *= sampledDiffuseColor;',
+            'diffuseColor.rgb = mix( diffuseColor.rgb, sampledDiffuseColor.rgb, sampledDiffuseColor.a );'));
+      };
+    } else if (material.map) material.color.setHex(0xffffff);
     // RGBA diffuse maps already supply alpha. Reusing them as map_d instead
     // multiplies opacity by the green color channel and erases dark clothing.
-    if (material.alphaMap && info.map_kd && info.map_kd === info.map_d) {
+    if (material.alphaMap && (overlay || info.map_kd && info.map_kd === info.map_d)) {
       if (material.alphaMap !== material.map) material.alphaMap.dispose();
       material.alphaMap = null;
       material.transparent = material.opacity < 1;
