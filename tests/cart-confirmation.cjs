@@ -1,0 +1,30 @@
+const assert=require('node:assert/strict');const path=require('node:path');const {chromium}=require('playwright');
+(async()=>{const browser=await chromium.launch({channel:'chrome',headless:true});try{
+ const page=await browser.newPage({viewport:{width:1000,height:700}});page.setDefaultTimeout(5000);
+ await page.route('https://www.roblox.com/**',r=>r.fulfill({contentType:'text/html',body:'<html class="larpblox-modern"><meta name="user-data" data-userid="123"><style>body{background:#111216;color:#eee;font:16px Arial}</style><div id="robux-menu"></div><h1>Marketplace</h1><div class="shopping-cart-footer"><button>Buy</button></div></html>'}));
+ await page.route('https://economy.roblox.com/**',r=>r.fulfill({json:{Name:'Free item',AssetTypeId:8,PriceInRobux:0}}));
+ const picture='data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96"><rect width="96" height="96" fill="#30323b"/><circle cx="48" cy="32" r="13" fill="#d5b69b"/><path d="M32 48h32v33H32z" fill="#375d85"/></svg>');
+ await page.route('https://thumbnails.roblox.com/**',r=>r.fulfill({json:{data:[1,2,3,4].map(targetId=>({targetId,imageUrl:picture}))}}));
+ await page.goto('https://www.roblox.com/catalog');await page.evaluate(()=>{
+  localStorage.setItem('larpblox-cosmetics-v1:123',JSON.stringify({mode:true,balance:4,items:[],equipped:[],cart:[]}));
+  localStorage.setItem('Roblox.AvatarMarketplace.Cart:123',JSON.stringify({items:[1,2,3,4].map(itemId=>({itemId,itemType:'Asset',itemName:'Free item'})),selectedItems:{asset1:true,asset2:true,asset3:true,asset4:true},itemDetails:{1:{price:0},2:{price:0},3:{price:0},4:{price:0}}}));
+ });
+ await page.addStyleTag({path:path.join(__dirname,'../larpbux.css')});await page.addScriptTag({path:path.join(__dirname,'../larpbux.js')});
+ const open=()=>page.locator('.shopping-cart-footer button').click();await open();const dialog=page.getByRole('dialog',{name:'Buy Now',exact:true});await dialog.waitFor();
+ assert.equal(await dialog.locator('.larpbux-cart-question').textContent(),'Would you like to buy these 4 items for Free?');
+ assert.equal(await dialog.locator('.larpbux-cart-previews img').count(),2);assert.equal(await dialog.locator('.larpbux-cart-overflow').textContent(),'+2');
+ assert.match(await dialog.locator('.larpbux-cart-balance').textContent(),/4\.$/);
+ assert.equal(await dialog.evaluate(e=>getComputedStyle(e).width),'480px');
+ await page.waitForTimeout(350);
+ await page.waitForFunction(()=>[...document.querySelectorAll('.larpbux-cart-previews img')].every(i=>i.complete&&i.naturalWidth));
+ await page.screenshot({path:path.join(__dirname,'../../cart-confirmation-preview.png')});
+ await dialog.getByRole('button',{name:'Cancel',exact:true}).click();await page.waitForFunction(()=>!document.querySelector('dialog'));
+ assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('larpblox-cosmetics-v1:123')).items.length),0);
+ await open();await dialog.getByRole('button',{name:'Get Now',exact:true}).click();await page.locator('.larpbux-cart-toast').waitFor();
+ assert.equal(await dialog.count(),0);assert.equal(await page.locator('.larpbux-cart-toast').textContent(),'Purchase Complete');
+ assert.equal(await page.locator('.larpbux-cart-toast').evaluate(e=>getComputedStyle(e).animationName),'larpbux-cart-toast-in');
+ assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('larpblox-cosmetics-v1:123')).balance),4);
+ assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('larpblox-cosmetics-v1:123')).items.length),4);
+ await page.locator('.larpbux-cart-toast').waitFor({state:'detached'});
+ console.log('PASS: Buy Now layout, free checkout, two previews plus exact overflow, cancellation, balance, and animated auto-dismiss toast.');
+}finally{await browser.close()}})().catch(e=>{console.error(e);process.exitCode=1});

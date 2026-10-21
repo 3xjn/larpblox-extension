@@ -338,6 +338,68 @@ html:is(.rbx2016,.larpblox-modern) .larpbux-buy-dialog .larpbux-buy-confirm.is-l
 .larpbux-avatar-copy-dialog [hidden] { display:none !important; }
 .larpbux-avatar-copy-body .larpbux-cart-items { max-height:35vh; margin:12px 0; }
 .larpbux-avatar-copy-body .larpbux-cart-row > span:last-child { white-space:nowrap; }
+
+/* Cart confirmation follows the compact Roblox purchase prompt. Keep these
+   rules on the cart class so the single-item purchase dialogs retain their
+   existing layout. */
+html:is(.rbx2016,.larpblox-modern) dialog.larpbux-buy-dialog.larpbux-cart-dialog {
+  width:480px; max-width:calc(100vw - 32px); box-sizing:border-box; padding:0;
+  border:1px solid #30323b; border-radius:16px; background:#191a1f; color:#f7f7f8;
+  font:14px/20px Arial,sans-serif; overflow:hidden;
+}
+html:is(.rbx2016,.larpblox-modern) dialog.larpbux-buy-dialog.larpbux-cart-dialog h2 {
+  margin:0; padding:18px 76px 17px 20px; border-bottom:1px solid #30323b;
+  font-size:20px; line-height:24px; font-weight:700;
+}
+html:is(.rbx2016,.larpblox-modern) dialog.larpbux-buy-dialog.larpbux-cart-dialog .larpbux-modal-close {
+  top:12px; right:12px; display:flex; align-items:center; justify-content:center;
+  width:48px; height:48px; padding:0; border:0; border-radius:50%;
+  background:#111216; color:#f7f7f8; font-size:28px; line-height:1; font-weight:400;
+}
+html:is(.rbx2016,.larpblox-modern) dialog.larpbux-buy-dialog.larpbux-cart-dialog .larpbux-modal-close:is(:hover,:focus-visible) { background:#30323b; }
+html:is(.rbx2016,.larpblox-modern) dialog.larpbux-buy-dialog.larpbux-cart-dialog .larpbux-cart-question { margin:14px 20px 0; }
+html:is(.rbx2016,.larpblox-modern) dialog.larpbux-buy-dialog.larpbux-cart-dialog p.larpbux-cart-question {
+  margin:14px 20px 0; color:#f7f7f8; font-size:16px; line-height:20px; font-weight:600;
+}
+html:is(.rbx2016,.larpblox-modern) dialog.larpbux-buy-dialog.larpbux-cart-dialog .larpbux-cart-previews {
+  display:flex; align-items:center; justify-content:center; gap:4px;
+  margin:40px 20px 58px; min-height:96px;
+}
+html:is(.rbx2016,.larpblox-modern) dialog.larpbux-buy-dialog.larpbux-cart-dialog .larpbux-cart-previews :is(img,.larpbux-cart-overflow) {
+  display:block; flex:0 0 96px; width:96px; height:96px; box-sizing:border-box; border-radius:8px;
+}
+html:is(.rbx2016,.larpblox-modern) dialog.larpbux-buy-dialog.larpbux-cart-dialog .larpbux-cart-previews img { object-fit:cover; background:#30323b; }
+html:is(.rbx2016,.larpblox-modern) dialog.larpbux-buy-dialog.larpbux-cart-dialog .larpbux-cart-previews .larpbux-cart-overflow {
+  display:flex; align-items:center; justify-content:center; background:transparent;
+  color:#f7f7f8; font-size:28px; line-height:32px; font-weight:700;
+}
+html:is(.rbx2016,.larpblox-modern) dialog.larpbux-buy-dialog.larpbux-cart-dialog .larpbux-purchase-footer {
+  display:flex; flex-direction:row; justify-content:center; gap:8px; padding:0 20px;
+}
+html:is(.rbx2016,.larpblox-modern) dialog.larpbux-buy-dialog.larpbux-cart-dialog .larpbux-purchase-footer button {
+  width:112px; height:48px; min-height:48px; box-sizing:border-box; margin:0; padding:0;
+  border:0; border-radius:8px; color:#fff; font:700 16px/22px Arial,sans-serif; cursor:pointer;
+}
+html:is(.rbx2016,.larpblox-modern) dialog.larpbux-buy-dialog.larpbux-cart-dialog .larpbux-buy-confirm { background:#335fff !important; border:0 !important; }
+html:is(.rbx2016,.larpblox-modern) dialog.larpbux-buy-dialog.larpbux-cart-dialog .larpbux-buy-cancel { background:#30323b; color:#f7f7f8; border:0; }
+html:is(.rbx2016,.larpblox-modern) dialog.larpbux-buy-dialog.larpbux-cart-dialog p.larpbux-cart-balance {
+  margin:12px 20px 20px; color:#aeb0b8; font-size:12px; line-height:16px;
+}
+html:is(.rbx2016,.larpblox-modern) dialog.larpbux-buy-dialog.larpbux-cart-dialog .larpbux-purchase-status:empty { display:none; }
+
+.larpbux-cart-toast {
+  position:fixed; top:40px; left:50%; z-index:10002; width:calc(100% - 170px); max-width:970px;
+  box-sizing:border-box; padding:12px 20px; border-radius:0; transform:translateX(-50%);
+  background:#2cbe85; color:#fff; font:400 20px/24px Arial,sans-serif; text-align:center;
+  animation:larpbux-cart-toast-in .2s ease-out both;
+}
+.larpbux-cart-toast.is-leaving { animation:larpbux-cart-toast-out .2s ease-in both; }
+@keyframes larpbux-cart-toast-in { from { opacity:0; transform:translate(-50%,-100%); } to { opacity:1; transform:translate(-50%,0); } }
+@keyframes larpbux-cart-toast-out { from { opacity:1; transform:translate(-50%,0); } to { opacity:0; transform:translate(-50%,-100%); } }
+@media(prefers-reduced-motion:reduce) {
+  .larpbux-cart-toast,.larpbux-cart-toast.is-leaving { animation:none; }
+  .larpbux-cart-toast.is-leaving { opacity:0; transform:translate(-50%,-100%); }
+}
 html[data-larpblox-identity-edit-profile="true"][data-larpblox-identity-name="true"] [data-larpblox-edit-name="true"]:not([data-larpblox-alias-ready="true"]) { visibility:hidden !important; }
 html[data-larpblox-identity-edit-profile="true"][data-larpblox-identity-avatar="true"] img[data-larpblox-edit-avatar="true"]:is(:not([src^="data:image/png"]),[srcset]) { visibility:hidden !important; }
 /* Hold thumbnail decoration until its image has loaded; never paint broken alt text. */

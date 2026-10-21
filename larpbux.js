@@ -1722,7 +1722,15 @@
       dialog.removeAttribute('aria-busy');
     };
   }
+  let purchaseToastTimer;
+  function purchaseToast() {
+    clearTimeout(purchaseToastTimer); document.querySelector('.larpbux-cart-toast')?.remove();
+    const toast = node('div', 'Purchase Complete', 'larpbux-cart-toast'); toast.setAttribute('role', 'status');
+    document.body.append(toast);
+    purchaseToastTimer = setTimeout(() => { toast.classList.add('is-leaving'); setTimeout(() => toast.remove(), 250); }, 3000);
+  }
   function purchaseComplete(dialog, message) {
+    purchaseToast();
     dialog.classList.add('larpbux-purchase-complete');
     dialog.setAttribute('aria-label', 'Purchase Complete');
     const title = node('h2', 'Purchase Complete');
@@ -1813,8 +1821,8 @@
         for (const item of imported) if (item && !current.cart.some(entry => keyFor(entry) === keyFor(item))) current = addToCart(current, item);
         save(current);
       }
-      if (account === userId && state?.mode) showCart();
-    } catch (error) { if (account !== userId || !state?.mode) return; showCart(); const status = purchaseDialog?.querySelector('.larpbux-purchase-status'); if (status) status.textContent = error.message; }
+      if (account === userId && state?.mode) confirmCartPurchase();
+    } catch (error) { if (account !== userId || !state?.mode) return; confirmCartPurchase(); const status = purchaseDialog?.querySelector('.larpbux-purchase-status'); if (status) status.textContent = error.message; }
   }
   function clearPurchasedNativeCart(items) {
     try {
@@ -1860,6 +1868,51 @@
     event.preventDefault(); event.stopImmediatePropagation(); event.stopPropagation();
     void openMarketplaceCart(true);
     return true;
+  }
+  function confirmCartPurchase() {
+    if (!state?.mode || !userId) return;
+    closePurchase();
+    const account = userId, quotedCart = JSON.stringify(state.cart || []), quotedBalance = state.balance;
+    const items = state.cart || [], count = items.reduce((sum, item) => sum + item.quantity, 0);
+    let cost, error;
+    try { cost = state.balance - checkoutCart(state).balance; } catch (failure) { error = failure.message; }
+    const dialog = node('dialog', '', 'larpbux-buy-dialog larpbux-cart-dialog'); purchaseDialog = dialog;
+    dialog.setAttribute('aria-label', 'Buy Now');
+    const title = node('h2', 'Buy Now');
+    const close = node('button', '×', 'larpbux-modal-close'); close.type = 'button'; close.setAttribute('aria-label', 'Close purchase'); close.addEventListener('click', closePurchase);
+    const question = node('p', `Would you like to buy ${count === 1 ? 'this item' : `these ${count} items`} for `, 'larpbux-cart-question');
+    close.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 5 14 14M19 5 5 19" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
+    const robux = () => { const icon = node('span', '', 'larpbux-robux-symbol'); icon.setAttribute('aria-label', 'Robux'); icon.innerHTML = '<svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1 14 4.5v7L8 15l-6-3.5v-7Z" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="m8 4 3.5 2v4L8 12l-3.5-2V6Z" fill="none" stroke="currentColor"/></svg>'; return icon; };
+    if (cost === 0) question.append(document.createTextNode('Free?'));
+    else if (cost !== undefined) question.append(robux(), document.createTextNode(` ${cost.toLocaleString('en-US')}?`));
+    else question.textContent = 'Review the items in your cart.';
+    const previews = node('div', '', 'larpbux-cart-previews');
+    let shown = 0;
+    for (const item of items) {
+      for (let copy = 0; copy < item.quantity && shown < 2; copy++, shown++) { const image = node('img'); thumbnail(image, item); previews.append(image); }
+      if (shown === 2) break;
+    }
+    if (count > shown) { const more = node('span', `+${count - shown}`, 'larpbux-cart-overflow'); more.setAttribute('aria-label', `${count - shown} more items`); previews.append(more); }
+    const footer = node('div', '', 'larpbux-purchase-footer');
+    const label = cost === 0 ? 'Get Now' : 'Buy';
+    const buy = node('button', label, 'larpbux-buy-confirm'); buy.type = 'button'; buy.disabled = !count || Boolean(error);
+    const cancel = node('button', 'Cancel', 'larpbux-buy-cancel'); cancel.type = 'button'; cancel.addEventListener('click', closePurchase); footer.append(buy, cancel);
+    const balance = node('p', 'Your balance after this transaction will be ', 'larpbux-cart-balance');
+    if (cost !== undefined) balance.append(robux(), document.createTextNode(` ${(state.balance - cost).toLocaleString('en-US')}.`)); else balance.textContent = '';
+    const status = node('p', error || (!count ? 'Select at least one item to buy.' : ''), 'larpbux-purchase-status'); status.setAttribute('role', 'status');
+    buy.addEventListener('click', async () => {
+      if (buy.disabled) return;
+      const finishLoading = purchaseLoading(dialog, buy);
+      try {
+        await finishLoading();
+        if (!dialog.open || dialog.dataset.closing || userId !== account || !state?.mode) return;
+        const current = read(account);
+        if (!current.mode || JSON.stringify(current.cart || []) !== quotedCart || current.balance !== quotedBalance) throw new Error('Your cart or balance changed. Close this window and review your purchase again.');
+        save(checkoutCart(current)); clearPurchasedNativeCart(current.cart); closePurchase(); purchaseToast();
+      } catch (failure) { dialog.removeAttribute('aria-busy'); status.textContent = failure.message; buy.disabled = false; buy.classList.remove('is-loading'); buy.removeAttribute('aria-busy'); buy.textContent = label; }
+    });
+    dialog.append(title, close, question, previews, footer, balance, status);
+    dialog.addEventListener('cancel', event => { event.preventDefault(); closePurchase(); }); document.body.append(dialog); dialog.showModal();
   }
   function showCart() {
     if (!state?.mode || !userId) return;
