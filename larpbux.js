@@ -1717,17 +1717,20 @@
     });
     input.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();confirm.click();}});
   }
-  function settingsNameRow(target) {
+  function settingsNameRow(target, displayName = false) {
     if (!/^\/my\/account\/?$/i.test(location.pathname)) return false;
     const button=target.closest?.('button, a, [role="button"], .icon-edit, [class*="btn-generic-edit"], [tabindex="0"]');
     if (!button || button.closest('.larpbux-buy-dialog, .larpbux-avatar-controls')) return false;
-    if (button.matches('#account-username-edit, [data-testid="username-edit"], [aria-label="Edit Username"], [aria-label="Edit username"]')) return true;
+    if (button.matches(displayName ? '#account-name-edit, [data-testid="display-name-edit"], [aria-label="Edit Name"], [aria-label="Edit name"], [aria-label="Edit Display Name"], [aria-label="Edit display name"]' : '#account-username-edit, [data-testid="username-edit"], [aria-label="Edit Username"], [aria-label="Edit username"]')) return true;
+    const labelPattern = displayName ? /^(?:display\s*)?name\s*:?$/i : /^username\s*:?$/i;
+    const rowPattern = displayName ? /^(?:display\s*)?name\s*:/i : /^username\s*:/i;
     let row=button.parentElement;
     for(let depth=0;row && depth<4;depth++,row=row.parentElement) {
       if (row.querySelectorAll('button, [role="button"]').length>1) break;
-      if ([...row.querySelectorAll('label, span, div, .text-label, .font-header-2, b, strong')].some(label=>/^username\s*:?$/i.test(label.textContent.trim()))) return true;
-      if (/^username\s*:/i.test(row.textContent.trim())) return true;
-      if (row.matches('#account-username, .account-username, [data-testid="account-username"]')) return true;
+      if ([...row.querySelectorAll('label, span, div, .text-label, .font-header-2, b, strong')].some(label=>labelPattern.test(label.textContent.trim()))) return true;
+      if ([...row.querySelectorAll('label, span, .text-label, b, strong')].some(label=>/^(?:username|(?:display\s*)?name)\s*:?$/i.test(label.textContent.trim()))) return false;
+      if (rowPattern.test(row.textContent.trim())) return true;
+      if (row.matches(displayName ? '#account-name, .account-name, [data-testid="account-name"]' : '#account-username, .account-username, [data-testid="account-username"]')) return true;
     }
     return false;
   }
@@ -2023,6 +2026,7 @@
           }
         }
       }
+      if (state?.mode && settingsNameRow(event.target, true)) { event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation(); return; }
       if (!state?.mode || !settingsNameRow(event.target)) return;
       event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();purchaseUsername();
     },true);
