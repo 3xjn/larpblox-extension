@@ -412,3 +412,6 @@ html.larpblox-modern .larpbux-single-owned .larpbux-owned-link { display:flex; a
 html.larpblox-modern .larpbux-single-owned .larpbux-owned-link:hover { background:#34363f; }
 
 html.larpblox-modern.larpblox-pretend-mode .larpbux-owned-creator { display:flex !important; align-items:center; flex-wrap:wrap; }
+
+.larpbux-social-counts > label { display:flex; justify-content:space-between; gap:16px; margin:12px 0; }
+.larpbux-social-counts input { max-width:240px; }

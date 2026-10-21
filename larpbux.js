@@ -18,6 +18,16 @@
     if (username && !/^[A-Za-z0-9_]{3,20}$/.test(username)) throw new Error('Use 3–20 letters, numbers, or underscores for the Larp username.');
     return {username};
   }
+  function localSocialCounts(value) {
+    if (value == null || (value.followers === '' && value.following === '')) return null;
+    const result = {};
+    for (const kind of ['followers', 'following']) {
+      const raw = value[kind];
+      if (!['number', 'string'].includes(typeof raw) || String(raw).trim() === '' || !/^\d+$/.test(String(raw))) throw new Error('Enter whole numbers for both Followers and Following, or use Roblox counts.');
+      result[kind] = amount(raw);
+    }
+    return result;
+  }
   function changeUsername(current, value) {
     const names = localNames({username:value});
     if (!names.username) throw new Error('Enter your new username.');
@@ -250,7 +260,7 @@
     for (const item of outfitAssets(state.items.filter(item => state.equipped.includes(keyFor(item))))) items.set(item.id, item);
     return {version: 1, userId: String(userId), definition, ...(definition.backgroundId ? {backgroundId: definition.backgroundId} : {}), items: definition.assets.map(asset => items.get(asset.id)).filter(Boolean).map(({id, name, assetType}) => ({id, name, assetType, itemType: 'Asset'}))};
   }
-  if (typeof module !== 'undefined' && module.exports) { module.exports = {changedBodyColors, addToCart, checkoutCart, changeUsername, localNames, amount, formatBalance, collect, equip, outfit, supportsOutfit, supportsCosmetic, isBackground, previewDefinition, matchesAvatarCategory, mergeGameSnapshot, gamePreviewDefinition, gameCommand, gameOutfitMatches}; return; }
+  if (typeof module !== 'undefined' && module.exports) { module.exports = {changedBodyColors, addToCart, checkoutCart, changeUsername, localNames, localSocialCounts, amount, formatBalance, collect, equip, outfit, supportsOutfit, supportsCosmetic, isBackground, previewDefinition, matchesAvatarCategory, mergeGameSnapshot, gamePreviewDefinition, gameCommand, gameOutfitMatches}; return; }
   let state, userId, panel, controls, list, balance, mode, message, exportBox, purchaseDialog, previewElement, previewViewer, previewSignature, previewController;
   // Catalog Try On is deliberately separate from the saved Larp outfit.  It is
   // a disposable render only: no save(), bridge message, purchase, or equip is
@@ -287,8 +297,9 @@
       try { gameLook = LarpbloxGameBridge.validateSnapshot(saved.gameLook, id); } catch (_) {}
     }
     const cart = Array.isArray(saved?.cart) ? saved.cart.filter(item => Number.isSafeInteger(item.id) && item.id > 0 && ['Asset', 'Bundle'].includes(item.itemType) && typeof item.name === 'string' && Number.isSafeInteger(item.price) && item.price >= 0 && Number.isSafeInteger(item.quantity) && item.quantity > 0).slice(0, 2000) : [];
+    let socialCounts; try { socialCounts = localSocialCounts(saved?.socialCounts); } catch (_) { socialCounts = null; }
     const backgroundId = Number.isSafeInteger(saved?.backgroundId) && saved.backgroundId > 0 && items.some(item => isBackground(item) && item.id === saved.backgroundId) ? saved.backgroundId : undefined;
-    return {version: 1, cart, names, mode: saved?.mode === true, pendingOutfit: saved?.mode === true && saved?.pendingOutfit === true, balance: Number.isSafeInteger(saved?.balance) && saved.balance >= 0 ? saved.balance : 0, items, backgroundId, equipped: Array.isArray(saved?.equipped) ? saved.equipped.filter(value => items.some(item => keyFor(item) === value) && !isBackground(items.find(item => keyFor(item) === value))).slice(0, 100) : [], ...(gameLook ? {gameLook} : {})};
+    return {version: 1, cart, names, socialCounts, mode: saved?.mode === true, pendingOutfit: saved?.mode === true && saved?.pendingOutfit === true, balance: Number.isSafeInteger(saved?.balance) && saved.balance >= 0 ? saved.balance : 0, items, backgroundId, equipped: Array.isArray(saved?.equipped) ? saved.equipped.filter(value => items.some(item => keyFor(item) === value) && !isBackground(items.find(item => keyFor(item) === value))).slice(0, 100) : [], ...(gameLook ? {gameLook} : {})};
   }
   const avatarUrl = () => '/my/avatar';
   async function syncNames() {
@@ -862,7 +873,7 @@
       backgroundId: current?.backgroundId, signature, loadDefinition,
     });
     if (typeof LarpbloxSharedUsers !== 'undefined' && typeof LarpbloxSharedUsers.publishProfile === 'function') LarpbloxSharedUsers.publishProfile({
-      userId: account, active: Boolean(current?.mode), signature, loadDefinition, names: current?.names,
+      userId: account, active: Boolean(current?.mode), signature, loadDefinition, names: current?.names, socialCounts: current?.socialCounts,
     });
   }
   async function bundleAssets(data, signal) {
@@ -1119,12 +1130,17 @@
   }
   function updateNames() {
     if (typeof LarpbloxNames !== 'undefined') LarpbloxNames.update({userId, mode: state?.mode === true, ...state?.names});
+    globalThis.LarpbloxSharedUsers?.update({userId, mode: state?.mode === true, socialCounts: state?.socialCounts});
   }
   function render() {
     if (typeof LarpbloxIdentityGate !== 'undefined') LarpbloxIdentityGate.update();
     document.documentElement.classList.toggle('larpblox-pretend-mode', state.mode);
     updateHeaderBalance();
     mode.checked = state.mode; balance.value = String(state.balance);
+    for (const kind of ['followers', 'following']) {
+      const input = controls?.querySelector(`[name="${kind}"]`);
+      if (input && document.activeElement !== input) input.value = state.socialCounts ? String(state.socialCounts[kind]) : '';
+    }
     updateNames();
     inventoryCards(list);
     exportBox.value = outfit(state, userId);
@@ -1179,6 +1195,25 @@
 
     const nameSettings = node('a', 'Change Larp username · R$ 1,000'); nameSettings.href = '/my/account#!/info';
     controls.append(nameSettings);
+    const social = node('details', '', 'larpbux-social-counts');
+    social.append(node('summary', 'Profile counts'), node('p', 'Choose the follower and following counts other Larpblox users see on your profile while Larp mode is on.'));
+    const inputs = {};
+    for (const kind of ['followers', 'following']) {
+      const label = node('label', kind === 'followers' ? 'Followers' : 'Following');
+      const input = node('input'); input.type = 'number'; input.name = kind; input.min = '0'; input.max = String(MAX); input.step = '1'; input.setAttribute('aria-label', `Custom ${kind}`);
+      inputs[kind] = input; label.append(input); social.append(label);
+    }
+    const saveCounts = node('button', 'Save profile counts'); saveCounts.type = 'button';
+    const resetCounts = node('button', 'Use Roblox counts'); resetCounts.type = 'button';
+    const countStatus = node('p'); countStatus.setAttribute('role', 'status');
+    saveCounts.addEventListener('click', () => {
+      try {
+        const socialCounts = localSocialCounts({followers: inputs.followers.value, following: inputs.following.value});
+        save({...state, socialCounts}); countStatus.textContent = state.mode ? 'Saved. Your counts will be shared with other Larpblox users.' : 'Saved. Turn on Larp mode to show your counts.';
+      } catch (error) { countStatus.textContent = error.message; }
+    });
+    resetCounts.addEventListener('click', () => { save({...state, socialCounts: null}); countStatus.textContent = 'Roblox counts restored.'; });
+    social.append(saveCounts, resetCounts, countStatus); controls.append(social);
     const connection = node('details', '', 'larpbux-game-connection');
     connection.append(node('summary', 'Game connection'));
     connection.append(node('p', 'Open the Larpblox app and run Larpblox in your game. The connection is automatic.'));
@@ -1765,7 +1800,7 @@
   }
   function update() {
     const id = document.querySelector('meta[name="user-data"]')?.getAttribute('data-userid');
-    globalThis.LarpbloxSharedUsers?.update({userId:id, mode:state?.mode === true});
+    globalThis.LarpbloxSharedUsers?.update({userId:id, mode:state?.mode === true, socialCounts:state?.socialCounts});
     if (!/^[1-9]\d*$/.test(id || '')) {
       userId = undefined; state = undefined;
       document.documentElement.classList.remove('larpblox-pretend-mode');

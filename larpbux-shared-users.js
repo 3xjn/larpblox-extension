@@ -3,8 +3,9 @@
   'use strict';
   const portraits = new Map(), names = new Map();
   let publication, publicationKey = '', publicationTime = 0, publishing = false, publicationGeneration = 0;
+  const validCounts = value => value && typeof value === 'object' && Number.isSafeInteger(value.followers) && value.followers >= 0 && Number.isSafeInteger(value.following) && value.following >= 0 ? {followers:value.followers, following:value.following} : undefined;
   function publishProfile(options) {
-    const key = JSON.stringify([options.userId, options.active, options.signature, options.names]);
+    const key = JSON.stringify([options.userId, options.active, options.signature, options.names, options.socialCounts ?? null]);
     if (key !== publicationKey) { publicationKey = key; publicationGeneration++; publicationTime = 0; }
     publication = options;
     flushProfile();
@@ -19,6 +20,8 @@
         const definition = await options.loadDefinition(new AbortController().signal);
         const userId = String(options.userId), username = options.names?.username || '';
         record = {version:1, userId, snapshot:{version:1,userId,definition,items:[]}, name:{enabled:!!username,username,displayName:username}};
+        const socialCounts = validCounts(options.socialCounts);
+        if (socialCounts) record.socialCounts = socialCounts;
       }
       if (mine !== publicationGeneration) return;
       const response = await chrome.runtime.sendMessage({type:'larpblox-publish-profile',userId:String(options.userId),record});
@@ -27,6 +30,7 @@
     finally { publishing = false; if (mine !== publicationGeneration) flushProfile(); }
   }
   let context = {}, records = new Map(), pending = false, lastPoll = 0, queued = false, generation = 0;
+  const counts = new Map();
   const userIdFrom = value => {
     try {
       const url = new URL(value || '', location.origin);
@@ -80,8 +84,70 @@
       names.get(node).shown = value;
     }
   }
+  function compactCount(value) {
+    if (value < 1000) return String(value);
+    const units = [[1e9, 'B'], [1e6, 'M'], [1e3, 'K']];
+    const [base, suffix] = units.find(([unit]) => value >= unit);
+    return `${(value / base).toFixed(1).replace(/\.0$/, '')}${suffix}`;
+  }
+  function countTarget(anchor) {
+    const href = String(anchor.getAttribute('href') || '').toLowerCase();
+    const match = href.match(/(?:^|\/)users\/([1-9]\d*)\/friends#!\/(followers|following)(?:$|[/?#])/i);
+    if (match) return {id:match[1], kind:match[2].toLowerCase()};
+    if (/\/friends#!\/(followers|following)(?:$|[/?#])/i.test(href)) return {id:String(context.userId), kind:href.match(/friends#!\/(followers|following)/i)[1].toLowerCase()};
+    if (!href && anchor.closest('.profile-header-overlay,.profile-header')) {
+      const match = (anchor.textContent || '').match(/\d[\d,.]*(?:[KMB])?\s+(Followers?|Following)\b/i);
+      if (match) return {id:profileId() || String(context.userId), kind:match[1].toLowerCase().startsWith('follower') ? 'followers' : 'following'};
+    }
+  }
+  function restoreCounts(wanted) {
+    for (const [node, entry] of counts) {
+      if (!node.isConnected) { counts.delete(node); continue; }
+      if (node.nodeValue !== entry.shown) { entry.real = node.nodeValue; entry.shown = null; }
+      if (!wanted.has(node)) {
+        if (node.nodeValue !== entry.real) node.nodeValue = entry.real;
+        if (entry.titleTarget?.isConnected && entry.titleTarget.getAttribute('title') === entry.title) {
+          if (entry.realTitle == null) entry.titleTarget.removeAttribute('title');
+          else entry.titleTarget.setAttribute('title', entry.realTitle);
+        }
+        counts.delete(node);
+      }
+    }
+  }
+  function applyCounts() {
+    const wanted = new Map();
+    for (const anchor of document.querySelectorAll('a')) {
+      const target = countTarget(anchor);
+      if (!target) continue;
+      const source = context.mode && (target.id === String(context.userId) ? context.socialCounts : records.get(target.id)?.socialCounts);
+      const value = validCounts(source)?.[target.kind];
+      if (value === undefined) continue;
+      const shown = compactCount(value), title = String(value);
+      const nodes = [];
+      const walker = document.createTreeWalker(anchor, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const text = node.nodeValue || '';
+        if (/^\s*\d[\d,.]*(?:[KMB])?\s*$/i.test(text) || /\d[\d,.]*(?:[KMB])?\s+(?:Followers?|Following)\b/i.test(text) || /\b(?:Followers?|Following)\s+\d[\d,.]*(?:[KMB])?/i.test(text)) nodes.push(node);
+      }
+      for (const node of nodes) {
+        const current = counts.get(node)?.real ?? node.nodeValue;
+        const next = current.replace(/\d[\d,.]*(?:[KMB])?/i, shown);
+        const titleTarget = node.parentElement?.closest('a') === anchor && /^\s*\d[\d,.]*(?:[KMB])?\s*$/i.test(current) ? node.parentElement : anchor;
+        wanted.set(node, {value:next, titleTarget, title});
+      }
+    }
+    restoreCounts(wanted);
+    for (const [node, entry] of wanted) {
+      if (!counts.has(node)) counts.set(node, {real:node.nodeValue, shown:null, realTitle:entry.titleTarget?.getAttribute('title')});
+      const state = counts.get(node);
+      if (node.nodeValue !== entry.value) node.nodeValue = entry.value;
+      if (entry.titleTarget) entry.titleTarget.setAttribute('title', entry.title);
+      state.shown = entry.value; state.titleTarget = entry.titleTarget; state.title = entry.title;
+    }
+  }
   function apply() {
     applyNames();
+    applyCounts();
     for (const [id, surface] of portraits) if (!records.has(id)) { surface.update({active:false}); portraits.delete(id); }
     for (const [id, record] of records) {
       if (!portraits.has(id)) portraits.set(id, LarpbloxAvatarSurfaces.createForPeer());
@@ -89,7 +155,7 @@
     }
   }
   async function scan() {
-    if (document.hidden) return;
+    if (typeof document === 'undefined' || document.hidden) return;
     if (!context.mode || !context.userId) {
       records.clear(); apply(); return;
     }
@@ -103,12 +169,13 @@
       if (mine !== generation) return;
       if (!response?.ok) { records.clear(); apply(); return; }
       const next = new Map();
-      for (const record of response.data.players || []) {
+      for (let record of response.data.players || []) {
         try {
           const id = String(record.userId);
           if (!visible.has(id) || id === String(context.userId)) continue;
           LarpbloxGameBridge.validateSnapshot(record.snapshot, id);
           if (record.name && (typeof record.name.enabled !== 'boolean' || !/^[A-Za-z0-9_]{0,20}$/.test(record.name.username) || typeof record.name.displayName !== 'string' || record.name.displayName.length > 50)) continue;
+          if (record.socialCounts && !validCounts(record.socialCounts)) record = {...record, socialCounts:undefined};
           next.set(id, record);
         } catch {}
       }

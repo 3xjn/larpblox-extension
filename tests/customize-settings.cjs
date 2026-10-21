@@ -36,6 +36,15 @@ body{font:16px Arial;background:#111216;color:#f7f7f8;margin:40px}h1{font-size:3
     await balance.fill('2750');
     await balance.locator('..').getByRole('button',{name:'Save',exact:true}).click();
     assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('larpblox-cosmetics-v1:123')).balance),2750);
+    await page.locator('.larpbux-social-counts summary').click();
+    await page.getByRole('spinbutton',{name:'Custom followers'}).fill('12345');
+    await page.getByRole('spinbutton',{name:'Custom following'}).fill('0');
+    await page.getByRole('button',{name:'Save profile counts',exact:true}).click();
+    assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('larpblox-cosmetics-v1:123')).socialCounts),{followers:12345,following:0});
+    await page.getByRole('spinbutton',{name:'Custom followers'}).fill('-1');
+    await page.getByRole('button',{name:'Save profile counts',exact:true}).click();
+    assert.match(await page.locator('.larpbux-social-counts [role="status"]').textContent(),/whole numbers/);
+    assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('larpblox-cosmetics-v1:123')).socialCounts.followers),12345);
     await page.getByRole('combobox',{name:'Website appearance'}).selectOption('classic');
     assert.equal(await page.evaluate(()=>chosenAppearance),'classic');
     await page.getByRole('link',{name:'Account info',exact:true}).click();
@@ -47,6 +56,13 @@ body{font:16px Arial;background:#111216;color:#f7f7f8;margin:40px}h1{font-size:3
     await load();
     await page.getByRole('heading',{name:'Customize',exact:true}).waitFor();
     assert.equal(await balance.inputValue(),'2750');
+    await page.locator('.larpbux-social-counts summary').click();
+    assert.equal(await page.getByRole('spinbutton',{name:'Custom followers'}).inputValue(),'12345');
+    assert.equal(await page.getByRole('spinbutton',{name:'Custom following'}).inputValue(),'0');
+    await page.getByRole('button',{name:'Use Roblox counts',exact:true}).click();
+    assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('larpblox-cosmetics-v1:123')).socialCounts),null);
+    assert.equal(await page.getByRole('spinbutton',{name:'Custom followers'}).inputValue(),'');
+
     assert.equal(await mode.count(),1);
     await page.evaluate(() => {
       const content = document.querySelector('.tab-content');
