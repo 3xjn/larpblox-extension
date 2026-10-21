@@ -39,6 +39,7 @@
       } catch (_) { if (signal.aborted) throw _; }
     }
     return { ...fallback, id, itemType:'Asset', name:data?.Name || fallback.name || `Item ${id}`,
+      assetType:Number(data?.AssetTypeId ?? fallback.assetType),
       isLimited:Boolean(data?.IsLimited || fallback.isLimited),
       isLimitedUnique:Boolean(data?.IsLimitedUnique || fallback.isLimitedUnique),
       price:limited ? resalePrice : (data?.IsForSale ? data.PriceInRobux : null),
@@ -65,7 +66,7 @@
     const caption = document.createElement('div'); caption.className = 'item-card-caption';
     const title = document.createElement('a'); title.className = 'item-card-name'; title.href = link.href;
     title.textContent = item.name; title.title = item.name; caption.append(title);
-    if (item.saleKnown) {
+    if (item.saleKnown && ![17, 18, 27, 28, 29, 30, 31, 79].includes(item.assetType)) {
       const price = document.createElement('div'); price.className = 'item-card-price';
       if (Number.isFinite(item.price)) {
         const icon = document.createElement('span'); icon.className = 'icon-robux-16x16'; icon.setAttribute('aria-label','Robux');
