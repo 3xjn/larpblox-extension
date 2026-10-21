@@ -1863,6 +1863,7 @@
     for (const [button, saved] of nativeCartBuyControls) {
       if (!button.isConnected) { nativeCartBuyControls.delete(button); continue; }
       if (!state?.mode) {
+        button.removeAttribute('data-larp-cart-disabled');
         button.disabled = saved.disabled;
         if (saved.aria == null) button.removeAttribute('aria-disabled'); else button.setAttribute('aria-disabled', saved.aria);
         button.classList.toggle('disabled', saved.disabledClass); button.style.pointerEvents = saved.pointerEvents;
@@ -1904,6 +1905,7 @@
       if (!/^buy(?:\s|$)/i.test(button.textContent.trim())) continue;
       if (!nativeCartBuyControls.has(button)) nativeCartBuyControls.set(button, {disabled:button.disabled, aria:button.getAttribute('aria-disabled'), disabledClass:button.classList.contains('disabled'), pointerEvents:button.style.pointerEvents});
       if (button.disabled !== disabled) button.disabled = disabled;
+      if (button.dataset.larpCartDisabled !== String(disabled)) button.dataset.larpCartDisabled = String(disabled);
       if (button.getAttribute('aria-disabled') !== String(disabled)) button.setAttribute('aria-disabled', String(disabled));
       button.classList.toggle('disabled', disabled); if (button.style.pointerEvents !== 'auto') button.style.pointerEvents = 'auto';
     }
