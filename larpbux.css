@@ -239,6 +239,7 @@ html #avatar-web-app .larpbux-avatar-look .larpbux-avatar-scene > :is(canvas,img
 html #avatar-web-app .larpbux-avatar-hats { background:transparent !important; max-height:calc(100% - 24px); overflow-y:auto; overflow-x:hidden; }
 
 #avatar-web-app .larpbux-avatar-scene.larpbux-avatar-loading { visibility:hidden; }
+#avatar-web-app .larpbux-avatar-status { align-items:center; justify-content:center; text-align:center; padding:24px; box-sizing:border-box; }
 
 #avatar-web-app .larpbux-avatar-hats button { background:var(--larpbux-hat-background,var(--larp-panel,#f2f4f5)); border-radius:var(--larpbux-hat-radius,8px); }
 html.larpblox-modern #avatar-web-app .larpbux-avatar-hats button { background:var(--larpbux-hat-background,#111216); }

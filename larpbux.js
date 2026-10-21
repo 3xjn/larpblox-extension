@@ -275,6 +275,20 @@
   const thumbnails = new Map();
   const thumbnailPending = new Map();
   let thumbnailTimer, thumbnailBusy = false, thumbnailBlockedUntil = 0;
+  const thumbnailStorageKey = 'larpblox-item-thumbnails-v1';
+  let thumbnailSaved;
+  function readThumbnailCache() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(thumbnailStorageKey) || 'null');
+      return {entries:Array.isArray(saved?.entries) ? saved.entries.filter(entry => entry && typeof entry.key === 'string') : [],
+        retryAt:Number.isFinite(saved?.retryAt) ? saved.retryAt : 0};
+    }
+    catch (_) { return {entries:[], retryAt:0}; }
+  }
+  function cachedThumbnail(cache, key) {
+    return cache.entries?.find(entry => entry.key === key && entry.expires > Date.now() &&
+      typeof entry.url === 'string' && /^https:\/\/(?:tr|t[0-7])\.rbxcdn\.com\//i.test(entry.url))?.url;
+  }
   const counts = new Map();
   const details = new Map();
   let namesPending=false, namesQueued=false;
@@ -497,32 +511,60 @@
     thumbnailBusy = true;
     const type = ready[0].item.itemType;
     const batch = ready.filter(entry => entry.item.itemType === type).slice(0, 100);
-    const ids = batch.map(entry => entry.item.id).join(',');
-    const endpoint = type === 'Bundle' ? `bundles/thumbnails?bundleIds=${ids}` : `assets?assetIds=${ids}`;
-    const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 15000);
     try {
-      const response = await fetch(`https://thumbnails.roblox.com/v1/${endpoint}&size=150x150&format=Png&isCircular=false`, {signal:controller.signal});
-      if (response.status === 429) {
-        thumbnailBlockedUntil = Date.now() + Math.max(1, LarpbloxAvatarRequests.retryAfter(response, 20)) * 1000;
-        return;
-      }
-      if (!response.ok) throw new Error('Item thumbnails are temporarily unavailable.');
-      const results = new Map(((await response.json()).data || []).map(entry => [String(entry.targetId), entry]));
-      for (const entry of batch) {
-        const result = results.get(String(entry.item.id));
-        if (result?.imageUrl || result?.state === 'Blocked' || result?.state === 'InReview') {
-          thumbnailPending.delete(entry.key); entry.resolve(result.imageUrl || null);
-        } else if (++entry.attempts >= 6) {
-          thumbnailPending.delete(entry.key); entry.resolve(null);
-        } else entry.due = Date.now() + Math.min(10000, 1000 * entry.attempts);
-      }
+      await navigator.locks.request('larpblox-item-thumbnails', async () => {
+        const shared = readThumbnailCache(); thumbnailSaved = shared;
+        const missing = batch.filter(entry => {
+          const url = cachedThumbnail(shared, entry.key);
+          if (url) { thumbnailPending.delete(entry.key); entry.resolve(url); return false; }
+          const pending = shared.entries.find(saved => saved.key === entry.key && saved.retryAt > Date.now());
+          if (pending) { entry.due = pending.retryAt; return false; }
+          return true;
+        });
+        if (!missing.length) return;
+        if (shared.retryAt > Date.now()) { thumbnailBlockedUntil = shared.retryAt; return; }
+        const ids = missing.map(entry => entry.item.id).join(',');
+        const endpoint = type === 'Bundle' ? `bundles/thumbnails?bundleIds=${ids}` : `assets?assetIds=${ids}`;
+        const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 15000);
+        try {
+          const response = await fetch(`https://thumbnails.roblox.com/v1/${endpoint}&size=150x150&format=Png&isCircular=false`, {credentials:'include',signal:controller.signal});
+          if (response.status === 429) {
+            thumbnailBlockedUntil = Date.now() + Math.max(1, LarpbloxAvatarRequests.retryAfter(response, 20)) * 1000;
+            shared.retryAt = thumbnailBlockedUntil;
+            localStorage.setItem(thumbnailStorageKey, JSON.stringify(shared));
+            return;
+          }
+          if (!response.ok) throw new Error('Item thumbnails are temporarily unavailable.');
+          const results = new Map(((await response.json()).data || []).map(entry => [String(entry.targetId), entry]));
+          shared.entries = (shared.entries || []).filter(entry => entry.expires > Date.now());
+          for (const entry of missing) {
+            const result = results.get(String(entry.item.id));
+            shared.entries = shared.entries.filter(saved => saved.key !== entry.key);
+            if (result?.imageUrl || result?.state === 'Blocked' || result?.state === 'InReview') {
+              thumbnailPending.delete(entry.key); entry.resolve(result.imageUrl || null);
+              if (result?.imageUrl) {
+                shared.entries.push({key:entry.key,url:result.imageUrl,expires:Date.now()+86400000});
+              }
+            } else if (++entry.attempts >= 6) {
+              thumbnailPending.delete(entry.key); entry.resolve(null);
+            } else {
+              entry.due = Date.now() + Math.min(10000, 1000 * entry.attempts);
+              shared.entries.push({key:entry.key,retryAt:entry.due,expires:entry.due});
+            }
+          }
+          shared.entries = shared.entries.slice(-1000);
+          shared.retryAt = Date.now() + 250;
+          localStorage.setItem(thumbnailStorageKey, JSON.stringify(shared));
+        } finally { clearTimeout(timeout); }
+      });
     } catch (_) {
       for (const entry of batch) {
+        if (!thumbnailPending.has(entry.key)) continue;
         if (++entry.attempts >= 6) { thumbnailPending.delete(entry.key); entry.resolve(null); }
         else entry.due = Date.now() + Math.min(30000, 2000 * entry.attempts);
       }
     } finally {
-      clearTimeout(timeout); thumbnailBusy = false;
+      thumbnailBusy = false;
       thumbnailBlockedUntil = Math.max(thumbnailBlockedUntil, Date.now() + 250);
       scheduleThumbnails();
     }
@@ -536,6 +578,9 @@
     ready();
     if (item.thumbnail) { image.src = item.thumbnail; return; }
     const key = keyFor(item);
+    thumbnailSaved ||= readThumbnailCache();
+    const saved = cachedThumbnail(thumbnailSaved, key);
+    if (saved) { image.src = saved; return; }
     if (!thumbnails.has(key)) {
       const promise = new Promise(resolve => thumbnailPending.set(key, {key,item,resolve,due:Date.now(),attempts:0}));
       thumbnails.set(key,promise); scheduleThumbnails();
@@ -914,6 +959,14 @@
     const pending = node('div', '', 'larpbux-avatar-scene');
     pending.classList.add('larpbux-avatar-loading');
     surface.append(pending);
+    const hasPicture = () => Boolean(surface.querySelector('.larpbux-avatar-scene:not(.larpbux-avatar-loading) img, .larpbux-avatar-scene:not(.larpbux-avatar-loading) canvas'));
+    const showStatus = text => {
+      if (hasPicture()) return;
+      let status = surface.querySelector('.larpbux-avatar-status');
+      if (!status) { status = node('div', '', 'thumbnail-loader larpbux-avatar-status'); status.setAttribute('role','status'); surface.append(status); }
+      status.textContent = text; surface.hidden = false;
+    };
+    showStatus('Loading avatar…');
     let nextViewer, committed = false;
     try {
       let definition;
@@ -923,11 +976,12 @@
       }
       if (account !== userId || signature !== previewSignature || signal.aborted) return;
       const cachedImage = LarpbloxAvatarRequests.cached?.(definition, account, '2d');
-      if (cachedImage && surface.hidden) {
+      if (cachedImage && !hasPicture()) {
         const fallback = node('div', '', 'larpbux-avatar-scene');
         const image = node('img'); image.alt = 'Your avatar with selected items';
         image.onload = () => {
           if (committed || account !== userId || signature !== previewSignature || signal.aborted) return;
+          surface.querySelector('.larpbux-avatar-status')?.remove();
           fallback.append(image); surface.prepend(fallback); surface.hidden = false;
         };
         image.src = cachedImage;
@@ -983,6 +1037,7 @@
           previewViewer?.dispose(); previewViewer = nextViewer;
           pending.classList.remove('larpbux-avatar-loading');
           surface.replaceChildren(pending); surface.hidden = false;
+          surface.removeAttribute('title');
           holder.classList.add('larpbux-local-preview');
           committed = true; previewRetries = 0;
           previewFailure = undefined;
@@ -997,6 +1052,7 @@
       const reason = error.message;
       previewFailure = {status:error.status, message:reason};
       surface.title = reason;
+      showStatus(error.status === 429 ? 'Roblox is limiting avatar requests. Retrying…' : 'Avatar could not load. Use Redraw to retry.');
       if (error.status === 429 || previewRetries < 2) {
         if (error.status !== 429) previewRetries++;
         previewRetryTimer = setTimeout(() => {
@@ -2195,6 +2251,10 @@
       });
     });
     window.addEventListener('click',event=>{
+      if (editingLarp() && event.target?.closest?.('#avatar-web-app .redraw-link')) {
+        event.preventDefault(); event.stopImmediatePropagation();
+        previewSignature = undefined; previewRetries = 0; updateAvatar(); return;
+      }
       if (marketplaceCartClick(event)) return;
       if (state?.mode && /^\/(?:catalog|bundles)\/\d+/.test(location.pathname)) {
         const control = event.target?.closest?.('button, [role="button"]');
