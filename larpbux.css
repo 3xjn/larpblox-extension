@@ -437,7 +437,7 @@ html body .shopping-cart-footer [data-larp-cart-disabled="true"]:active {
   cursor:default !important;
 }
 
-.larpblox-people-results { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; margin:12px 0; }
+.larpblox-people-results { display:contents; }
 .larpblox-person-card { display:grid; grid-template-columns:96px 1fr; gap:16px; padding:16px; border-radius:8px; background:var(--color-surface-100,#191a1f); color:inherit; }
 .larpblox-person-avatar { width:96px; height:96px; border-radius:50%; overflow:hidden; background:#c8cad1; }
 .larpblox-person-avatar img { width:100%; height:100%; object-fit:cover; }

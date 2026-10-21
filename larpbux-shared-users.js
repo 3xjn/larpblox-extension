@@ -173,7 +173,7 @@
       root = document.createElement('div'); root.id = 'larpblox-people-results';
       root.className = 'larpblox-people-results'; root.setAttribute('aria-label', 'Larp player results');
     }
-    if (native.previousElementSibling !== root) native.before(root);
+    if (native.firstElementChild !== root) native.prepend(root);
     const key = JSON.stringify([...searchRecords].map(([id, record]) => [id, record.name, record.imageUrl]));
     if (root.dataset.results === key) return;
     root.dataset.results = key; root.replaceChildren();

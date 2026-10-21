@@ -49,8 +49,10 @@
     }
     return false;
   }
+  const nonPortraitSelector = '[data-rblx-verified-badge-icon],[data-testid="verified-badge"],.icon-verified,.icon-filled-verified-backplate,.larpblox-verified-badge,.profile-verified-badge-icon';
+  const isPortrait = image => !image?.matches?.(nonPortraitSelector) && !image?.closest?.(nonPortraitSelector);
   function ownImage(image, userId, doc = document, win = window) {
-    if (!image || !numericId(userId)) return false;
+    if (!image || !numericId(userId) || !isPortrait(image)) return false;
     const action = image.closest?.('a[href]');
     if (action && /^(view profile|my profile|profile)$/i.test(action.textContent.trim())) return false;
     if (!peer && /^\/users\/profile\/edit\/?$/i.test(win.location?.pathname || '') && image === globalThis.LarpbloxIdentityGate?.editProfileImage(doc)) return true;
