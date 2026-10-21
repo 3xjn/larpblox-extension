@@ -136,25 +136,31 @@ function App() {
     {!state ? pending === null && <Button variant="outline" className="mt-4 w-full" onClick={() => void initialize()}>Retry connection</Button> : <>
       <section className="mode-section">
         <div className="toggle-row">
-          <div><Label htmlFor="larp-mode" className="text-base font-semibold">Larp mode</Label><p className="help">Use your pretend balance and cosmetics.</p></div>
+          <div><Label htmlFor="larp-mode" className="text-base font-semibold">Larp mode</Label><p className="help">Your avatar, profile, and pretend Robux.</p></div>
           <Switch id="larp-mode" checked={state.mode} disabled={busy} onCheckedChange={mode => void act("mode", { type: "larpblox-popup-update", mode })} />
         </div>
         <div className="sharing-option">
           <div className="toggle-row">
-            <div><Label htmlFor="share-mode">Share appearance</Label><p id="sharing-help" className="help">Show your look to Larpblox players in this server.</p></div>
+            <div><Label htmlFor="share-mode">Share appearance</Label><p id="sharing-help" className="help">Visible to Larpblox players in your server.</p></div>
             <Switch id="share-mode" checked={state.mode && state.sharing} disabled={disabled} aria-describedby="sharing-help" onCheckedChange={sharing => void act("sharing", { type: "larpblox-popup-update", sharing })} />
           </div>
         </div>
       </section>
 
-      <section className="section">
+      <section className="profile-section">
         <form className="field" onSubmit={event => submit(event, () => void act("balance", { type: "larpblox-popup-update", balance }, ["balance"], "Balance saved."))}>
-          <Label htmlFor="balance">Pretend Larpbux balance</Label>
+          <Label htmlFor="balance">Larpbux balance</Label>
           <div className="flex items-center gap-2.5">
             <div className="relative min-w-0 flex-1"><span className="input-prefix" aria-hidden="true">R$</span><Input id="balance" type="number" min="0" step="1" inputMode="numeric" required className="h-10 pl-10" aria-describedby="balance-help" disabled={disabled} value={balance} onChange={event => setBalance(event.target.value)} /></div>
-            <Button type="submit" className="h-10 px-4" disabled={disabled} loading={pending === "balance"}>Save</Button>
+            <Button type="submit" variant="outline" className="h-10 px-4" disabled={disabled} loading={pending === "balance"}>Save</Button>
           </div>
-          <p id="balance-help" className="help">Does not change your real Robux.</p>
+          <p id="balance-help" className="help">Pretend balance only.</p>
+        </form>
+        <form className="field" onSubmit={event => submit(event, () => void act("username", { type: "larpblox-popup-username", username }, ["username", "balance"]))}>
+          <div className="flex items-center justify-between"><Label htmlFor="username">Larp username</Label><span className="help">R$ 1,000</span></div>
+          <div className="flex items-center gap-2.5"><Input className="h-10 min-w-0 flex-1" id="username" autoComplete="off" maxLength={20} required disabled={disabled} value={username} onChange={event => setUsername(event.target.value)} aria-describedby="username-help" />
+          <Button type="submit" variant="outline" className="h-10 px-4" disabled={disabled} loading={pending === "username"}>Change</Button></div>
+          <p id="username-help" className="help">Also updates your Larp display name.</p>
         </form>
       </section>
 
@@ -163,7 +169,9 @@ function App() {
         {state.previewStatus && <><p className="help" role="status">{state.previewStatus}</p><Button variant="outline" disabled={busy} loading={pending === "preview"} onClick={() => void act("preview", { type: "larpblox-popup-avatar-retry" })}>Retry avatar preview</Button></>}
       </section>}
 
-      <Disclosure title="Profile counts">
+      <Disclosure title="More settings">
+        <div className="secondary-group">
+        <h2>Profile counts</h2>
         <p className="help">Choose the counts other Larpblox users see while Larp mode is on.</p>
         <form className="space-y-3" onSubmit={event => submit(event, () => void act("counts", { type: "larpblox-popup-profile-counts", socialCounts: { followers, following } }, ["counts"], "Profile counts saved.", "counts"))}>
           <div className="grid grid-cols-2 gap-3">
@@ -173,27 +181,20 @@ function App() {
           <div className="flex flex-wrap gap-2.5"><Button type="submit" disabled={disabled} loading={pending === "counts"}>Save counts</Button><Button type="button" variant="outline" disabled={disabled} loading={pending === "reset-counts"} onClick={() => void act("reset-counts", { type: "larpblox-popup-profile-counts", socialCounts: null }, ["counts"], "Roblox counts restored.", "counts")}>Use Roblox counts</Button></div>
         </form>
         {status(countsNotice)}
-      </Disclosure>
+        </div>
 
-      <section className="section">
-        <form className="field" onSubmit={event => submit(event, () => void act("username", { type: "larpblox-popup-username", username }, ["username", "balance"]))}>
-          <div className="flex items-center justify-between"><Label htmlFor="username">Larp username</Label><span className="help">R$ 1,000</span></div>
-          <Input id="username" autoComplete="off" maxLength={20} required disabled={disabled} value={username} onChange={event => setUsername(event.target.value)} aria-describedby="username-help" />
-          <p id="username-help" className="help">Your Larp display name will match.</p>
-          <Button type="submit" disabled={disabled} loading={pending === "username"}>Change Larp username</Button>
-        </form>
-      </section>
-
-      <Disclosure title="Game connection">
+        <div className="secondary-group">
+        <h2>Game connection</h2>
         <p className="help">Open Larpblox Desktop and run Larpblox in your game. The connection is automatic.</p>
         <div className="flex gap-2.5"><Button variant="outline" disabled={busy} loading={pending === "connect"} onClick={() => void act("connect", { type: "larpblox-popup-game", action: "connect" }, [], undefined, "game")}>Reconnect</Button><Button variant="outline" disabled={busy} loading={pending === "disconnect"} onClick={() => void act("disconnect", { type: "larpblox-popup-game", action: "disconnect" }, [], undefined, "game")}>Disconnect</Button></div>
         {status(gameNotice.text ? gameNotice : { text: state.gameStatus })}
-      </Disclosure>
+        </div>
 
-      <section className="section space-y-2">
+        <div className="secondary-group space-y-2">
         <Choice id="appearance" label="Website appearance" value={state.appearance} disabled={busy} items={[{ value: "modern", label: "Current Roblox" }, { value: "classic", label: "Classic Roblox (2016)" }]} onChange={appearance => void act("appearance", { type: "larpblox-popup-update", appearance })} />
         <p className="help">Changes how Roblox looks in this browser.</p>
-      </section>
+        </div>
+      </Disclosure>
     </>}
   </main>;
 }
