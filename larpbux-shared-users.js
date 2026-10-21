@@ -71,7 +71,7 @@
         for (let node = walker.nextNode(); node; node = walker.nextNode()) {
           if (node.parentElement.closest('button,input,textarea,[contenteditable="true"]')) continue;
           const value = (names.get(node)?.real ?? node.nodeValue).trim();
-          if (!value || value.length > 50 || /^(view profile|profile|\d[\d.,KkMm\s]*)$/.test(value)) continue;
+          if (!value || value.length > 50 || /^(view profile|profile|\d[\d.,KkMm\s]*)$/i.test(value)) continue;
           const username = value.startsWith('@') || root.matches('.stylistic-alts-username,.profile-header-username,[data-testid="profile-header-username"]');
           wanted.set(node, (username ? '@' + record.name.username : record.name.displayName));
         }

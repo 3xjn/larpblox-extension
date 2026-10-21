@@ -48,6 +48,7 @@
     const found = new Map();
     for (const anchor of document.querySelectorAll('a[href]')) {
       const id = userIdFrom(anchor.getAttribute('href'));
+      if (/^(view profile|my profile|profile)$/i.test(anchor.textContent.trim())) continue;
       if (!id || !hasVisibleText(anchor) || anchor.matches(usernameSelector) || anchor.querySelector(usernameSelector) || /^@/.test(anchor.textContent.trim())) continue;
       const name = [...anchor.querySelectorAll(nameChildSelector)].find(hasVisibleText);
       found.set(name || anchor, id);

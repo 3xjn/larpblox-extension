@@ -21,6 +21,8 @@
   }
   function ownImage(image, userId, doc = document, win = window) {
     if (!image || !numericId(userId)) return false;
+    const action = image.closest?.('a[href]');
+    if (action && /^(view profile|my profile|profile)$/i.test(action.textContent.trim())) return false;
     if (!peer && /^\/users\/profile\/edit\/?$/i.test(win.location?.pathname || '') && image === globalThis.LarpbloxIdentityGate?.editProfileImage(doc)) return true;
     if (image.classList?.contains('rbx2016-welcome-avatar')) return !peer;
     for (let node = image, depth = 0; node && depth < 10; node = node.parentElement, depth++) {
