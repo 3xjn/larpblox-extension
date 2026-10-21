@@ -424,3 +424,8 @@ html.larpblox-modern.larpblox-pretend-mode .larpbux-owned-creator { display:flex
 
 .larpbux-social-counts > label { display:flex; justify-content:space-between; gap:16px; margin:12px 0; }
 .larpbux-social-counts input { max-width:240px; }
+
+.shopping-cart-items-list [data-larp-owned="true"] .item-price { display:none !important; }
+.shopping-cart-items-list .larpbux-cart-owned { display:flex; align-items:center; gap:6px; }
+.shopping-cart-items-list .larpbux-cart-owned .item-owned-icon { display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px; border-radius:50%; background:#00b06f; color:#25272d; }
+.shopping-cart-items-list .larpbux-cart-owned .item-owned-icon::after { content:'✓'; font-size:11px; font-weight:700; }

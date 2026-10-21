@@ -1801,13 +1801,28 @@
       }
     });
   }
+  function cartOwned(entry, native, current = state) {
+    const owned = current?.items.find(item => keyFor(item) === `${entry.itemType}:${entry.itemId}`);
+    const detail = native?.itemDetails?.[entry.itemId];
+    return Boolean(owned && !owned.isLimited && !owned.isLimitedUnique && !detail?.isLimited && !detail?.isLimitedUnique && !detail?.itemRestrictions?.some(value => /^(Limited|LimitedUnique|Collectible)$/i.test(value)));
+  }
+  function nativeCartRow(entry) {
+    return [...document.querySelectorAll('.shopping-cart-items-list .cart-item-container')].find(row => {
+      const path = row.querySelector('a.item-name')?.getAttribute('href') || '';
+      return path.match(/\/(catalog|bundles)\/(\d+)/)?.slice(1).join(':') === `${entry.itemType === 'Bundle' ? 'bundles' : 'catalog'}:${entry.itemId}`;
+    });
+  }
+  function cartSelected(entry, native) {
+    const checkbox = nativeCartRow(entry)?.querySelector('input[type="checkbox"]');
+    return !cartOwned(entry, native) && (checkbox ? checkbox.checked && !checkbox.disabled : native.selectedItems?.[`${entry.itemType.toLowerCase()}${entry.itemId}`] === true);
+  }
   async function openMarketplaceCart(selectedOnly = false) {
     const account = userId;
     try {
       if (account !== userId || !state?.mode) return;
       const native = JSON.parse(localStorage.getItem(`Roblox.AvatarMarketplace.Cart:${account}`) || 'null');
       if (Array.isArray(native?.items)) {
-        const selected = native.items.filter(entry => !selectedOnly || native.selectedItems?.[`${entry.itemType.toLowerCase()}${entry.itemId}`] === true);
+        const selected = native.items.filter(entry => !cartOwned(entry, native) && (!selectedOnly || cartSelected(entry, native)));
         const imported = await Promise.all(selected.map(async entry => {
           const id = Number(entry.itemId), type = entry.itemType;
           if (!Number.isSafeInteger(id) || id <= 0 || !['Asset','Bundle'].includes(type)) throw new Error('A cart item could not be loaded.');
@@ -1818,7 +1833,7 @@
         if (account !== userId || !state?.mode) return;
         let current = read(account); if (!current.mode) return;
         if (selectedOnly) current = {...current, cart:[]};
-        for (const item of imported) if (item && !current.cart.some(entry => keyFor(entry) === keyFor(item))) current = addToCart(current, item);
+        for (const item of imported) if (item && !cartOwned({itemId:item.id, itemType:item.itemType}, {itemDetails:{[item.id]:item}}, current) && !current.cart.some(entry => keyFor(entry) === keyFor(item))) current = addToCart(current, item);
         save(current);
       }
       if (account === userId && state?.mode) confirmCartPurchase();
@@ -1841,7 +1856,24 @@
     } catch (_) {}
   }
   const nativeCartBuyControls = new Map();
+  const nativeCartOwnedRows = new Map(), nativeCartTexts = new Map();
+  document.addEventListener('change', event => {
+    if (event.target.closest?.('.shopping-cart-items-list')) updateMarketplaceCart();
+  });
   function updateMarketplaceCart() {
+    let native;
+    try { native = JSON.parse(localStorage.getItem(`Roblox.AvatarMarketplace.Cart:${userId}`) || 'null'); } catch (_) {}
+    for (const [row, saved] of nativeCartOwnedRows) {
+      if (!row.isConnected) { nativeCartOwnedRows.delete(row); continue; }
+      if (!state?.mode || !native?.items?.some(entry => nativeCartRow(entry) === row && cartOwned(entry, native))) {
+        if (saved.checkbox) { saved.checkbox.disabled = saved.disabled; saved.checkbox.checked = saved.checked; }
+        row.removeAttribute('data-larp-owned'); row.querySelector('.larpbux-cart-owned')?.remove(); nativeCartOwnedRows.delete(row);
+      }
+    }
+    for (const [element, saved] of nativeCartTexts) {
+      if (!element.isConnected) nativeCartTexts.delete(element);
+      else if (!state?.mode) { element.innerHTML = saved.html; nativeCartTexts.delete(element); }
+    }
     for (const [button, saved] of nativeCartBuyControls) {
       if (!button.isConnected) { nativeCartBuyControls.delete(button); continue; }
       if (!state?.mode) {
@@ -1852,20 +1884,54 @@
       }
     }
     if (!state?.mode || !/^\/catalog\/?$/i.test(location.pathname)) return;
+    for (const entry of native?.items || []) {
+      const row = nativeCartRow(entry);
+      if (!row || !cartOwned(entry, native)) continue;
+      const checkbox = row.querySelector('input[type="checkbox"]');
+      if (!nativeCartOwnedRows.has(row)) nativeCartOwnedRows.set(row, {checkbox, disabled:checkbox?.disabled, checked:checkbox?.checked});
+      if (row.dataset.larpOwned !== 'true') row.dataset.larpOwned = 'true';
+      if (checkbox) { checkbox.disabled = true; checkbox.checked = false; }
+      if (!row.querySelector('.item-owned')) {
+        const label = node('div', '', 'item-owned larpbux-cart-owned');
+        label.append(node('span', '', 'item-owned-icon'), node('span', 'Item Owned', 'item-owned-text'));
+        row.querySelector('.item-details-container')?.append(label);
+      }
+    }
+    const selected = (native?.items || []).filter(entry => cartSelected(entry, native));
+    let cost = 0, valid = true;
+    for (const entry of selected) {
+      const detail = native.itemDetails?.[entry.itemId];
+      const price = [detail?.lowestPrice, detail?.price].find(value => Number.isSafeInteger(value) && value >= 0);
+      if (price == null) valid = false; else cost += price;
+    }
+    const replaceText = (selector, text) => {
+      for (const element of document.querySelectorAll(selector)) {
+        if (!nativeCartTexts.has(element)) nativeCartTexts.set(element, {html:element.innerHTML});
+        if (element.textContent !== text) element.textContent = text;
+      }
+    };
+    replaceText('.shopping-cart-footer .total-label', `Total: ${selected.length} items`);
+    replaceText('.shopping-cart-footer .total-price-container .price-text', cost.toLocaleString('en-US'));
+    replaceText('.shopping-cart-footer .balance-disclaimer-text .text-robux', Math.max(0, state.balance - cost).toLocaleString('en-US'));
+    const disabled = !selected.length || !valid || cost > state.balance;
     for (const button of document.querySelectorAll('.shopping-cart-footer button, .shopping-cart-footer [role="button"]')) {
       if (!/^buy(?:\s|$)/i.test(button.textContent.trim())) continue;
       if (!nativeCartBuyControls.has(button)) nativeCartBuyControls.set(button, {disabled:button.disabled, aria:button.getAttribute('aria-disabled'), disabledClass:button.classList.contains('disabled'), pointerEvents:button.style.pointerEvents});
-      if (button.disabled) button.disabled = false;
-      if (button.getAttribute('aria-disabled') !== 'false') button.setAttribute('aria-disabled', 'false');
-      button.classList.remove('disabled'); if (button.style.pointerEvents !== 'auto') button.style.pointerEvents = 'auto';
+      if (button.disabled !== disabled) button.disabled = disabled;
+      if (button.getAttribute('aria-disabled') !== String(disabled)) button.setAttribute('aria-disabled', String(disabled));
+      button.classList.toggle('disabled', disabled); if (button.style.pointerEvents !== 'auto') button.style.pointerEvents = 'auto';
     }
   }
   function marketplaceCartClick(event) {
     if (!state?.mode || !/^\/catalog\/?$/i.test(location.pathname)) return false;
+    if (event.target.closest?.('[data-larp-owned="true"]') && event.target.closest?.('.thumbnail-container, .purchase-checkbox-container, input[type="checkbox"], label')) {
+      event.preventDefault(); event.stopImmediatePropagation(); return true;
+    }
     const control = event.target.closest?.('button, a, [role="button"]');
     if (!control || control.closest('.larpbux-buy-dialog, .larpbux-panel')) return false;
     if (!control.closest('.shopping-cart-footer') || !/^buy(?:\s|$)/i.test(control.textContent.trim())) return false;
     event.preventDefault(); event.stopImmediatePropagation(); event.stopPropagation();
+    if (control.disabled || control.getAttribute('aria-disabled') === 'true') return true;
     void openMarketplaceCart(true);
     return true;
   }
