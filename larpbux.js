@@ -482,8 +482,15 @@
   }
   function nativeInventoryRoot() {
     if (!/^\/users\/(?:\d+\/)?inventory\/?$/i.test(location.pathname)) return null;
-    return [...document.querySelectorAll('#inventory-container, #inventory-page-container, .inventory-container, [data-testid="inventory-container"]')]
-      .find(element => element.getClientRects().length && (element.querySelector('.item-card, .items-container, [data-testid*="item"]') || /inventory/i.test(element.textContent)));
+    const visible = element => element && element.getClientRects().length;
+    const root = [...document.querySelectorAll('#inventory-container, #inventory-page-container, #inventory-web-app, .inventory-container, [data-testid="inventory-container"]')].find(visible);
+    if (root) return root;
+    // Inventory has shipped with several different outer wrappers. Locate the
+    // actual card list on this route instead of depending on a wrapper name.
+    const list = [...document.querySelectorAll('.item-cards, .inventory-items, .items-container')]
+      .find(element => visible(element) && !element.closest('.larpbux-native-inventory, .larpbux-panel, .larpbux-avatar-controls') && element.querySelector('a[href*="/catalog/"], a[href*="/bundles/"]'));
+    if (list) return list.parentElement;
+    return [...document.querySelectorAll('.item-card')].find(element => visible(element) && !element.closest('.larpbux-native-inventory, .larpbux-panel, .larpbux-avatar-controls'))?.parentElement;
   }
   function clearNativeInventory() {
     nativeInventoryHost?.remove(); nativeInventoryHost = undefined;

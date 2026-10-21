@@ -4,7 +4,7 @@ const {chromium} = require('playwright');
 const {collect} = require('../larpbux.js');
 const html = `<html class="larpblox-modern"><head><meta name="user-data" data-userid="123"><style>
 body{background:#111216;color:white;font:16px Arial}.item-cards{display:flex;flex-wrap:wrap;gap:8px;width:800px}.item-card{width:126px}.item-card-thumb-container{background:#393b46;border-radius:8px;overflow:hidden}.item-card-name{display:block;font-weight:bold}.item-card img{width:100%}
-</style></head><body><div id="robux-menu"></div><main id="inventory-container"><h1>My Inventory</h1><div class="item-cards"><div class="item-card" id="native-card">Roblox item</div></div></main></body></html>`;
+</style></head><body><div id="robux-menu"></div><main id="inventory-web-app"><h1>My Inventory</h1><div class="item-cards"><div class="item-card" id="native-card"><a href="/catalog/999/Native">Roblox item</a></div></div></main></body></html>`;
 const item = (id, assetType, extra = {}) => ({id, assetType, itemType:'Asset', name:`Item ${id}`, assetTypeVerified:true, limitedVerified:true, price:5, ...extra});
 (async () => {
   const browser = await chromium.launch({channel:'chrome',headless:true});
@@ -27,6 +27,10 @@ const item = (id, assetType, extra = {}) => ({id, assetType, itemType:'Asset', n
     assert.equal(await page.locator('.larpbux-native-inventory-card [aria-label="Limited Unique"]').count(),2);
     assert.equal(await cards.first().locator('.item-card-link').getAttribute('href'),'/catalog/1');
     assert.equal(await cards.first().locator('.larpbux-limited-badge').evaluate(e=>getComputedStyle(e).backgroundPosition),'0px -54px');
+    await page.evaluate(()=>{document.querySelector('main').id='another-inventory-layout'});
+    await page.evaluate(()=>document.body.append(document.createElement('div')));
+    await page.waitForFunction(()=>document.querySelectorAll('.larpbux-native-inventory-card').length===6);
+    assert.equal(await page.locator('.item-cards > .larpbux-native-inventory').count(),1,'find the native grid even when its wrapper name changes');
     const update=async s=>page.evaluate(s=>{localStorage.setItem('larpblox-cosmetics-v1:123',JSON.stringify(s));dispatchEvent(new StorageEvent('storage',{key:'larpblox-cosmetics-v1:123'}))},s);
     saved=collect(saved,item(1,8,{isLimited:true}));
     await update(saved);
