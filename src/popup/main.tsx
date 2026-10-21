@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
-import { ChevronRightIcon } from "lucide-react";
+import { ChevronRightIcon, SettingsIcon, ArrowLeftIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +25,42 @@ type PopupState = {
 type Reply = PopupState & { ok: boolean; error?: string };
 type Message = { type: string; [key: string]: unknown };
 type Notice = { text: string; error?: boolean };
+
+function UpdateSettings() {
+  const [result, setResult] = useState<{version?: string; enabled?: boolean; updated?: boolean}>({});
+  const [notice, setNotice] = useState("Loading…");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(false);
+  async function run(action: string) {
+    setBusy(true); setError(false);
+    if (action === "check") setNotice("Checking for updates…");
+    try {
+      const reply = await chrome.runtime.sendMessage({type:"larpblox-website-update", action});
+      if (!reply?.ok) throw new Error(reply?.error || "Could not check for updates.");
+      if (action === "enable" || action === "reload") return;
+      setResult(reply);
+      setNotice(reply.enabled === false ? "Enable Allow User Scripts in the extension’s details, then return here." :
+        reply.updated ? "Update ready. Reload your Roblox tabs to apply it." : reply.updated === false ? "You’re up to date." : "");
+    } catch (failure) { setError(true); setNotice(failure instanceof Error ? failure.message : "Could not check for updates."); }
+    finally { setBusy(false); }
+  }
+  useEffect(() => {
+    void run("status");
+    const focus = () => void run("status");
+    window.addEventListener("focus", focus);
+    return () => window.removeEventListener("focus", focus);
+  }, []);
+  return <section aria-label="Extension settings" className="space-y-4">
+    <h2 className="text-base font-semibold">Updates</h2>
+    {result.version && <p className="help">Website version {result.version}</p>}
+    {notice && <p role="status" className={error ? "notice error" : "notice"}>{notice}</p>}
+    <div className="flex flex-wrap gap-2">
+      {result.enabled === false && <Button variant="outline" disabled={busy} onClick={() => void run("enable")}>Open extension settings</Button>}
+      <Button variant="outline" loading={busy} disabled={busy} onClick={() => void run("check")}>Check for updates</Button>
+      {result.updated && <Button disabled={busy} onClick={() => void run("reload")}>Reload Roblox tabs</Button>}
+    </div>
+  </section>;
+}
 
 function Disclosure({ title, children }: { title: string; children: ReactNode }) {
   return <Collapsible className="disclosure">
@@ -51,6 +87,7 @@ function Choice({ id, label, value, items, disabled, onChange }: {
 }
 
 function App() {
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [state, setState] = useState<PopupState | null>(null);
   const [pending, setPending] = useState<string | null>("initialize");
   const [notice, setNotice] = useState<Notice>({ text: "Connecting to Roblox…" });
@@ -66,7 +103,7 @@ function App() {
   async function send(message: Message): Promise<PopupState> {
     if (tabId.current === undefined) throw new Error("Open a signed-in Roblox tab first.");
     let response: Reply;
-    try { response = await chrome.tabs.sendMessage(tabId.current, message); }
+    try { response = await chrome.runtime.sendMessage({type:"larpblox-popup-relay", tabId:tabId.current, message}); }
     catch { throw new Error("Reload your Roblox tab, then reopen Larpblox."); }
     if (!response?.ok) throw new Error(response?.error || "Could not update Larpblox. Reload Roblox and try again.");
     return response;
@@ -130,7 +167,12 @@ function App() {
   const status = (value: Notice) => value.text ? <p role="status" className={value.error ? "notice error" : "notice"}>{value.text}</p> : null;
 
   return <main>
-    <header className="popup-header"><img src="assets/larpblox-logo.png" alt="Larpblox" /><h1 className="sr-only">Larpblox</h1></header>
+    <header className="popup-header"><img src="assets/larpblox-logo.png" alt="Larpblox" /><h1 className="sr-only">Larpblox</h1>
+      <Button variant="ghost" size="icon" className="ml-auto" aria-label={settingsOpen ? "Back to Larpblox" : "Settings"} title={settingsOpen ? "Back" : "Settings"} aria-expanded={settingsOpen} onClick={() => setSettingsOpen(open => !open)}>
+        {settingsOpen ? <ArrowLeftIcon aria-hidden="true" /> : <SettingsIcon aria-hidden="true" />}
+      </Button>
+    </header>
+    {settingsOpen ? <UpdateSettings /> : <>
     {status(notice)}
     {!state ? pending === null && <Button variant="outline" className="mt-4 w-full" onClick={() => void initialize()}>Retry connection</Button> : <>
       <section className="mode-section">
@@ -187,6 +229,7 @@ function App() {
         <p className="help">Changes how Roblox looks in this browser.</p>
         </div>
       </Disclosure>
+    </>}
     </>}
   </main>;
 }

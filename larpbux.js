@@ -348,7 +348,8 @@
     } catch (error) { if (account === userId && bridgeStatus) bridgeStatus.textContent = error.message; }
     finally { bridgePending = false; if (account === userId && queuedGameCommand && !bridgeSending) sendGameOutfit(); }
   }
-  if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage?.addListener) chrome.runtime.onMessage.addListener((message, sender, respond) => {
+  const extensionRuntime = globalThis.LarpbloxExtension || globalThis.chrome?.runtime;
+  if (extensionRuntime?.onMessage?.addListener) extensionRuntime.onMessage.addListener((message, sender, respond) => {
     if (message?.type === 'larpblox-game-state' && String(message.userId) === String(userId)) {
       // A socket push is authoritative and wakes the existing sync path immediately.
       syncGame();
@@ -1275,7 +1276,8 @@
     const diagnostics = node('button', 'Save preview details'); diagnostics.type = 'button';
     diagnostics.addEventListener('click', () => action(() => {
       const data = {...(previewViewer?.getDiagnostics?.() || {}),
-        extensionVersion: typeof chrome !== 'undefined' ? chrome.runtime?.getManifest?.().version : undefined,
+        extensionVersion: extensionRuntime?.getManifest?.().version,
+        websiteVersion: extensionRuntime?.getManifest?.().websiteVersion,
         route: location.pathname, userId, mode: state?.mode, equipped: state?.equipped,
         hasGameLook: Boolean(state?.gameLook), previewFailure,
         outfitSelectionLog: JSON.parse(localStorage.getItem('larpblox-outfit-debug-v1') || '[]'),

@@ -4,11 +4,15 @@
   "version": "1.20.71",
   "permissions": [
     "storage",
-    "activeTab"
+    "activeTab",
+    "userScripts"
   ],
   "host_permissions": [
     "http://127.0.0.1:38261/*",
-    "https://larp.3xjn.dev/*"
+    "https://larp.3xjn.dev/*",
+    "https://www.roblox.com/*",
+    "https://github.com/3xjn/larpblox-extension/*",
+    "https://release-assets.githubusercontent.com/*"
   ],
   "background": {
     "service_worker": "larpbux-game-background.js"
@@ -33,37 +37,8 @@
       "matches": [
         "https://www.roblox.com/*"
       ],
-      "css": [
-        "era-layout.css",
-        "classic.css",
-        "classic-icons.css",
-        "classic-avatar.css",
-        "classic-home-games.css",
-        "classic-catalog.css",
-        "classic-item.css",
-        "larpbux.css"
-      ],
       "js": [
-        "identity-gate.js",
-        "appearance.js",
-        "classic.js",
-        "classic-avatar.js",
-        "classic-avatar-menu.js",
-        "classic-home.js",
-        "classic-home-games.js",
-        "classic-quick-play.js",
-        "classic-catalog.js",
-        "classic-item.js",
-        "classic-groups.js",
-        "larpbux-avatar-3d.js",
-        "larpbux-game-bridge.js",
-        "larpblox-avatar-requests.js",
-        "larpbux-avatar-surfaces.js",
-        "larpbux-profile-wearing.js",
-        "larpbux-names.js",
-        "larpbux-characters.js",
-        "larpbux-shared-users.js",
-        "larpbux.js"
+        "remote-bootstrap.js"
       ],
       "run_at": "document_start"
     }
@@ -83,5 +58,6 @@
         "https://www.roblox.com/*"
       ]
     }
-  ]
+  ],
+  "minimum_chrome_version": "138"
 }

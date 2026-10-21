@@ -35,8 +35,9 @@
     return {version: 1, userId: String(userId), definition: value.definition, imageUrl: value.imageUrl};
   }
   async function request(action, userId, extra = {}) {
-    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) throw new Error('Reload the extension to enable the game connection.');
-    const result = await chrome.runtime.sendMessage({type: 'larpblox-game-bridge', action, userId: String(userId), ...extra});
+    const runtime = globalThis.LarpbloxExtension || globalThis.chrome?.runtime;
+    if (!runtime?.sendMessage) throw new Error('Reload the extension to enable the game connection.');
+    const result = await runtime.sendMessage({type: 'larpblox-game-bridge', action, userId: String(userId), ...extra});
     if (!result?.ok) throw new Error(result?.error || 'The game connection is unavailable.');
     return result.data;
   }

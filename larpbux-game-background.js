@@ -1,16 +1,25 @@
 /* global chrome, LarpbloxGameBridge, importScripts */
-importScripts('larpbux-game-bridge.js');
+importScripts('larpbux-game-bridge.js', 'remote-loader.js');
 const ROOT = 'http://127.0.0.1:38261';
 const SOCKET = 'ws://127.0.0.1:38261/v1/socket';
 const storageKey = userId => `larpblox-game-pair:${userId}`;
 const pairing = new Map();
 const sockets = new Map();
 const tabs = new Map();
+const websitePorts = new Map();
+chrome.runtime.onUserScriptConnect.addListener(port => {
+  if (port.name !== 'larpblox-website' || port.sender?.id !== chrome.runtime.id || !/^https:\/\/www\.roblox\.com\//.test(port.sender?.url || '')) return;
+  const id = port.sender.tab?.id;
+  if (id == null) return;
+  websitePorts.set(id, port);
+  port.onDisconnect.addListener(() => { if (websitePorts.get(id) === port) websitePorts.delete(id); });
+});
 const socketTimeout = 2500;
 function notify(userId, snapshot) {
   const tabId = tabs.get(String(userId));
   if (tabId == null || !chrome.tabs?.sendMessage) return;
-  try { chrome.tabs.sendMessage(tabId, {type: 'larpblox-game-state', userId: String(userId), snapshot}).catch?.(() => {}); } catch (_) {}
+  const message = {type: 'larpblox-game-state', userId: String(userId), snapshot};
+  try { websitePorts.get(tabId)?.postMessage(message); } catch (_) {}
 }
 function socketFor(userId, token) {
   userId = String(userId);
@@ -168,7 +177,7 @@ async function handle(message, sender) {
   }
   throw new Error('Unsupported connection action.');
 }
-chrome.runtime.onMessage.addListener((message, sender, respond) => {
+function onBridgeMessage(message, sender, respond) {
   if (message?.type === 'larpblox-publish-profile') {
     if (!/^https:\/\/www\.roblox\.com\//.test(sender.url || '') || sender.id !== chrome.runtime.id || !/^[1-9]\d{0,15}$/.test(String(message.userId))) {
       respond({ok:false}); return false;
@@ -198,4 +207,6 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
   if (message?.type !== 'larpblox-game-bridge') return false;
   handle(message, sender).then(data => respond({ok: true, data}), error => respond({ok: false, error: error.message}));
   return true;
-});
+}
+chrome.runtime.onMessage.addListener(onBridgeMessage);
+chrome.runtime.onUserScriptMessage.addListener(onBridgeMessage);

@@ -24,7 +24,7 @@
         if (socialCounts) record.socialCounts = socialCounts;
       }
       if (mine !== publicationGeneration) return;
-      const response = await chrome.runtime.sendMessage({type:'larpblox-publish-profile',userId:String(options.userId),record});
+      const response = await (globalThis.LarpbloxExtension || chrome.runtime).sendMessage({type:'larpblox-publish-profile',userId:String(options.userId),record});
       if (response?.ok && mine === publicationGeneration) publicationTime = Date.now();
     } catch (_) { /* Retry after transient relay or avatar failures. */ }
     finally { publishing = false; if (mine !== publicationGeneration) flushProfile(); }
@@ -165,7 +165,7 @@
     if (pending || !ids.length || Date.now() - lastPoll < 5000) return;
     pending = true; lastPoll = Date.now(); const mine = generation;
     try {
-      const response = await chrome.runtime.sendMessage({type:'larpblox-shared-users', userIds:ids});
+      const response = await (globalThis.LarpbloxExtension || chrome.runtime).sendMessage({type:'larpblox-shared-users', userIds:ids});
       if (mine !== generation) return;
       if (!response?.ok) { records.clear(); apply(); return; }
       const next = new Map();

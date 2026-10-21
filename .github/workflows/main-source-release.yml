@@ -60,11 +60,19 @@ jobs:
           echo "RELEASE_TAG=$next_tag" >> "$GITHUB_ENV"
           echo "RELEASE_SHA=$release_sha" >> "$GITHUB_ENV"
 
+      - name: Package remote website and loader
+        run: |
+          python3 scripts/package-website.py
+          mkdir -p /tmp/larpblox-loader/larpblox-extension
+          cp website-bundle.json /tmp/larpblox-loader/larpblox-extension/
+          archive="$PWD/Larpblox-Extension-$RELEASE_VERSION.zip"
+          (cd /tmp/larpblox-loader && zip -u "$archive" larpblox-extension/website-bundle.json)
+
       - name: Publish versioned and latest releases
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "$RELEASE_TAG" "Larpblox-Extension-$RELEASE_VERSION.zip" \
+          gh release create "$RELEASE_TAG" "Larpblox-Extension-$RELEASE_VERSION.zip" website-release/* \
             --target "$RELEASE_SHA" \
             --title "Larpblox Extension $RELEASE_VERSION" \
             --notes "Version $RELEASE_VERSION from the main branch. Download the source ZIP and extract it to use the unpacked Chrome extension." \
@@ -89,3 +97,6 @@ jobs:
               --prerelease \
               --latest=false
           fi
+
+          # Publish the pointer after its versioned payload is available.
+          gh release upload main-latest website-release/website-latest.json --clobber

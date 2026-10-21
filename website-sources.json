@@ -1,0 +1,34 @@
+{
+  "css": [
+    "era-layout.css",
+    "classic.css",
+    "classic-icons.css",
+    "classic-avatar.css",
+    "classic-home-games.css",
+    "classic-catalog.css",
+    "classic-item.css",
+    "larpbux.css"
+  ],
+  "js": [
+    "identity-gate.js",
+    "appearance.js",
+    "classic.js",
+    "classic-avatar.js",
+    "classic-avatar-menu.js",
+    "classic-home.js",
+    "classic-home-games.js",
+    "classic-quick-play.js",
+    "classic-catalog.js",
+    "classic-item.js",
+    "classic-groups.js",
+    "larpbux-avatar-3d.js",
+    "larpbux-game-bridge.js",
+    "larpblox-avatar-requests.js",
+    "larpbux-avatar-surfaces.js",
+    "larpbux-profile-wearing.js",
+    "larpbux-names.js",
+    "larpbux-characters.js",
+    "larpbux-shared-users.js",
+    "larpbux.js"
+  ]
+}

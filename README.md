@@ -1,3 +1,26 @@
+# Remote website updates
+
+Website updates do not need Desktop. Load the extension once, enable **Allow User
+Scripts** in its Chrome Details page, then use the **cog in the extension popup →
+Check for updates**. Choose **Reload Roblox tabs** after an update is ready.
+There is no update entry added to Roblox's menus.
+
+The loader downloads versioned website scripts and styles from this repository's
+GitHub releases, checks size and SHA-256, and caches them for offline use. Checks
+are manual. Failed downloads and JavaScript syntax checks preserve the installed
+version; a synchronous startup failure restores the previous cached version.
+HTTPS protects the release origin; the hash is an integrity check, not a separate
+publisher signature. Game sync still uses the existing local bridge.
+
+The installed loader, extension popup, permissions, MAIN-world body-color hook,
+and background bridge remain local. Changes to those need a new loader package.
+Website scripts and styles update through the cached payload.
+
+Development: run `npm ci`, `npm run build`, and `python scripts/package-website.py`
+before loading/reloading the extension. The last command creates
+`website-bundle.json` and a ready-to-extract loader ZIP under `website-release/`.
+CI publishes the immutable website payload before updating `website-latest.json`.
+
 # Roblox 2016 Classic for Chrome
 
 Version 1.20.61 moves Larp mode, pretend Larpbux balance, avatar selection, profile counts, Larp username, game connection, and website appearance into the extension popup. Open it from Chrome's extension toolbar while a signed-in Roblox tab is active. No Larpblox settings accordion is injected into Roblox pages.
