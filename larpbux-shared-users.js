@@ -17,9 +17,9 @@
     try {
       let record;
       if (options.active) {
-        const definition = await options.loadDefinition(new AbortController().signal);
+        const snapshot = options.loadSnapshot ? await options.loadSnapshot() : {version:1,userId:String(options.userId),definition:await options.loadDefinition(new AbortController().signal),items:[]};
         const userId = String(options.userId), username = options.names?.username || '';
-        record = {version:1, userId, verified:options.verified === true, snapshot:{version:1,userId,definition,items:[]}, name:{enabled:!!username,username,displayName:username}};
+        record = {version:1, userId, verified:options.verified === true, snapshot:LarpbloxGameBridge.validateSnapshot(snapshot,userId), name:{enabled:!!username,username,displayName:username}};
         const socialCounts = validCounts(options.socialCounts);
         if (socialCounts) record.socialCounts = socialCounts;
       }

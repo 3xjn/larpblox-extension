@@ -1012,7 +1012,7 @@
       backgroundId: current?.backgroundId, signature, loadDefinition,
     });
     if (typeof LarpbloxSharedUsers !== 'undefined' && typeof LarpbloxSharedUsers.publishProfile === 'function') LarpbloxSharedUsers.publishProfile({
-      userId: account, active: Boolean(current?.mode), signature, loadDefinition, names: current?.names, verified: current?.verified === true, socialCounts: current?.socialCounts,
+      userId: account, active: Boolean(current?.mode && current?.sharing), signature, loadDefinition, loadSnapshot: captureCharacter, names: current?.names, verified: current?.verified === true, socialCounts: current?.socialCounts,
     });
   }
   async function bundleAssets(data, signal) {
