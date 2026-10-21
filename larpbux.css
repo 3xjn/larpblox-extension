@@ -48,31 +48,6 @@ html:is(.rbx2016, .larpblox-modern) .larpbux-avatar-controls { display:grid; gap
 .larpbux-avatar-controls .larpbux-appearance { display:grid; gap:6px; font-size:14px; }
 .larpbux-avatar-controls :is(input, select, button, summary):focus-visible { outline:2px solid #0074bd; outline-offset:2px; }
 
-.larpbux-browser-preferences-appearance {
-  display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(240px, 380px);
-  align-items: center;
-  gap: 8px 24px;
-  margin-top: 24px;
-  padding-top: 16px;
-  border-top: 1px solid var(--larp-border, #d5d7dd);
-  color: var(--larp-text, #202227);
-}
-.larpbux-browser-preferences-appearance label { font-size: 16px; font-weight: 600; }
-.larpbux-browser-preferences-appearance select {
-  width: 100%; min-height: 48px; box-sizing: border-box; padding: 10px 12px;
-  border: 1px solid var(--larp-border, #d5d7dd); border-radius: 8px;
-  background: var(--larp-panel, #fff); color: inherit; font: inherit;
-}
-.larpbux-browser-preferences-appearance p {
-  grid-column: 1 / -1; margin: 0; color: var(--larp-muted, #606770);
-  font-size: 14px; line-height: 20px;
-}
-@media (max-width: 700px) {
-  .larpbux-browser-preferences-appearance { grid-template-columns: 1fr; gap: 8px; }
-  .larpbux-browser-preferences-appearance p { grid-column: 1; }
-}
-
 html:is(.rbx2016, .larpblox-modern).larpblox-pretend-mode #nav-robux-amount { max-width: none !important; width: auto !important; white-space: nowrap; text-overflow: clip !important; overflow: visible !important; }
 
 html:is(.rbx2016, .larpblox-modern) .larpbux-item-actions .larpbux-classic-buy,

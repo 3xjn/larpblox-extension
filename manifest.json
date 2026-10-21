@@ -1,9 +1,10 @@
 {
   "manifest_version": 3,
   "name": "Roblox 2016 Classic",
-  "version": "1.20.58",
+  "version": "1.20.59",
   "permissions": [
-    "storage"
+    "storage",
+    "activeTab"
   ],
   "host_permissions": [
     "http://127.0.0.1:38261/*",
@@ -12,7 +13,11 @@
   "background": {
     "service_worker": "larpbux-game-background.js"
   },
-  "description": "Choose classic 2016 or current Roblox appearance while keeping Larpblox cosmetics and game sync.",
+  "description": "Manage Larp mode, pretend balance, and Roblox appearance from the extension popup.",
+  "action": {
+    "default_title": "Larpblox",
+    "default_popup": "popup.html"
+  },
   "content_scripts": [
     {
       "matches": [

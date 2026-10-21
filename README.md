@@ -1,8 +1,10 @@
 # Roblox 2016 Classic for Chrome
 
+Version 1.20.59 adds a Larpblox extension popup for Larp mode, pretend Larpbux balance, and the Classic Roblox (2016) / Current Roblox appearance choice. Open the popup from Chrome's extension toolbar while a signed-in Roblox tab is active. Larp settings are no longer injected into Roblox settings; avatar-specific editing controls remain on the Avatar page.
+
 Version 1.18 adds local Larp character saves in Avatar Editor > Avatars > Creations. With Larp mode on, click the existing Create New Character button, enter a name in the save dialog and save. Larp characters appear beside real outfits in the same grid. Click a character thumbnail to wear its full saved look; its gear menu offers Delete. Saves persist per Roblox account in this browser (up to 12). Native Create New Character / Create New Outfit opens the local save dialog while Larp mode is on. Local saves do not create Roblox account outfits.
 
-Version 1.17 adds a website appearance choice. After reloading the extension and refreshing Roblox, open the Robux menu and choose **Website appearance → Current Roblox** for Roblox's current native layout, or **Classic Roblox (2016)** for the classic theme. Switching reloads the page and is remembered across Roblox tabs. The choice is separate from Larp mode: local currency, collected items, Wear/Remove, avatar previews, Larp names, and game sync remain available in both appearances. The added quick Play button and other 2016 page changes run only in Classic appearance. Your saved Larp account data is preserved.
+Version 1.17 adds a website appearance choice for Roblox's current native layout or the Classic Roblox (2016) theme. The choice is separate from Larp mode: local currency, collected items, Wear/Remove, avatar previews, Larp names, and game sync remain available in both appearances. The added quick Play button and other 2016 page changes run only in Classic appearance. Your saved Larp account data is preserved.
 
 
 
