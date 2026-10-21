@@ -1723,7 +1723,6 @@
     purchaseToastTimer = setTimeout(() => { toast.classList.add('is-leaving'); setTimeout(() => toast.remove(), 250); }, 3000);
   }
   function purchaseComplete(dialog, message) {
-    purchaseToast();
     dialog.classList.add('larpbux-purchase-complete');
     dialog.setAttribute('aria-label', 'Purchase Complete');
     const title = node('h2', 'Purchase Complete');
@@ -2014,7 +2013,7 @@
           const current = read(account);
           if (!current.mode) throw new Error('Turn Larp mode on before buying.');
           if (JSON.stringify(current.cart) !== JSON.stringify(state.cart)) throw new Error('Your cart changed. Reopen it to review your purchase.');
-          save(checkoutCart(current)); clearPurchasedNativeCart(current.cart); purchaseComplete(dialog, 'You have successfully bought the items in your cart');
+          save(checkoutCart(current)); clearPurchasedNativeCart(current.cart); closePurchase(); purchaseToast();
         } catch (failure) { dialog.removeAttribute('aria-busy'); status.textContent = failure.message; buy.disabled = false; buy.classList.remove('is-loading'); buy.removeAttribute('aria-busy'); buy.textContent = 'Buy'; }
       });
       footer.append(buy);
