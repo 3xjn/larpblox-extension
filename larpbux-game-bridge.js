@@ -17,6 +17,17 @@
     }
     if (!['R6', 'R15'].includes(definition.playerAvatarType?.playerAvatarType)) throw new Error('Invalid game body type.');
     for (const [name, scale] of Object.entries(definition.scales || {})) if (!['height', 'width', 'depth', 'head', 'proportion', 'bodyType'].includes(name) || !Number.isFinite(scale) || scale < 0 || scale > 5) throw new Error('Invalid game body scale.');
+    const background = value.backgroundId ?? definition.backgroundId ?? definition.backgroundRequestModel?.id;
+    if (background !== undefined && background !== 0 && !id(background)) throw new Error('Invalid game background.');
+    if (value.backgrounds !== undefined) {
+      if (!Array.isArray(value.backgrounds) || value.backgrounds.length > 100) throw new Error('Invalid background collection.');
+      const seen = new Set();
+      for (const item of value.backgrounds) {
+        if (!id(item?.id) || seen.has(item.id) || typeof item.name !== 'string' || item.name.length > 128) throw new Error('Invalid collected background.');
+        seen.add(item.id);
+      }
+      if (background > 0 && !seen.has(background)) throw new Error('Collect this background first.');
+    }
     if (JSON.stringify(value).length > 262144) throw new Error('Game outfit is too large.');
     return value;
   }

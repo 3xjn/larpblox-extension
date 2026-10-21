@@ -164,7 +164,10 @@ async function handle(message, sender) {
     return {connected: true, snapshot: snapshot && LarpbloxGameBridge.validateSnapshot(snapshot, userId)};
   }
   if (message.action === 'publish') {
-    try { await socketRequest(userId, token, 'browser', {version: 1, userId, definition: socketValue.definition, items: socketValue.items}); } catch (_) { await accountCall(userId, `/v1/browser/${userId}`, {version: 1, userId, definition: socketValue.definition, items: socketValue.items}); }
+    const value = {version: 1, userId, definition: socketValue.definition, items: socketValue.items,
+      ...(socketValue.backgroundId !== undefined ? {backgroundId: socketValue.backgroundId} : {}),
+      ...(socketValue.backgrounds !== undefined ? {backgrounds: socketValue.backgrounds} : {})};
+    try { await socketRequest(userId, token, 'browser', value); } catch (_) { await accountCall(userId, `/v1/browser/${userId}`, value); }
     return {connected: true};
   }
   if (message.action === 'publishNames') {

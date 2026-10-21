@@ -227,10 +227,17 @@
       entry.promise = (async () => {
         const definition = await loadDefinition(controller.signal);
         const previous = savedPictures(userId, definition);
-        const flat = globalThis.LarpbloxAvatarRequests?.cached?.(definition,userId,'2d') || options.imageUrl;
+        let flat = globalThis.LarpbloxAvatarRequests?.cached?.(definition,userId,'2d') || options.imageUrl;
+        // A cold profile must not depend on a 3D render before it can show any
+        // avatar. Get a matching still first, then enhance it with the model.
+        if (!previous && !flat && !globalThis.LarpbloxAvatarRequests?.cached?.(definition,userId,'3d')) {
+          try { flat = await render(definition, userId, controller.signal, '2d'); }
+          catch (error) { if (controller.signal.aborted) throw error; }
+        }
         if (previous || flat) {
           try {
             entry.result = previous || await flatPictures(flat, controller.signal, definition);
+            savePictures(userId, definition, entry.result);
             if (cache === entry && !controller.signal.aborted) update(options);
           } catch (error) { if (controller.signal.aborted) throw error; }
         }

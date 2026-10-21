@@ -103,7 +103,7 @@
         // must never start its queued request between a 429 and this update.
         if (response.status === 429) {
           const shared = timing();
-          const seconds = Math.max(1, retryAfter(response, Math.min(120, 20 * 2 ** Math.min(shared.rateLimits, 3))));
+          const seconds = Math.max(retryAfter(response), Math.min(120, 20 * 2 ** Math.min(shared.rateLimits, 3)));
           shared.rateLimits++; shared.blockedUntil = Math.max(blockedUntil(), Date.now() + seconds * 1000);
           saveTiming(shared);
           globalThis.LarpbloxRenderBlockedUntil = shared.blockedUntil;

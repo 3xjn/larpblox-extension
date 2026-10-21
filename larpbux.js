@@ -209,7 +209,11 @@
     }
     const equipped = snapshotItems.filter(item => !bundled.has(keyFor(item)) && !removedBodySlots.has(bodySlot(item.assetType))).map(keyFor);
     for (const key of bundled) if (state.items.some(item => keyFor(item) === key)) equipped.push(key);
-    const backgroundId = Number.isSafeInteger(Number(snapshot.backgroundId)) && Number(snapshot.backgroundId) > 0 ? Number(snapshot.backgroundId) : state.backgroundId;
+    for (const background of snapshot.backgrounds || []) {
+      if (!items.some(item => isBackground(item) && item.id === background.id)) items.push({...background, itemType:'Asset', assetType:92, price:0, source:'game'});
+    }
+    const selectedBackground = snapshot.backgroundId ?? snapshot.definition?.backgroundId ?? snapshot.definition?.backgroundRequestModel?.id;
+    const backgroundId = selectedBackground === undefined ? state.backgroundId : Number(selectedBackground) || undefined;
     return {...state, items, equipped, ...(backgroundId ? {backgroundId} : {backgroundId:undefined}), gameLook: snapshot};
   }
   function gamePreviewDefinition(state) {
@@ -252,13 +256,15 @@
     const normalizeColor = value => typeof value === 'string' ? value.replace(/^#/, '').toLowerCase() : value;
     const colors = ['headColor', 'torsoColor', 'leftArmColor', 'rightArmColor', 'leftLegColor', 'rightLegColor'];
     const bodyColorsMatch = colors.every(color => normalizeColor(snapshot.definition?.bodyColors?.[color]) === normalizeColor(command.definition?.bodyColors?.[color]));
-    return String(snapshot.userId) === String(command.userId) && keys(snapshot) === keys(command) && bodyColorsMatch;
+    const background = value => Number(value.backgroundId ?? value.definition?.backgroundId ?? value.definition?.backgroundRequestModel?.id ?? 0);
+    return String(snapshot.userId) === String(command.userId) && keys(snapshot) === keys(command) && bodyColorsMatch && background(snapshot) === background(command);
   }
   function gameCommand(state, userId) {
     const definition = gamePreviewDefinition(state);
     const items = new Map(state.gameLook.items.map(item => [item.id, item]));
     for (const item of outfitAssets(state.items.filter(item => state.equipped.includes(keyFor(item))))) items.set(item.id, item);
-    return {version: 1, userId: String(userId), definition, ...(definition.backgroundId ? {backgroundId: definition.backgroundId} : {}), items: definition.assets.map(asset => items.get(asset.id)).filter(Boolean).map(({id, name, assetType}) => ({id, name, assetType, itemType: 'Asset'}))};
+    const backgrounds = state.items.filter(isBackground).map(({id, name}) => ({id, name}));
+    return {version: 1, userId: String(userId), definition, backgroundId: definition.backgroundId || 0, backgrounds, items: definition.assets.map(asset => items.get(asset.id)).filter(Boolean).map(({id, name, assetType}) => ({id, name, assetType, itemType: 'Asset'}))};
   }
   if (typeof module !== 'undefined' && module.exports) { module.exports = {changedBodyColors, addToCart, checkoutCart, changeUsername, localNames, localSocialCounts, amount, formatBalance, collect, equip, outfit, supportsOutfit, supportsCosmetic, isBackground, previewDefinition, matchesAvatarCategory, mergeGameSnapshot, gamePreviewDefinition, gameCommand, gameOutfitMatches}; return; }
   let state, userId, panel, list, message, exportBox, purchaseDialog, previewElement, previewViewer, previewSignature, previewController;
@@ -342,7 +348,7 @@
       if (state.pendingOutfit && !awaitingGameOutfit && state.gameLook) awaitingGameOutfit = {command: gameCommand(state, account)};
       if (awaitingGameOutfit) {
         if (!gameOutfitMatches(snapshot, awaitingGameOutfit.command)) {
-          if (!queuedGameCommand && account === userId && state?.mode) queuedGameCommand = awaitingGameOutfit.command;
+          if (!awaitingGameOutfit.sent && !queuedGameCommand && account === userId && state?.mode) queuedGameCommand = awaitingGameOutfit.command;
           if (bridgeStatus) bridgeStatus.textContent = 'Waiting for the game to apply your outfit...';
           return;
         }
@@ -453,6 +459,7 @@
           if (bridgeStatus) bridgeStatus.textContent = 'Not connected. Retrying when the game connection returns.';
           break;
         }
+        if (awaitingGameOutfit?.command === command) awaitingGameOutfit.sent = true;
         if (command.userId !== userId) continue;
         if (bridgeStatus) bridgeStatus.textContent = 'Waiting for the game to confirm your outfit. If this stays here, check Accessories → Browser Connection in the game.';
       }
@@ -1005,7 +1012,7 @@
   function updateOwnAvatarSurfaces() {
     const current = state, account = userId;
     const selected = current?.items.filter(item => current.equipped.includes(keyFor(item)) && supportsOutfit(item)) || [];
-    const signature = JSON.stringify([account, selected.map(item => item.id), current?.backgroundId, current?.gameLook?.definition, current?.names]);
+    const signature = JSON.stringify([account, selected.map(item => item.id), current?.backgroundId, current?.gameLook?.definition]);
     const loadDefinition = signal => current?.gameLook ? Promise.resolve(gamePreviewDefinition(current)) : loadBrowserPreview(selected, signal);
     if (typeof LarpbloxProfileWearing !== 'undefined') LarpbloxProfileWearing.update({
       userId: account, active: Boolean(current?.mode), signature,
