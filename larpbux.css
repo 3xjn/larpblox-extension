@@ -226,8 +226,9 @@ html[data-larpblox-identity-avatar="true"] #avatar-web-app:not([data-larpbux-ava
 html[data-larpblox-identity-avatar="true"] #avatar-web-app:not([data-larpbux-avatar-view="real"]) .avatar-thumbnail > :not(.larpbux-avatar-look):not(.larpbux-avatar-hats) *,
 #avatar-web-app .avatar-thumbnail.larpbux-local-preview > :not(.larpbux-avatar-look):not(.larpbux-avatar-hats),
 #avatar-web-app .avatar-thumbnail.larpbux-local-preview > :not(.larpbux-avatar-look):not(.larpbux-avatar-hats) * { visibility:hidden !important; }
-#avatar-web-app .avatar-thumbnail.larpbux-local-preview > :not(.larpbux-avatar-look):not(.larpbux-avatar-hats) .toggle-three-dee,
-#avatar-web-app .avatar-thumbnail.larpbux-local-preview > :not(.larpbux-avatar-look):not(.larpbux-avatar-hats) .toggle-three-dee * { visibility:visible !important; }
+html #avatar-web-app .avatar-thumbnail.larpbux-local-preview > :not(.larpbux-avatar-look):not(.larpbux-avatar-hats) .toggle-three-dee,
+html #avatar-web-app .avatar-thumbnail.larpbux-local-preview > :not(.larpbux-avatar-look):not(.larpbux-avatar-hats) .toggle-three-dee * { visibility:visible !important; }
+html #avatar-web-app .avatar-thumbnail.larpbux-local-preview .toggle-three-dee { z-index:3; }
 
 /* Keep the local viewer inside the same frame and use the native backdrop. */
 html #avatar-web-app .avatar-thumbnail:has(> .larpbux-avatar-look) { max-width:100% !important; min-width:0; overflow:hidden; border-radius:inherit; isolation:isolate; }
