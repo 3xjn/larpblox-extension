@@ -1557,14 +1557,15 @@
   async function avatarCopyQuote(target, account, signal) {
     if (signal?.aborted) throw new DOMException('Avatar lookup cancelled.', 'AbortError');
     let result;
-    try { result = await LarpbloxGameBridge.request('lookupAvatar', account, {targetUserId:target}); }
+    try { result = await LarpbloxGameBridge.request('clientRequest', account, {method:'avatar.lookup',params:{targetUserId:target}}); }
     catch (error) {
       if (error.message === 'Unsupported connection action.') throw new Error('Install the latest extension loader, then reload the extension to copy avatars through the client.');
       throw error;
     }
     if (signal?.aborted) throw new DOMException('Avatar lookup cancelled.', 'AbortError');
-    if (!result?.connected || !result.snapshot) throw new Error('Connect your game to copy an avatar.');
-    const snapshot = LarpbloxGameBridge.validateSnapshot(result.snapshot, account);
+    if (!result?.connected || !result.result?.snapshot) throw new Error('Connect your game to copy an avatar.');
+    if (result.result.targetUserId !== target) throw new Error('The client returned a different avatar.');
+    const snapshot = LarpbloxGameBridge.validateSnapshot(result.result.snapshot, account);
     const items = snapshot.items.filter(isWearableAsset).map(item => ({...item,price:0,assetTypeVerified:true,limitedVerified:false}));
     const supported = new Set(items.map(item => item.id));
     return {snapshot:{...snapshot,items,definition:{...snapshot.definition,assets:snapshot.definition.assets.filter(asset=>supported.has(asset.id))}},items,skipped:snapshot.items.length-items.length};
