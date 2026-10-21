@@ -12,7 +12,7 @@ const {chromium} = require('playwright');
       body: `<!doctype html><html><body>
         <nav><a id="nav-own" href="/users/123/profile">Real nav name</a></nav>
         <main>
-          <div id="profile-header-title-container-name">Real profile name</div>
+          <span id="foundation-title" style="display:flex;align-items:center;gap:4px;width:max-content"><span id="profile-header-title-container-name" style="font-size:28px;line-height:34px">Real profile name</span></span>
           <div class="profile-header-title"><span class="profile-header-display-name">Nested profile name</span></div>
           <div class="profile-header-names"><span class="profile-header-title-container"><h1>Native display name</h1><span data-testid="verified-badge"><img alt="Verified"></span></span></div>
           <div class="profile-header-username">@realusername</div>
@@ -37,10 +37,13 @@ const {chromium} = require('playwright');
     });
     await page.waitForFunction(() => document.querySelectorAll('.larpblox-verified-badge').length === 4);
     assert.equal(await page.locator('#nav-own > .larpblox-verified-badge').count(), 1);
-    assert.equal(await page.locator('#profile-header-title-container-name > .larpblox-verified-badge').count(), 1);
-    const fallbackBadge=page.locator('#profile-header-title-container-name > .larpblox-verified-badge');
-    assert.equal(await fallbackBadge.evaluate(el=>getComputedStyle(el).width),'28px','alternate profile layout uses full profile size');
-    assert.equal(await fallbackBadge.evaluate(el=>getComputedStyle(el).marginLeft),'8px','alternate profile layout matches native name gap');
+    assert.equal(await page.locator('#foundation-title > .larpblox-verified-badge').count(), 1);
+    const fallbackBadge=page.locator('#foundation-title > .larpblox-verified-badge');
+    assert.equal(await fallbackBadge.evaluate(el=>getComputedStyle(el).width),'24px','matches live Foundation profile badge size');
+    assert.equal(await fallbackBadge.evaluate(el=>getComputedStyle(el).marginLeft),'0px','Foundation parent supplies the native gap');
+    const measurements=await fallbackBadge.evaluate(el=>{const b=el.getBoundingClientRect(),n=el.previousElementSibling.getBoundingClientRect();return {gap:b.left-n.right,center:b.top+b.height/2-(n.top+n.height/2)}});
+    assert.equal(measurements.gap,4,'measured live name-to-badge gap');
+    assert.equal(measurements.center,0,'measured live vertical centering');
     assert.equal(await page.locator('.profile-header-username .larpblox-verified-badge').count(), 0);
     assert.equal(await page.locator('.profile-header-title > .larpblox-verified-badge').count(), 0);
     assert.equal(await page.locator('.profile-header-display-name > .larpblox-verified-badge').count(), 1);
@@ -63,13 +66,13 @@ const {chromium} = require('playwright');
     await page.waitForFunction(() => document.querySelector('.profile-header-title-container > .larpblox-profile-verified'));
     assert.equal(await page.locator('.profile-header-title-container > h1 + .larpblox-profile-verified + #native-plus').count(),1,'profile badge follows display name before other badges');
     const nativeBadge=page.locator('.profile-header-title-container > .larpblox-profile-verified');
-    assert.equal(await nativeBadge.evaluate(el=>getComputedStyle(el).width),'28px');
+    assert.equal(await nativeBadge.evaluate(el=>getComputedStyle(el).width),'24px');
     assert.equal(await nativeBadge.evaluate(el=>getComputedStyle(el).marginLeft),'0px');
-    const exactSvg=fs.readFileSync(path.join(__dirname,'../assets/roblox-verified-badge.svg'),'utf8');
+    const exactSvg=fs.readFileSync(path.join(__dirname,'../assets/roblox-profile-verified-badge.svg'),'utf8');
     const imageUrl=await nativeBadge.locator('img').getAttribute('src');
     assert.equal(decodeURIComponent(imageUrl.slice(imageUrl.indexOf(',')+1)),exactSvg,'uses the original Roblox badge asset unchanged');
     await page.setViewportSize({width:500,height:700});
-    assert.equal(await nativeBadge.evaluate(el=>getComputedStyle(el).width),'16px','matches native mobile badge size');
+    assert.equal(await nativeBadge.evaluate(el=>getComputedStyle(el).width),'24px','matches measured Foundation mobile badge size');
     await page.setViewportSize({width:1280,height:720});
     await page.evaluate(() => {const existing=document.createElement('span');existing.dataset.testid='verified-badge';document.querySelector('.profile-header-title-container').append(existing);});
     await page.waitForFunction(() => !document.querySelector('.profile-header-title-container > .larpblox-profile-verified'));

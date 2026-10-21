@@ -2,6 +2,8 @@
 (() => {
   'use strict';
   const verifiedImage = "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2228%22%20height%3D%2228%22%20viewBox%3D%220%200%2028%2028%22%20fill%3D%22none%22%3E%20%3Cg%20clip-path%3D%22url%28%23clip0_8_46%29%22%3E%20%3Crect%20x%3D%225.88818%22%20width%3D%2222.89%22%20height%3D%2222.89%22%20transform%3D%22rotate%2815%205.88818%200%29%22%20fill%3D%22%230066FF%22%2F%3E%20%3Cpath%20fill-rule%3D%22evenodd%22%20clip-rule%3D%22evenodd%22%20d%3D%22M20.543%208.7508L20.549%208.7568C21.15%209.3578%2021.15%2010.3318%2020.549%2010.9328L11.817%2019.6648L7.45%2015.2968C6.85%2014.6958%206.85%2013.7218%207.45%2013.1218L7.457%2013.1148C8.058%2012.5138%209.031%2012.5138%209.633%2013.1148L11.817%2015.2998L18.367%208.7508C18.968%208.1498%2019.942%208.1498%2020.543%208.7508Z%22%20fill%3D%22white%22%2F%3E%20%3C%2Fg%3E%20%3Cdefs%3E%20%3CclipPath%20id%3D%22clip0_8_46%22%3E%20%3Crect%20width%3D%2228%22%20height%3D%2228%22%20fill%3D%22white%22%2F%3E%20%3C%2FclipPath%3E%20%3C%2Fdefs%3E%20%3C%2Fsvg%3E";
+  // Original Foundation icon paths measured on Roblox profile 694550345.
+  const profileVerifiedImage = 'data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2032%2032%22%20width%3D%2232%22%20height%3D%2232%22%3E%3Cpath%20d%3D%22M7.71897%204.48022C8.00434%203.41518%209.09906%202.78315%2010.1641%203.06852L27.5198%207.71897C28.5848%208.00434%2029.2169%209.09906%2028.9315%2010.1641L24.281%2027.5198C23.9957%2028.5848%2022.9009%2029.2169%2021.8359%2028.9315L4.48022%2024.281C3.41518%2023.9957%202.78315%2022.9009%203.06852%2021.8359L7.71897%204.48022Z%22%20fill%3D%22%23335fff%22%2F%3E%3Cpath%20d%3D%22M19.9393%2011.9393C20.5251%2011.3536%2021.4746%2011.3536%2022.0604%2011.9393C22.646%2012.5251%2022.6461%2013.4747%2022.0604%2014.0604L15.0604%2021.0604C14.4747%2021.6461%2013.5251%2021.646%2012.9393%2021.0604L9.93934%2018.0604C9.35355%2017.4746%209.35355%2016.5251%209.93934%2015.9393C10.5251%2015.3536%2011.4746%2015.3536%2012.0604%2015.9393L13.9999%2017.8788L19.9393%2011.9393Z%22%20fill%3D%22white%22%2F%3E%3C%2Fsvg%3E%0A';
   const markerClass = 'larpblox-verified-badge';
   // Roblox display-name surfaces only. Username/alias fields are excluded.
   const profileSelector = '#profile-header-title-container-name,.profile-header-title,.profile-header-display-name,[data-testid="profile-header-title"],[data-testid="profile-header-display-name"],.profile-header-names > .profile-header-title-container > h1,.profile-header-names > span.profile-header-title-container > h1';
@@ -16,7 +18,7 @@
   const ownProfileId = () => location.pathname.match(/^\/users\/([1-9]\d*)\/profile\/?$/i)?.[1];
   const nameChildSelector = '.display-name,[data-testid="profile-header-display-name"],[data-testid="profile-header-title"],[class*="display-name" i]';
   const usernameSelector = '.stylistic-alts-username,.profile-header-username,[data-testid="profile-header-username"],[class*="username" i]';
-  const nativeBadgeSelector = '[data-rblx-verified-badge-icon],[data-testid="verified-badge"],.icon-verified:not(.larpblox-verified-badge)';
+  const nativeBadgeSelector = '[data-rblx-verified-badge-icon],[data-testid="verified-badge"],.icon-verified:not(.larpblox-verified-badge),.icon-filled-verified-backplate';
   const hasVisibleText = node => Boolean((node?.textContent || '').replace(/\s+/g, ' ').trim());
   function ids() {
     const shared = context.records instanceof Map ? [...context.records] : [];
@@ -39,6 +41,7 @@
   }
   function removeAll() { document.querySelectorAll(`.${markerClass}`).forEach(node => node.remove()); }
   function placement(root) {
+    if (root.matches('#profile-header-title-container-name')) return root.parentElement;
     return root.matches('.profile-header-names > .profile-header-title-container > h1,.profile-header-names > span.profile-header-title-container > h1') ? root.parentElement : root;
   }
   function targets() {
@@ -75,10 +78,12 @@
       }
       if (!root.querySelector(`:scope > .${markerClass}`) && !root.querySelector(`:scope > ${nativeBadgeSelector}`)) {
         const mark = badge();
-        const title = root.matches('.profile-header-title-container') ? root.querySelector(':scope > h1') : null;
+        const title = root.querySelector(':scope > #profile-header-title-container-name') || (root.matches('.profile-header-title-container') ? root.querySelector(':scope > h1') : null);
         if (title || root.matches(profileSelector)) {
           mark.classList.add('larpblox-profile-verified');
+          mark.querySelector('img').src = profileVerifiedImage;
           mark.querySelector('img').classList.add('profile-verified-badge-icon');
+          if (title?.id === 'profile-header-title-container-name') mark.classList.add('larpblox-foundation-profile-verified');
         }
         if (title) {
           root.insertBefore(mark, title.nextSibling);
