@@ -341,7 +341,7 @@
         const known = new Set(state.items.map(keyFor));
         const desired = state.equipped;
         const merged = mergeGameSnapshot(state, snapshot);
-        save({...merged, equipped: [...new Set([...merged.equipped.filter(item => !known.has(item)), ...desired])]});
+        save({...merged, backgroundId: state.backgroundId, equipped: [...new Set([...merged.equipped.filter(item => !known.has(item)), ...desired])]});
         queuedGameCommand = gameCommand(state, account);
         return;
       }
@@ -718,7 +718,7 @@
         }));
         items.push(...batch);
       }
-      if (account !== userId || !state.mode || JSON.stringify(current.equipped) !== JSON.stringify(state.equipped) || JSON.stringify(current.gameLook) !== JSON.stringify(state.gameLook)) throw new Error('Your outfit changed while saving. Try again.');
+      if (account !== userId || !state.mode || current.backgroundId !== state.backgroundId || JSON.stringify(current.equipped) !== JSON.stringify(state.equipped) || JSON.stringify(current.gameLook) !== JSON.stringify(state.gameLook)) throw new Error('Your outfit changed while saving. Try again.');
       const snapshot = {version: 1, userId: String(account), definition, ...(current.backgroundId ? {backgroundId: current.backgroundId} : {}), items};
       return JSON.parse(JSON.stringify(LarpbloxGameBridge.validateSnapshot(snapshot, account)));
     } finally { clearTimeout(timer); }
