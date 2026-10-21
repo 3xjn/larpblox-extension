@@ -1555,43 +1555,21 @@
     } else { dialog.close(); dialog.remove(); }
   }
   async function avatarCopyQuote(target, account, signal) {
-    const readJson = async (url, label) => {
-      const cooldownKey = 'larpblox.avatar-copy-cooldown-until';
-      let blockedUntil = 0;
-      try { blockedUntil = Number(localStorage.getItem(cooldownKey)) || 0; } catch (_) {}
-      if (blockedUntil > Date.now()) throw Object.assign(new Error(`Roblox asked us to wait before loading ${label}.`), {retryAfter:(blockedUntil - Date.now()) / 1000});
-      const response = await fetch(url, {credentials:'include', signal});
-      if (!response.ok) {
-        if (response.status === 429) {
-          const retryAfter = Math.max(1, LarpbloxAvatarRequests.retryAfter(response, 30));
-          try { localStorage.setItem(cooldownKey, String(Math.max(blockedUntil, Date.now() + retryAfter * 1000))); } catch (_) {}
-          throw Object.assign(new Error(`Roblox is limiting ${label}.`), {retryAfter});
-        }
-        throw new Error(`Could not load ${label}. Retry in a moment.`);
-      }
-      return response.json();
-    };
-    const cacheKey = `larpblox.avatar-copy-cache:v1:${target}`;
-    let cached;
-    try {
-      const entry = JSON.parse(localStorage.getItem(cacheKey) || 'null');
-      if (entry?.expires > Date.now() && entry.avatar) cached = entry;
-      else if (entry) localStorage.removeItem(cacheKey);
-    } catch (_) {}
-    const avatar = cached?.avatar || await readJson(`https://avatar.roblox.com/v1/users/${target}/avatar`, 'this avatar');
-    if (!cached) {
-      cached = {expires:Date.now() + 300000, avatar};
-      try { localStorage.setItem(cacheKey, JSON.stringify(cached)); } catch (_) {}
+    if (signal?.aborted) throw new DOMException('Avatar lookup cancelled.', 'AbortError');
+    let result;
+    try { result = await LarpbloxGameBridge.request('lookupAvatar', account, {targetUserId:target}); }
+    catch (error) {
+      if (error.message === 'Unsupported connection action.') throw new Error('Install the latest extension loader, then reload the extension to copy avatars through the client.');
+      throw error;
     }
-    if (!Array.isArray(avatar.assets) || avatar.assets.length > 100) throw new Error('This avatar could not be loaded.');
-    const rules = avatar.bodyColor3s ? {} : cached?.rules || await readJson('https://avatar.roblox.com/v1/avatar-rules', 'avatar colors');
-    if (!cached.rules) { cached.rules = rules; try { localStorage.setItem(cacheKey, JSON.stringify(cached)); } catch (_) {} }
-    const assets = avatar.assets.map(asset => ({id:asset.id, itemType:'Asset', name:String(asset.name || `Item ${asset.id}`).slice(0,128), assetType:Number(asset.assetType?.id), ...(asset.meta ? {meta:asset.meta} : {})}));
-    const supported = assets.filter(isWearableAsset);
-    const definition = previewDefinition({...avatar, assets:avatar.assets.filter(asset => supported.some(item => item.id === asset.id))}, rules, []);
-    const items = supported.map(item => ({...item, price:0, assetTypeVerified:true, limitedVerified:false}));
-    return {snapshot:LarpbloxGameBridge.validateSnapshot({version:1,userId:String(account),definition,items},account), items, skipped:assets.length - supported.length};
+    if (signal?.aborted) throw new DOMException('Avatar lookup cancelled.', 'AbortError');
+    if (!result?.connected || !result.snapshot) throw new Error('Connect your game to copy an avatar.');
+    const snapshot = LarpbloxGameBridge.validateSnapshot(result.snapshot, account);
+    const items = snapshot.items.filter(isWearableAsset).map(item => ({...item,price:0,assetTypeVerified:true,limitedVerified:false}));
+    const supported = new Set(items.map(item => item.id));
+    return {snapshot:{...snapshot,items,definition:{...snapshot.definition,assets:snapshot.definition.assets.filter(asset=>supported.has(asset.id))}},items,skipped:snapshot.items.length-items.length};
   }
+
   function stealAvatar(target) {
     if (!userId || !/^[1-9]\d*$/.test(target)) return;
     closePurchase();

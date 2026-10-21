@@ -15,6 +15,12 @@ chrome.runtime.onUserScriptConnect.addListener(port => {
   port.onDisconnect.addListener(() => { if (websitePorts.get(id) === port) websitePorts.delete(id); });
 });
 const socketTimeout = 2500;
+function rejectLookups(entry) {
+  for (const waiter of entry.readyWaiters || []) waiter.reject(new Error('The desktop connection closed. Try again.'));
+  entry.readyWaiters?.clear();
+  for (const waiter of entry.lookups?.values() || []) { clearTimeout(waiter.timer); waiter.reject(new Error('The desktop connection closed. Try again.')); }
+  entry.lookups?.clear();
+}
 function notify(userId, snapshot) {
   const tabId = tabs.get(String(userId));
   if (tabId == null || !chrome.tabs?.sendMessage) return;
@@ -41,10 +47,11 @@ function socketFor(userId, token) {
     if (existing.keepalive) clearInterval(existing.keepalive);
     for (const waiter of existing.pending.values()) { clearTimeout(waiter.timer); waiter.reject(new Error('socket replaced')); }
     existing.pending.clear(); existing.queues.clear();
+    rejectLookups(existing);
     if (existing.ws) try { existing.ws.close(); } catch (_) {}
   }
   if (typeof WebSocket === 'undefined') return null;
-  const entry = {userId, token, ws: null, ready: false, snapshot: undefined, pending: new Map(), queues: new Map(), lastValues: new Map(), reconnects: 0, timer: null, keepalive: null, closed: false};
+  const entry = {userId, token, ws: null, ready: false, snapshot: undefined, pending: new Map(), queues: new Map(), lastValues: new Map(), reconnects: 0, timer: null, keepalive: null, closed: false, readyWaiters:new Set(), lookups:new Map(), lookupJobs:new Map()};
   sockets.set(userId, entry);
   const connect = async () => {
     if (entry.closed || entry.connecting || (entry.ws && entry.ws.readyState !== WebSocket.CLOSED)) return;
@@ -63,6 +70,9 @@ function socketFor(userId, token) {
       if (message?.type === 'ready') {
         clearTimeout(authenticationTimeout);
         entry.reconnects = 0; entry.ready = true;
+        entry.avatarLookup = message.avatarLookup === true;
+        for (const waiter of entry.readyWaiters) waiter.resolve();
+        entry.readyWaiters.clear();
         if (!entry.keepalive) entry.keepalive = setInterval(() => { try { ws.send(JSON.stringify({type: 'ping'})); } catch (_) {} }, 20000);
         // Replay the latest desired value for each channel after a helper restart.
         for (const [channel, value] of entry.lastValues) {
@@ -74,13 +84,22 @@ function socketFor(userId, token) {
       } else if (message?.type === 'state' && message.channel === 'game') {
         try { entry.snapshot = message.value == null ? null : LarpbloxGameBridge.validateSnapshot(message.value, userId); } catch (_) { return; }
         notify(userId, entry.snapshot);
+      } else if (message?.type === 'avatar-lookup-result') {
+        const waiter = entry.lookups.get(message.id);
+        if (waiter) {
+          entry.lookups.delete(message.id); clearTimeout(waiter.timer);
+          if (message.ok && message.targetUserId === waiter.target) {
+            try { waiter.resolve(LarpbloxGameBridge.validateSnapshot(message.snapshot, userId)); }
+            catch (error) { waiter.reject(error); }
+          } else waiter.reject(new Error(message.error || 'The client returned a different avatar.'));
+        }
       } else if (message?.type === 'ack') {
         const waiter = entry.pending.get(message.channel);
         if (waiter) { entry.pending.delete(message.channel); clearTimeout(waiter.timer); waiter.resolve(message.value); pump(message.channel); }
       }
     };
     ws.onerror = () => { try { ws.close(); } catch (_) {} };
-    ws.onclose = () => { clearTimeout(authenticationTimeout); entry.ready = false; if (entry.keepalive) { clearInterval(entry.keepalive); entry.keepalive = null; } for (const waiter of entry.pending.values()) { clearTimeout(waiter.timer); waiter.reject(new Error('socket closed')); } entry.pending.clear(); schedule(); };
+    ws.onclose = () => { clearTimeout(authenticationTimeout); entry.ready = false; rejectLookups(entry); if (entry.keepalive) { clearInterval(entry.keepalive); entry.keepalive = null; } for (const waiter of entry.pending.values()) { clearTimeout(waiter.timer); waiter.reject(new Error('socket closed')); } entry.pending.clear(); schedule(); };
   };
   const schedule = () => { if (entry.closed || entry.timer) return; entry.timer = setTimeout(() => { entry.timer = null; entry.reconnects = Math.min(entry.reconnects + 1, 5); connect(); }, Math.min(1000 * 2 ** entry.reconnects, 30000)); };
   const pump = channel => {
@@ -108,6 +127,27 @@ async function socketRequest(userId, token, channel, value, read = false) {
     entry.queues.get(channel).push({resolve, reject, value, timer: null});
     entry.pump(channel);
   });
+}
+async function lookupAvatar(userId, token, target) {
+  if (!/^[1-9]\d{0,15}$/.test(target) || !Number.isSafeInteger(Number(target))) throw new Error('Invalid Roblox account.');
+  const entry = socketFor(userId, token);
+  if (!entry) throw new Error('Open Larpblox Desktop and connect your game to copy an avatar.');
+  if (!entry.ready) await new Promise((resolve,reject) => {
+    const waiter = {resolve:() => {clearTimeout(timer);resolve();},reject:error => {clearTimeout(timer);reject(error);}};
+    const timer = setTimeout(() => {entry.readyWaiters.delete(waiter);reject(new Error('Open Larpblox Desktop and connect your game to copy an avatar.'));},5000);
+    entry.readyWaiters.add(waiter);
+  });
+  if (!entry.avatarLookup) throw new Error('Update Larpblox Desktop to copy avatars through the client.');
+  if (entry.lookupJobs.has(target)) return entry.lookupJobs.get(target);
+  const id = crypto.randomUUID();
+  const job = new Promise((resolve,reject) => {
+    const timer = setTimeout(() => {entry.lookups.delete(id);reject(new Error('The client avatar lookup timed out. Try again.'));},35000);
+    entry.lookups.set(id,{resolve,reject,timer,target});
+    try {entry.ws.send(JSON.stringify({type:'avatar-lookup',id,targetUserId:target}));}
+    catch (error) {clearTimeout(timer);entry.lookups.delete(id);reject(error);}
+  });
+  entry.lookupJobs.set(target,job);
+  try {return await job;} finally {if (entry.lookupJobs.get(target) === job) entry.lookupJobs.delete(target);}
 }
 async function call(path, token, body) {
   const controller = new AbortController();
@@ -157,6 +197,7 @@ async function handle(message, sender) {
   if (!/^[1-9]\d{0,15}$/.test(userId) || !Number.isSafeInteger(Number(userId))) throw new Error('Invalid Roblox account.');
   if (sender.tab?.id != null) tabs.set(userId, sender.tab.id);
   const token = await localToken(userId);
+  if (message.action === 'lookupAvatar') return {connected:true,snapshot:await lookupAvatar(userId,token,String(message.targetUserId || ''))};
   const socketValue = message.action === 'publish' ? LarpbloxGameBridge.validateSnapshot(message.snapshot, userId) : message.action === 'publishNames' ? LarpbloxGameBridge.validateNames(message.names, userId) : message.action === 'publishImage' ? LarpbloxGameBridge.validateImage(message.image, userId) : undefined;
   if (message.action === 'read') {
     let snapshot;
