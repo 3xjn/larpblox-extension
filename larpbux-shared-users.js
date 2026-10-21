@@ -2,8 +2,8 @@
 (() => {
   'use strict';
   const portraits = new Map(), names = new Map(), wearing = new Map();
-  let publication, publicationKey = '', publicationTime = 0, publishing = false, publicationGeneration = 0;
-  const validCounts = value => value && typeof value === 'object' && Number.isSafeInteger(value.followers) && value.followers >= 0 && Number.isSafeInteger(value.following) && value.following >= 0 ? {followers:value.followers, following:value.following} : undefined;
+  let publication, publicationKey = '', publicationTime = 0, publishing = false, publicationGeneration = 0, publicationRetry;
+  const validCounts = value => value && typeof value === 'object' && Number.isSafeInteger(value.followers) && value.followers >= 0 && Number.isSafeInteger(value.following) && value.following >= 0 && (value.friends === undefined || Number.isSafeInteger(value.friends) && value.friends >= 0 && value.friends <= 1000) ? {followers:value.followers, following:value.following, ...(value.friends === undefined ? {} : {friends:value.friends})} : undefined;
   function publishProfile(options) {
     const key = JSON.stringify([options.userId, options.active, options.signature, options.names, options.verified === true, options.socialCounts ?? null]);
     if (key !== publicationKey) { publicationKey = key; publicationGeneration++; publicationTime = 0; }
@@ -13,6 +13,7 @@
   async function flushProfile() {
     if (!publication?.userId || publishing || Date.now() - publicationTime < 60000) return;
     const options = publication, mine = publicationGeneration;
+    clearTimeout(publicationRetry);
     publishing = true; publicationTime = Date.now();
     try {
       let record;
@@ -25,8 +26,11 @@
       }
       if (mine !== publicationGeneration) return;
       const response = await (globalThis.LarpbloxExtension || chrome.runtime).sendMessage({type:'larpblox-publish-profile',userId:String(options.userId),record});
-      if (response?.ok && mine === publicationGeneration) publicationTime = Date.now();
-    } catch (_) { /* Retry after transient relay or avatar failures. */ }
+      if (!response?.ok) throw new Error('Profile publication failed');
+      if (mine === publicationGeneration) publicationTime = Date.now();
+    } catch (_) {
+      if (mine === publicationGeneration) publicationRetry = setTimeout(() => { publicationTime = 0; flushProfile(); }, 5000);
+    }
     finally { publishing = false; if (mine !== publicationGeneration) flushProfile(); }
   }
   let context = {}, records = new Map(), pending = false, lastPoll = 0, queued = false, generation = 0;
@@ -92,12 +96,14 @@
   }
   function countTarget(anchor) {
     const href = String(anchor.getAttribute('href') || '').toLowerCase();
-    const match = href.match(/(?:^|\/)users\/([1-9]\d*)\/friends#!\/(followers|following)(?:$|[/?#])/i);
-    if (match) return {id:match[1], kind:match[2].toLowerCase()};
-    if (/\/friends#!\/(followers|following)(?:$|[/?#])/i.test(href)) return {id:String(context.userId), kind:href.match(/friends#!\/(followers|following)/i)[1].toLowerCase()};
-    if (!href && anchor.closest('.profile-header-overlay,.profile-header')) {
-      const match = (anchor.textContent || '').match(/\d[\d,.]*(?:[KMB])?\s+(Followers?|Following)\b/i);
-      if (match) return {id:profileId() || String(context.userId), kind:match[1].toLowerCase().startsWith('follower') ? 'followers' : 'following'};
+    const match = href.match(/(?:^|\/)users\/([1-9]\d*)\/friends(?:#!\/(followers|following|friends|connections)(?:$|[/?#])|\/?$)/i);
+    const kind = label => /^follower/i.test(label) ? 'followers' : /^following/i.test(label) ? 'following' : 'friends';
+    if (match) return {id:match[1], kind:kind(match[2] || 'friends')};
+    const own = href.match(/^\/friends(?:#!\/(followers|following|friends|connections)(?:$|[/?#])|\/?$)/i);
+    if (own) return {id:String(context.userId), kind:kind(own[1] || 'friends')};
+    if (anchor.closest('.profile-header-overlay,.profile-header,.user-profile-header')) {
+      const match = (anchor.textContent || '').trim().match(/^\d[\d,.]*(?:[KMB])?\s+(Followers?|Following|Friends?|Connections?)$/i);
+      if (match) return {id:profileId() || String(context.userId), kind:kind(match[1])};
     }
   }
   function restoreCounts(wanted) {
@@ -116,7 +122,7 @@
   }
   function applyCounts() {
     const wanted = new Map();
-    for (const anchor of document.querySelectorAll('a')) {
+    for (const anchor of document.querySelectorAll('a,.user-profile-header button,.profile-header button,.profile-header-overlay button')) {
       const target = countTarget(anchor);
       if (!target) continue;
       const source = context.mode && (target.id === String(context.userId) ? context.socialCounts : records.get(target.id)?.socialCounts);
@@ -127,7 +133,7 @@
       const walker = document.createTreeWalker(anchor, NodeFilter.SHOW_TEXT);
       for (let node = walker.nextNode(); node; node = walker.nextNode()) {
         const text = node.nodeValue || '';
-        if (/^\s*\d[\d,.]*(?:[KMB])?\s*$/i.test(text) || /\d[\d,.]*(?:[KMB])?\s+(?:Followers?|Following)\b/i.test(text) || /\b(?:Followers?|Following)\s+\d[\d,.]*(?:[KMB])?/i.test(text)) nodes.push(node);
+        if (/^\s*\d[\d,.]*(?:[KMB])?\s*$/i.test(text) || /\d[\d,.]*(?:[KMB])?\s+(?:Followers?|Following|Friends?|Connections?)\b/i.test(text) || /\b(?:Followers?|Following|Friends?|Connections?)\s+\d[\d,.]*(?:[KMB])?/i.test(text)) nodes.push(node);
       }
       for (const node of nodes) {
         const current = counts.get(node)?.real ?? node.nodeValue;
@@ -231,12 +237,12 @@
     for (const [id, record] of searchRecords) records.set(id, record);
     for (const id of records.keys()) if (!visible.has(id)) records.delete(id);
     apply();
-    if (pending || !ids.length || Date.now() - lastPoll < 5000) return;
+    if (pending || !ids.length || Date.now() - lastPoll < 1000) return;
     pending = true; lastPoll = Date.now(); const mine = generation;
     try {
       const response = await (globalThis.LarpbloxExtension || chrome.runtime).sendMessage({type:'larpblox-shared-users', userIds:ids});
       if (mine !== generation) return;
-      if (!response?.ok) { records = new Map(searchRecords); apply(); return; }
+      if (!response?.ok) return;
       const next = new Map();
       for (let record of response.data.players || []) {
         try {
@@ -250,9 +256,8 @@
       }
       for (const [id, record] of searchRecords) next.set(id, record);
       records = next; apply();
-    } catch {
-      if (mine === generation) { records = new Map(searchRecords); apply(); }
-    } finally { pending = false; }
+    } catch { /* Keep the last known profile through transient lookup failures. */ }
+    finally { pending = false; }
   }
   function update(next) {
     if (context.userId !== next.userId || context.mode !== next.mode) { generation++; records.clear(); lastPoll = 0; }
@@ -265,15 +270,17 @@
     searchFrame = true;
     requestAnimationFrame(() => {
       searchFrame = false;
+      applyCounts();
       // Navigation can happen before the next relay poll.
       if (searchKey !== (context.mode ? searchKeyword() : '')) { scan(); return; }
       if (renderSearch()) apply();
     });
   }
-  new MutationObserver(refreshSearchPlacement).observe(document, {childList:true, subtree:true, attributes:true, attributeFilter:['aria-busy']});
+  new MutationObserver(refreshSearchPlacement).observe(document, {childList:true, characterData:true, subtree:true, attributes:true, attributeFilter:['aria-busy']});
   document.addEventListener('load', refreshSearchPlacement, true);
   window.addEventListener('popstate', refreshSearchPlacement);
-  setInterval(scan, 5000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { lastPoll = 0; scan(); } });
+  setInterval(scan, 2000);
   setInterval(flushProfile, 60000);
   globalThis.LarpbloxSharedUsers = {update, publishProfile};
 })();

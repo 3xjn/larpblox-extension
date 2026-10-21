@@ -96,7 +96,7 @@ const sharedPath = path.join(root, 'larpbux-shared-users.js');
     await page.evaluate(async () => {
       window.__now += 5001;
       window.__relay.failed = true;
-      const timer = window.__intervals.find(entry => entry.ms === 5000);
+      const timer = window.__intervals.find(entry => entry.ms < 60000);
       await timer.fn();
     });
     assert.equal(await page.locator('.larpblox-person-card .display-name').textContent(), 'Alias Display', 'failed relay preserves visible result');

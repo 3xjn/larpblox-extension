@@ -19,12 +19,17 @@
     return {username};
   }
   function localSocialCounts(value) {
-    if (value == null || (value.followers === '' && value.following === '')) return null;
+    if (value == null || (value.followers === '' && value.following === '' && (value.friends == null || value.friends === ''))) return null;
     const result = {};
     for (const kind of ['followers', 'following']) {
       const raw = value[kind];
       if (!['number', 'string'].includes(typeof raw) || String(raw).trim() === '' || !/^\d+$/.test(String(raw))) throw new Error('Enter whole numbers for both Followers and Following, or use Roblox counts.');
       result[kind] = amount(raw);
+    }
+    if (value.friends != null && value.friends !== '') {
+      if (!['number', 'string'].includes(typeof value.friends) || !/^\d+$/.test(String(value.friends))) throw new Error('Enter a whole number for Friends.');
+      result.friends = amount(value.friends);
+      if (result.friends > 1000) throw new Error('Friends must be between 0 and 1,000, matching Roblox’s limit.');
     }
     return result;
   }

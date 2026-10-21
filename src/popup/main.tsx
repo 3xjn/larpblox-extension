@@ -19,7 +19,7 @@ type PopupState = {
   verified: boolean;
   balance: number;
   appearance: "classic" | "modern";
-  socialCounts: { followers: number; following: number } | null;
+  socialCounts: { followers: number; following: number; friends?: number } | null;
   username: string;
   avatarPage: boolean;
   avatarView: "real" | "larp";
@@ -105,6 +105,7 @@ function App() {
   const [username, setUsername] = useState("");
   const [followers, setFollowers] = useState("");
   const [following, setFollowing] = useState("");
+  const [friends, setFriends] = useState("");
   const tabId = useRef<number | undefined>(undefined);
   const mounted = useRef(true);
   const inFlight = useRef(false);
@@ -126,6 +127,7 @@ function App() {
     if (fields.includes("counts")) {
       setFollowers(next.socialCounts ? String(next.socialCounts.followers) : "");
       setFollowing(next.socialCounts ? String(next.socialCounts.following) : "");
+      setFriends(next.socialCounts?.friends == null ? "" : String(next.socialCounts.friends));
     }
   }
 
@@ -227,10 +229,11 @@ function App() {
         <div className="secondary-group">
         <h2>Profile counts</h2>
         <p className="help">Choose the counts other Larpblox users see while Larp mode is on.</p>
-        <form className="space-y-3" onSubmit={event => submit(event, () => void act("counts", { type: "larpblox-popup-profile-counts", socialCounts: { followers, following } }, ["counts"], "Profile counts saved.", "counts"))}>
+        <form className="space-y-3" onSubmit={event => submit(event, () => void act("counts", { type: "larpblox-popup-profile-counts", socialCounts: { followers, following, friends } }, ["counts"], "Profile counts saved.", "counts"))}>
           <div className="grid grid-cols-2 gap-3">
             <div className="field"><Label htmlFor="followers">Followers</Label><Input id="followers" type="number" min="0" step="1" disabled={disabled} value={followers} onChange={event => setFollowers(event.target.value)} /></div>
             <div className="field"><Label htmlFor="following">Following</Label><Input id="following" type="number" min="0" step="1" disabled={disabled} value={following} onChange={event => setFollowing(event.target.value)} /></div>
+            <div className="field"><Label htmlFor="friends">Friends</Label><Input id="friends" type="number" min="0" max="1000" step="1" placeholder="Roblox count" disabled={disabled} value={friends} onChange={event => setFriends(event.target.value)} /><p className="help">Up to 1,000. Leave blank to use Roblox’s count.</p></div>
           </div>
           <div className="flex flex-wrap gap-2.5"><Button type="submit" disabled={disabled} loading={pending === "counts"}>Save counts</Button><Button type="button" variant="outline" disabled={disabled} loading={pending === "reset-counts"} onClick={() => void act("reset-counts", { type: "larpblox-popup-profile-counts", socialCounts: null }, ["counts"], "Roblox counts restored.", "counts")}>Use Roblox counts</Button></div>
         </form>
