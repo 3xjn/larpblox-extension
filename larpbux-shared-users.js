@@ -1,7 +1,7 @@
 /* global chrome, LarpbloxGameBridge, LarpbloxAvatarSurfaces */
 (() => {
   'use strict';
-  const portraits = new Map(), names = new Map();
+  const portraits = new Map(), names = new Map(), wearing = new Map();
   let publication, publicationKey = '', publicationTime = 0, publishing = false, publicationGeneration = 0;
   const validCounts = value => value && typeof value === 'object' && Number.isSafeInteger(value.followers) && value.followers >= 0 && Number.isSafeInteger(value.following) && value.following >= 0 ? {followers:value.followers, following:value.following} : undefined;
   function publishProfile(options) {
@@ -150,9 +150,14 @@
     applyNames();
     applyCounts();
     for (const [id, surface] of portraits) if (!records.has(id)) { surface.update({active:false}); portraits.delete(id); }
+    for (const [id, surface] of wearing) if (!records.has(id)) { surface.update({active:false}); wearing.delete(id); }
     for (const [id, record] of records) {
       if (!portraits.has(id)) portraits.set(id, LarpbloxAvatarSurfaces.createForPeer());
       portraits.get(id).update({userId:id, active:true, signature:JSON.stringify(record.snapshot) + (record.imageUrl || ''), imageUrl:record.imageUrl, backgroundId:record.snapshot.definition.backgroundRequestModel?.id, loadDefinition:async () => record.snapshot.definition});
+      if (globalThis.LarpbloxProfileWearing?.createForPeer && context.thumbnail) {
+        if (!wearing.has(id)) wearing.set(id, LarpbloxProfileWearing.createForPeer());
+        wearing.get(id).update({userId:id, active:true, signature:JSON.stringify(record.snapshot), items:record.snapshot.items, loadDefinition:async()=>record.snapshot.definition, thumbnail:context.thumbnail});
+      }
     }
   }
   async function scan() {

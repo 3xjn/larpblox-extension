@@ -6,6 +6,36 @@
   const records = new Map(), previews = new Map(), hiddenCanvases = new Map(), banners = new Map();
   let cache, retryTimer, activeKey = '', activeAccount = '', lastFailure = '';
   let status = {stage: 'not-started'};
+  const pictureKey = definition => globalThis.LarpbloxAvatarRequests?.definitionKey?.(definition) || JSON.stringify(definition);
+  function savedPictures(userId, definition) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(`larpblox-profile-pictures:${userId}`) || 'null');
+      if (saved?.key === pictureKey(definition) && saved.expires > Date.now() &&
+          [saved.result.headshot,saved.result.fullBody,saved.result.transparentBody].every(url=>url?.startsWith('data:image/png'))) return saved.result;
+    } catch (_) {}
+  }
+  function savePictures(userId, definition, result) {
+    if (peer) return;
+    try {
+      const saved = JSON.stringify({key:pictureKey(definition), expires:Date.now()+86400000, result});
+      if (saved.length < 1500000) localStorage.setItem(`larpblox-profile-pictures:${userId}`, saved);
+    } catch (_) {}
+  }
+  async function flatPictures(url, signal, definition) {
+    const image = new Image(); image.crossOrigin = 'anonymous';
+    await new Promise((resolve,reject) => {
+      const finish = error => { clearTimeout(timer); signal.removeEventListener('abort',abort); image.onload=image.onerror=null; error ? reject(error) : resolve(); };
+      const abort = () => finish(new Error('Avatar preview cancelled.'));
+      const timer = setTimeout(()=>finish(new Error('Avatar image took too long to load.')),10000);
+      image.onload=()=>finish(); image.onerror=()=>finish(new Error('Avatar image could not load.'));
+      signal.addEventListener('abort',abort,{once:true}); image.src=url;
+      if (signal.aborted) abort();
+    });
+    const canvas = document.createElement('canvas'); canvas.width=image.naturalWidth; canvas.height=image.naturalHeight;
+    canvas.getContext('2d').drawImage(image,0,0);
+    const fullBody = canvas.toDataURL('image/png');
+    return {headshot:fullBody,fullBody,transparentBody:fullBody,definition};
+  }
   const numericId = value => /^[1-9]\d*$/.test(String(value || ''));
   const idFromHref = href => String(href || '').match(/\/users\/(\d+)(?:\/|$)/i)?.[1] || '';
   function selfProfileLink(image) {
@@ -121,31 +151,47 @@
       return {descriptor, headshot, fullBody, transparentBody, backgroundUrl, backgroundAspect, definition};
     } finally { viewer?.dispose(); host.remove(); }
   }
-  async function updateProfilePreviews(userId, key, descriptor, definition) {
+  async function updateProfilePreviews(userId, key, result) {
+    const {descriptor, definition} = result;
     const containers = [...document.querySelectorAll('.profile-avatar-thumb, .profile-avatar-left, .profile-avatar')]
       .filter(container => !container.closest('#avatar-web-app') && ownImage(container, userId) && container.querySelector('canvas:not(.larpblox-own-avatar-canvas)'));
     const wide = definition?.backgroundRequestModel?.id ? containers.filter(container => container.matches('.currently-wearing-avatar-with-background .profile-avatar-left')) : [];
     const candidates = containers.filter(container => !wide.some(banner => banner !== container && banner.contains(container)));
     // Background previews use the whole banner; other previews keep the native canvas wrapper.
     const wanted = candidates.filter(container => !candidates.some(other => other !== container && container.contains(other)));
-    for (const [container, record] of previews) if (!wanted.includes(container) || record.key !== key) removePreview(container, record);
+    const previewKey = `${key}:${descriptor || 'flat'}`;
+    for (const [container, record] of previews) if (!wanted.includes(container) || record.key !== previewKey || record.retryAt <= Date.now()) removePreview(container, record);
     for (const container of wanted) {
-      if (previews.has(container)) continue;
+      if (previews.has(container)) { await previews.get(container).ready; continue; }
       const controller = new AbortController(), host = document.createElement('div');
       host.className = 'larpblox-own-profile-preview';
       host.style.cssText = 'position:absolute;inset:0;z-index:6;pointer-events:auto';
-      const record = {key, host, controller, position: container.style.position, hidden: new Map()};
+      const record = {key:previewKey, host, controller, position: container.style.position, hidden: new Map()};
+      let finish;
+      record.ready = new Promise(resolve=>{ finish=resolve; });
       previews.set(container, record);
       container.style.position = 'relative'; container.append(host);
+      const image = document.createElement('img'); image.src=result.fullBody; image.alt='Your avatar';
+      image.style.cssText='position:absolute;inset:0;width:100%;height:100%;object-fit:contain';
+      const message = document.createElement('span'); message.className='larpblox-profile-preview-status'; message.setAttribute('role','status'); message.textContent='Loading 3D…';
+      host.append(image,message);
       try {
-        const viewer = await LarpbloxAvatar3D.create(host, descriptor, {signal: controller.signal, definition, background: !wide.includes(container)});
+        if (!descriptor) continue;
+        const timer = setTimeout(()=>controller.abort(),10000);
+        let viewer;
+        try { viewer = await LarpbloxAvatar3D.create(host, descriptor, {signal: controller.signal, definition, background: !wide.includes(container)}); }
+        finally { clearTimeout(timer); }
         if (activeKey !== key || controller.signal.aborted || !container.isConnected) { viewer.dispose(); removePreview(container, record); continue; }
         record.viewer = viewer;
+        image.remove(); message.remove();
         host.querySelector('canvas')?.classList.add('larpblox-own-avatar-canvas');
         for (const node of container.querySelectorAll('canvas:not(.larpblox-own-avatar-canvas)')) {
           record.hidden.set(node, node.style.visibility); node.style.visibility = 'hidden';
         }
-      } catch (_) { if (previews.get(container) === record) removePreview(container, record); }
+      } catch (_) {
+        if (previews.get(container) === record) { record.retryAt=Date.now()+5000; message.textContent='3D unavailable. Retrying…'; }
+      }
+      finally { finish(); }
     }
   }
   async function update(options = {}) {
@@ -173,14 +219,30 @@
     }
     // Keep native/previous portraits visible until their replacements are ready.
     if (!images.length && !document.querySelector('.profile-avatar-thumb canvas, .profile-avatar-left canvas, .profile-avatar canvas')) return;
-    if (cache?.retryAt && Date.now() < cache.retryAt) return;
-    if (!cache || cache.retryAt) {
+    if (cache?.retryAt && Date.now() < cache.retryAt && !cache.result) return;
+    if (!cache || (cache.retryAt && Date.now() >= cache.retryAt)) {
       const controller = new AbortController();
       const entry = {controller}; cache = entry;
       status = {stage: 'loading-outfit', userId};
       entry.promise = (async () => {
         const definition = await loadDefinition(controller.signal);
-        return pictures(await render(definition, userId, controller.signal), controller.signal, definition);
+        const previous = savedPictures(userId, definition);
+        const flat = globalThis.LarpbloxAvatarRequests?.cached?.(definition,userId,'2d') || options.imageUrl;
+        if (previous || flat) {
+          entry.result = previous || await flatPictures(flat, controller.signal, definition);
+          if (cache === entry && !controller.signal.aborted) update(options);
+        }
+        const descriptor = await render(definition, userId, controller.signal);
+        const modelController = new AbortController(), abort = () => modelController.abort();
+        controller.signal.addEventListener('abort',abort,{once:true});
+        const timer=setTimeout(abort,10000);
+        let result;
+        try { result = await pictures(descriptor, modelController.signal, definition); }
+        finally { clearTimeout(timer); controller.signal.removeEventListener('abort',abort); }
+        if (cache !== entry || controller.signal.aborted) throw new Error('Avatar preview cancelled.');
+        entry.result = result; savePictures(userId, definition, result);
+        update(options);
+        return result;
       })();
       entry.promise.catch(error => {
         if (cache !== entry) return;
@@ -189,6 +251,10 @@
         const failure = `${key}:${error.message}`;
         if (lastFailure !== failure) console.warn('Larp avatar pictures could not render; retrying.', error.message);
         lastFailure = failure;
+        for (const {host} of previews.values()) {
+          const message = host.querySelector('.larpblox-profile-preview-status');
+          if (message) message.textContent='3D unavailable. Retrying…';
+        }
         clearTimeout(retryTimer);
         retryTimer = setTimeout(() => {
           retryTimer = undefined;
@@ -197,9 +263,9 @@
       });
     }
     try {
-      const result = await cache.promise;
+      const result = cache.result || await cache.promise;
       if (activeKey !== key) return;
-      clearTimeout(retryTimer); retryTimer = undefined; lastFailure = '';
+      if (!cache.retryAt) { clearTimeout(retryTimer); retryTimer = undefined; lastFailure = ''; }
       updateBanners(userId, result);
       for (const image of images) {
         if (!image.isConnected || !ownImage(image, userId)) continue;
@@ -212,7 +278,7 @@
         if (image.getAttribute('srcset') !== null) image.removeAttribute('srcset');
         image.style.visibility = record.visibility;
       }
-      await updateProfilePreviews(userId, key, result.descriptor, result.definition);
+      await updateProfilePreviews(userId, key, result);
       if (activeKey === key) status = {stage: 'applied', images: images.length};
     } catch (error) {
       if (activeKey === key && !cache?.retryAt) status = {stage: 'failed-applying', error: String(error.message)};

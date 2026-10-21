@@ -145,5 +145,5 @@
       job.promise.then(value => finish(resolve, value), error => finish(reject, error));
     });
   }
-  globalThis.LarpbloxAvatarRequests = {render, cached, waitForRender, retryAfter};
+  globalThis.LarpbloxAvatarRequests = {render, cached, definitionKey, waitForRender, retryAfter};
 })();

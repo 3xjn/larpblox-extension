@@ -331,6 +331,8 @@ html:not([data-larpblox-identity-checked]) :is(#profile-header-title-container-n
 html[data-larpblox-identity-own-profile="true"][data-larpblox-identity-name="true"] :is(#profile-header-title-container-name,.stylistic-alts-username,.profile-header-title,.profile-header-username,.profile-header-display-name,[data-testid="profile-header-title"],[data-testid="profile-header-username"],[data-testid="profile-header-display-name"]):not([data-larpblox-alias-ready="true"]) { visibility:hidden !important; }
 html:not([data-larpblox-identity-checked]) :is(.profile-avatar-thumb,.profile-avatar-left,.profile-avatar,.profile-avatar-image,.profile-avatar-headshot,.user-profile-header-details-avatar-container) :is(img,canvas),
 html[data-larpblox-identity-own-profile="true"][data-larpblox-identity-avatar="true"] :is(.profile-avatar-thumb,.profile-avatar-left,.profile-avatar,.profile-avatar-image,.profile-avatar-headshot,.user-profile-header-details-avatar-container) :is(img:not([src^="data:image/png"]),img[srcset],canvas:not(.larpblox-own-avatar-canvas)) { visibility:hidden !important; }
+.larpblox-profile-preview-status { position:absolute; bottom:12px; left:12px; padding:4px 8px; border-radius:4px; color:var(--larp-text,#393b3d); background:var(--larp-panel,#fff); font-size:12px; }
+.larpblox-profile-wearing-section { margin-bottom:24px; }
 
 html:is(.rbx2016,.larpblox-modern) .larpbux-buy-dialog .larpbux-buy-confirm { transition:background-color .1s cubic-bezier(.2,0,0,1),color .1s cubic-bezier(.2,0,0,1); }
 html:is(.rbx2016,.larpblox-modern) .larpbux-buy-dialog .larpbux-buy-confirm.is-loading { background:#25262d !important; border-color:transparent !important; color:#898a91; opacity:1; cursor:default; }

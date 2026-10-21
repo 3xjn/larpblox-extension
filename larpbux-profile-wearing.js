@@ -1,6 +1,7 @@
 // Keep the profile's existing heading and native cards available for real mode.
 (() => {
   'use strict';
+  function createWearing(peer = false) {
   let cache, record, retryTimer;
   const details = new Map();
   async function mapConcurrent(items, limit, mapper) {
@@ -17,8 +18,10 @@
   function restore() {
     if (!record) return;
     record.host.remove();
-    if (record.display) record.source.style.setProperty('display', record.display, record.priority);
-    else record.source.style.removeProperty('display');
+    if (record.source) {
+      if (record.display) record.source.style.setProperty('display', record.display, record.priority);
+      else record.source.style.removeProperty('display');
+    }
     record = undefined;
   }
   async function itemDetails(id, known, signal) {
@@ -90,18 +93,20 @@
   async function update(options = {}) {
     const {userId, active, signature, items = [], loadDefinition, thumbnail} = options;
     const owner = location.pathname.match(/^\/users\/(\d+)\/profile\/?$/i)?.[1];
-    const ownProfile = owner === String(userId) || /^\/users\/profile\/?$/.test(location.pathname);
+    const ownProfile = owner === String(userId) || (!peer && /^\/users\/profile\/?$/.test(location.pathname));
     const source = ownProfile && active && document.querySelector('.profile-currently-wearing .profile-carousel:not(.larpbux-currently-wearing)');
-    if (!source) { restore(); clearTimeout(retryTimer); cache?.controller.abort(); cache = undefined; return; }
+    const content = ownProfile && active && document.querySelector('.profile-platform-container .profile-content');
+    const target = source || content;
+    if (!target) { restore(); clearTimeout(retryTimer); cache?.controller.abort(); cache = undefined; return; }
     const key = `${userId}:${signature}`;
-    if (record && (record.source !== source || record.key !== key || !record.host.isConnected)) restore();
+    if (record && (record.target !== target || record.key !== key || !record.host.isConnected)) restore();
     if (record) return;
     if (cache?.key === key && cache.retryAt > Date.now()) return;
     if (!cache || cache.key !== key || cache.retryAt) {
       clearTimeout(retryTimer);
       cache?.controller.abort();
       const controller = new AbortController(), known = new Map(items.map(item => [Number(item.id), item]));
-      for (const native of source.querySelectorAll('.item-card')) {
+      for (const native of source?.querySelectorAll('.item-card') || []) {
         const id = native.querySelector('a[href*="/catalog/"]')?.getAttribute('href')?.match(/\/catalog\/(\d+)/)?.[1];
         const name = native.querySelector('.item-card-name')?.textContent?.trim();
         if (id && name && !known.has(Number(id))) known.set(Number(id), {name});
@@ -116,14 +121,21 @@
     const entry = cache;
     try {
       const wearing = await entry.promise;
-      if (cache !== entry || entry.controller.signal.aborted || !source.isConnected || record) return;
-      const host = source.cloneNode(false); host.removeAttribute('id'); host.classList.add('larpbux-currently-wearing');
+      if (cache !== entry || entry.controller.signal.aborted || !target.isConnected || record) return;
+      const host = source ? source.cloneNode(false) : document.createElement('div'); host.removeAttribute('id'); host.classList.add('larpbux-currently-wearing');
       host.style.cssText = 'display:flex;gap:16px;overflow-x:auto;align-items:flex-start;padding-bottom:8px';
-      const width = source.querySelector('.item-card')?.getBoundingClientRect().width || 150;
+      const width = source?.querySelector('.item-card')?.getBoundingClientRect().width || 150;
       for (const item of wearing) host.append(card(item, width, thumbnail));
       if (!wearing.length) host.textContent = 'No avatar items equipped.';
-      record = {key, source, host, display: source.style.getPropertyValue('display'), priority: source.style.getPropertyPriority('display')};
-      source.after(host); source.style.setProperty('display', 'none', 'important');
+      const display = source?.style.getPropertyValue('display'), priority = source?.style.getPropertyPriority('display');
+      let section = host;
+      if (source) { source.after(host); source.style.setProperty('display', 'none', 'important'); }
+      else {
+        section = document.createElement('section'); section.className = 'larpblox-profile-wearing-section';
+        const heading = document.createElement('h2'); heading.textContent = 'Currently Wearing';
+        section.append(heading, host); content.prepend(section);
+      }
+      record = {key, target, source, host:section, display, priority};
     } catch (_) {
       if (cache !== entry) return;
       entry.retryAt = Date.now() + 5000;
@@ -131,5 +143,7 @@
       retryTimer = setTimeout(() => { if (cache === entry) update(options); }, 5001);
     }
   }
-  globalThis.LarpbloxProfileWearing = {update};
+  return {update};
+  }
+  globalThis.LarpbloxProfileWearing = {...createWearing(), createForPeer:()=>createWearing(true)};
 })();

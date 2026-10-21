@@ -1270,7 +1270,7 @@
   function updateNames() {
     globalThis.LarpbloxVerification?.update({userId, mode:state?.mode === true, verified:state?.verified === true});
     if (typeof LarpbloxNames !== 'undefined') LarpbloxNames.update({userId, mode: state?.mode === true, ...state?.names});
-    globalThis.LarpbloxSharedUsers?.update({userId, mode: state?.mode === true, socialCounts: state?.socialCounts});
+    globalThis.LarpbloxSharedUsers?.update({userId, mode: state?.mode === true, socialCounts: state?.socialCounts, thumbnail});
   }
   function render() {
     if (typeof LarpbloxIdentityGate !== 'undefined') LarpbloxIdentityGate.update();
@@ -2153,7 +2153,7 @@
   function update() {
     const id = document.querySelector('meta[name="user-data"]')?.getAttribute('data-userid');
     globalThis.LarpbloxVerification?.update({userId:id, mode:state?.mode === true, verified:state?.verified === true});
-    globalThis.LarpbloxSharedUsers?.update({userId:id, mode:state?.mode === true, socialCounts:state?.socialCounts});
+    globalThis.LarpbloxSharedUsers?.update({userId:id, mode:state?.mode === true, socialCounts:state?.socialCounts, thumbnail});
     if (!/^[1-9]\d*$/.test(id || '')) {
       userId = undefined; state = undefined;
       document.documentElement.classList.remove('larpblox-pretend-mode');
