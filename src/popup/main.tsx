@@ -27,7 +27,7 @@ type Message = { type: string; [key: string]: unknown };
 type Notice = { text: string; error?: boolean };
 
 function UpdateSettings() {
-  const [result, setResult] = useState<{version?: string; enabled?: boolean; updated?: boolean}>({});
+  const [result, setResult] = useState<{version?: string; enabled?: boolean; pendingReload?: boolean}>({});
   const [notice, setNotice] = useState("Loading…");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
@@ -37,10 +37,10 @@ function UpdateSettings() {
     try {
       const reply = await chrome.runtime.sendMessage({type:"larpblox-website-update", action});
       if (!reply?.ok) throw new Error(reply?.error || "Could not check for updates.");
-      if (action === "enable" || action === "reload") return;
-      setResult(reply);
+      if (action === "enable") return;
+      setResult({...reply, pendingReload: reply.pendingReload ?? reply.updated === true});
       setNotice(reply.enabled === false ? "Enable Allow User Scripts in the extension’s details, then return here." :
-        reply.updated ? "Update ready. Reload your Roblox tabs to apply it." : reply.updated === false ? "You’re up to date." : "");
+        reply.updated === false ? "You’re up to date." : "");
     } catch (failure) { setError(true); setNotice(failure instanceof Error ? failure.message : "Could not check for updates."); }
     finally { setBusy(false); }
   }
@@ -52,13 +52,13 @@ function UpdateSettings() {
   }, []);
   return <section aria-label="Extension settings" className="space-y-4">
     <h2 className="text-base font-semibold">Updates</h2>
-    {result.version && <p className="help">Website version {result.version}</p>}
+    {result.version && <p className="help">Version {result.version}{result.pendingReload ? " is ready to apply." : ""}</p>}
     {notice && <p role="status" className={error ? "notice error" : "notice"}>{notice}</p>}
-    <div className="flex flex-wrap gap-2">
-      {result.enabled === false && <Button variant="outline" disabled={busy} onClick={() => void run("enable")}>Open extension settings</Button>}
-      <Button variant="outline" loading={busy} disabled={busy} onClick={() => void run("check")}>Check for updates</Button>
-      {result.updated && <Button disabled={busy} onClick={() => void run("reload")}>Reload Roblox tabs</Button>}
-    </div>
+    {result.enabled === false ?
+      <Button variant="outline" className="h-10 w-full" disabled={busy} onClick={() => void run("enable")}>Open extension settings</Button> :
+      result.pendingReload ?
+        <Button className="h-10 w-full" loading={busy} disabled={busy} onClick={() => void run("reload")}>Reload Roblox tabs</Button> :
+        <Button variant="outline" className="h-10 w-full" loading={busy} disabled={busy} onClick={() => void run("check")}>Check for updates</Button>}
   </section>;
 }
 

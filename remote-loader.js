@@ -77,6 +77,21 @@
     if (enabled) await register(bundle);
     return {record, bundle, enabled};
   }
+  async function status() {
+    const {bundle, enabled} = await state();
+    let pendingReload = false;
+    if (enabled) {
+      const tabs = await chrome.tabs.query({url:'https://www.roblox.com/*'});
+      const versions = await Promise.all(tabs.map(async tab => {
+        try {
+          const results = await chrome.userScripts.execute({target:{tabId:tab.id}, world:'USER_SCRIPT', js:[{code:'globalThis.__larpbloxWebsite || null'}]});
+          return results[0]?.result;
+        } catch { return null; } // Closed or navigating tabs do not need a reload.
+      }));
+      pendingReload = versions.some(loaded => loaded && loaded !== bundle.version);
+    }
+    return {enabled, version:bundle.version, pendingReload};
+  }
   async function read(url, limit) {
     const response = await fetch(url, {cache:'no-store', credentials:'omit', signal:AbortSignal.timeout(20000)});
     if (!response.ok) throw new Error(response.status === 404 ? 'Website updates have not been published yet. Your current version is unchanged.' : 'Could not download the update. Try again later.');
@@ -122,7 +137,9 @@
     }
     if (message.action === 'reload') {
       const tabs = await chrome.tabs.query({url:'https://www.roblox.com/*'});
-      await Promise.all(tabs.map(tab => chrome.tabs.reload(tab.id).catch(() => {}))); return {};
+      await Promise.all(tabs.map(tab => chrome.tabs.reload(tab.id)));
+      const {bundle, enabled} = await state();
+      return {enabled, version:bundle.version, pendingReload:false};
     }
     if (message.action === 'failed') {
       if (!sender.tab || ownPage) throw new Error('Invalid website failure report.');
@@ -143,7 +160,7 @@
       if (enabled) await chrome.userScripts.execute({target:{tabId:sender.tab.id}, js:[{code:code(bundle)}], world:'USER_SCRIPT'});
       return {enabled, version:bundle.version};
     }
-    if (message.action === 'status') { const {bundle, enabled} = await state(); return {enabled, version:bundle.version}; }
+    if (message.action === 'status') return status();
     throw new Error('Unknown update action.');
   }
   const listener = (message, sender, respond) => {
