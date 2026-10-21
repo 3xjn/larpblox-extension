@@ -248,3 +248,12 @@ npm run build
 The build updates `assets/popup/popup.js` and `popup.css`. Keep these generated files with source changes so the unpacked extension and release ZIP work without a build step. Reload the extension and refresh Roblox after updating.
 
 Larp mode contains a separate **Share appearance** option. Sharing is off unless enabled, is suspended while Larp mode is off, and remembers your choice when Larp mode returns.
+
+### Automatic desktop connection
+
+The browser connection requires no Connect, Reconnect, or Disconnect button.
+The extension discovers Desktop locally, renews rejected pairing credentials, and
+keeps retrying while Desktop is closed using a delay capped at 30 seconds. Saved
+manual-disconnect flags from older versions no longer block automatic pairing.
+Use Larp mode and Share appearance to control what is applied and shared; the
+local desktop connection remains automatic.

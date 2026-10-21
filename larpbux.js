@@ -323,7 +323,7 @@
       const result = await LarpbloxGameBridge.request('read', account);
       if (account !== userId || !state?.mode || bridgeSending || queuedGameCommand) return;
       if (!result.connected) { if (bridgeStatus) bridgeStatus.textContent = 'Not connected.'; return; }
-      if (!result.snapshot) { if (bridgeStatus) bridgeStatus.textContent = 'Helper connected. Connect Larpblox in-game with the same code.'; return; }
+      if (!result.snapshot) { if (bridgeStatus) bridgeStatus.textContent = 'Desktop connected. Run Larpblox in your game.'; return; }
       const snapshot = LarpbloxGameBridge.validateSnapshot(result.snapshot, account);
       if (state.pendingOutfit && !state.gameLook) {
         // Keep edits made before the first game snapshot; merge previously unseen originals.
@@ -418,21 +418,7 @@
       } catch (error) { respond({ok:false, error:error.message}); }
       return;
     }
-    if (message.type === 'larpblox-popup-game') {
-      (async () => {
-        if (typeof LarpbloxGameBridge === 'undefined') throw new Error('Reload the extension first.');
-        if (message.action === 'connect') {
-          await LarpbloxGameBridge.request('connect', userId);
-          if (bridgeStatus) bridgeStatus.textContent = 'Local connection ready.';
-          await syncNames(); await syncGame();
-        } else if (message.action === 'disconnect') {
-          await LarpbloxGameBridge.request('disconnect', userId);
-          if (bridgeStatus) bridgeStatus.textContent = 'Disconnected. Last synced outfit kept locally.';
-        } else throw new Error('Unknown game connection action.');
-        respond({ok:true, ...popupState()});
-      })().catch(error => respond({ok:false, error:error.message}));
-      return true;
-    }
+
   });
   async function sendGameOutfit() {
     if (!state?.mode || !state.gameLook || typeof LarpbloxGameBridge === 'undefined') return;
