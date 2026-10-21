@@ -55,7 +55,6 @@ function App() {
   const [pending, setPending] = useState<string | null>("initialize");
   const [notice, setNotice] = useState<Notice>({ text: "Connecting to Roblox…" });
   const [countsNotice, setCountsNotice] = useState<Notice>({ text: "" });
-  const [gameNotice, setGameNotice] = useState<Notice>({ text: "" });
   const [balance, setBalance] = useState("");
   const [username, setUsername] = useState("");
   const [followers, setFollowers] = useState("");
@@ -107,11 +106,11 @@ function App() {
 
   useEffect(() => { mounted.current = true; void initialize(); return () => { mounted.current = false; }; }, []);
 
-  async function act(key: string, message: Message, fields: string[] = [], success?: string, target: "main" | "counts" | "game" = "main") {
+  async function act(key: string, message: Message, fields: string[] = [], success?: string, target: "main" | "counts" = "main") {
     if (inFlight.current) return;
     inFlight.current = true;
     setPending(key);
-    const notify = target === "counts" ? setCountsNotice : target === "game" ? setGameNotice : setNotice;
+    const notify = target === "counts" ? setCountsNotice : setNotice;
     notify({ text: "" });
     try {
       const next = await send(message);
@@ -186,8 +185,7 @@ function App() {
         <div className="secondary-group">
         <h2>Game connection</h2>
         <p className="help">Open Larpblox Desktop and run Larpblox in your game. The connection is automatic.</p>
-        <div className="flex gap-2.5"><Button variant="outline" disabled={busy} loading={pending === "connect"} onClick={() => void act("connect", { type: "larpblox-popup-game", action: "connect" }, [], undefined, "game")}>Reconnect</Button><Button variant="outline" disabled={busy} loading={pending === "disconnect"} onClick={() => void act("disconnect", { type: "larpblox-popup-game", action: "disconnect" }, [], undefined, "game")}>Disconnect</Button></div>
-        {status(gameNotice.text ? gameNotice : { text: state.gameStatus })}
+        {status({ text: state.gameStatus })}
         </div>
 
         <div className="secondary-group space-y-2">
