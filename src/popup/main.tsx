@@ -182,12 +182,6 @@ function App() {
         {status(countsNotice)}
         </div>
 
-        <div className="secondary-group">
-        <h2>Game connection</h2>
-        <p className="help">Open Larpblox Desktop and run Larpblox in your game. The connection is automatic.</p>
-        {status({ text: state.gameStatus })}
-        </div>
-
         <div className="secondary-group space-y-2">
         <Choice id="appearance" label="Website appearance" value={state.appearance} disabled={busy} items={[{ value: "modern", label: "Current Roblox" }, { value: "classic", label: "Classic Roblox (2016)" }]} onChange={appearance => void act("appearance", { type: "larpblox-popup-update", appearance })} />
         <p className="help">Changes how Roblox looks in this browser.</p>
