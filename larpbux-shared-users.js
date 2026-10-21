@@ -169,6 +169,11 @@
     if (!context.mode || !searchKeyword() || !searchRecords.size) { root?.remove(); return; }
     const native = document.querySelector('[data-testid="player-search-results"], .player-search-results-grid, .people-list, .users-list, .people-search-results, #people-search-container .section-content');
     if (!native) return;
+    const nativeResults = [...native.children].filter(element => element !== root);
+    const loading = native.matches('[aria-busy="true"]') || nativeResults.some(element =>
+      element.matches('[aria-busy="true"],[role="progressbar"]') || element.querySelector('[aria-busy="true"],[role="progressbar"]') ||
+      [...element.querySelectorAll('img[src]')].some(image => !image.complete));
+    if (loading || !nativeResults.some(element => element.textContent.trim())) { root?.remove(); return; }
     if (!root) {
       root = document.createElement('div'); root.id = 'larpblox-people-results';
       root.className = 'larpblox-people-results'; root.setAttribute('aria-label', 'Larp player results');

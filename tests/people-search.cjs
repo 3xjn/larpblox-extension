@@ -8,6 +8,7 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
   await page.route('https://www.roblox.com/**', route => route.fulfill({contentType:'text/html',body:'<style>.player-search-results-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;width:940px}.native-card{height:180px}</style><main><h1>People Results</h1><div id="react-player-search-web-app"><div class="player-search-results-grid" data-testid="player-search-results"><article class="native-card"><a href="/users/999/profile">Alias</a></article></div></div></main>'}));
   await page.goto('https://www.roblox.com/search/users?keyword=Alias');
   await page.evaluate(() => {
+   window.savedNativeCard=document.querySelector('.native-card');window.savedNativeCard.remove();
    window.testRecords=[{userId:'123',name:{enabled:true,username:'Alias',displayName:'Alias'},verified:true,snapshot:{definition:{},items:[]}}, {userId:'456',name:{enabled:true,username:'Alias2',displayName:'Alias2'},verified:false,snapshot:{definition:{},items:[]}}];
    window.chrome={runtime:{sendMessage:async message=>({ok:true,data:{players:message.type==='larpblox-search-users'?window.testRecords:[]}})}};
    window.LarpbloxGameBridge={validateSnapshot:()=>{}};
@@ -17,6 +18,9 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
   await page.addScriptTag({path:path.join(__dirname,'../larpbux-verification.js')});
   await page.addScriptTag({path:path.join(__dirname,'../larpbux-shared-users.js')});
   await page.evaluate(()=>{LarpbloxVerification.update({mode:true,userId:'123',verified:true});LarpbloxSharedUsers.update({mode:true,userId:'123'});});
+  await page.waitForTimeout(100);
+  assert.equal(await page.locator('#larpblox-people-results').count(),0, 'Larp cards wait while native results are still loading');
+  await page.evaluate(()=>{document.querySelector('.player-search-results-grid').append(window.savedNativeCard);LarpbloxSharedUsers.update({mode:true,userId:'123'});});
   await page.waitForSelector('#larpblox-people-results .larpblox-verified-badge', {timeout:2000});
   assert.equal(await page.locator('.larpblox-person-card').count(),2);
   assert.equal(await page.locator('.player-search-results-grid > #larpblox-people-results:first-child').count(),1, 'Larp cards belong inside the native grid');
