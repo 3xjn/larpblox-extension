@@ -16,6 +16,7 @@ declare global {
 type PopupState = {
   mode: boolean;
   sharing: boolean;
+  verified: boolean;
   balance: number;
   appearance: "classic" | "modern";
   socialCounts: { followers: number; following: number } | null;
@@ -189,6 +190,10 @@ function App() {
           <div className="toggle-row">
             <div><Label htmlFor="share-mode">Share appearance</Label><p id="sharing-help" className="help">Visible to Larpblox players in your server.</p></div>
             <Switch id="share-mode" checked={state.mode && state.sharing} disabled={disabled} aria-describedby="sharing-help" onCheckedChange={sharing => void act("sharing", { type: "larpblox-popup-update", sharing })} />
+          </div>
+          <div className="toggle-row mt-3">
+            <div><Label htmlFor="verified-mode">Larp verification</Label><p id="verified-help" className="help">Show a cosmetic verified mark beside Larp usernames.</p></div>
+            <Switch id="verified-mode" checked={state.mode && state.verified} disabled={disabled} aria-describedby="verified-help" onCheckedChange={verified => void act("verified", { type: "larpblox-popup-update", verified })} />
           </div>
         </div>
       </section>

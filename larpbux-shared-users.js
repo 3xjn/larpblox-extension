@@ -5,7 +5,7 @@
   let publication, publicationKey = '', publicationTime = 0, publishing = false, publicationGeneration = 0;
   const validCounts = value => value && typeof value === 'object' && Number.isSafeInteger(value.followers) && value.followers >= 0 && Number.isSafeInteger(value.following) && value.following >= 0 ? {followers:value.followers, following:value.following} : undefined;
   function publishProfile(options) {
-    const key = JSON.stringify([options.userId, options.active, options.signature, options.names, options.socialCounts ?? null]);
+    const key = JSON.stringify([options.userId, options.active, options.signature, options.names, options.verified === true, options.socialCounts ?? null]);
     if (key !== publicationKey) { publicationKey = key; publicationGeneration++; publicationTime = 0; }
     publication = options;
     flushProfile();
@@ -19,7 +19,7 @@
       if (options.active) {
         const definition = await options.loadDefinition(new AbortController().signal);
         const userId = String(options.userId), username = options.names?.username || '';
-        record = {version:1, userId, snapshot:{version:1,userId,definition,items:[]}, name:{enabled:!!username,username,displayName:username}};
+        record = {version:1, userId, verified:options.verified === true, snapshot:{version:1,userId,definition,items:[]}, name:{enabled:!!username,username,displayName:username}};
         const socialCounts = validCounts(options.socialCounts);
         if (socialCounts) record.socialCounts = socialCounts;
       }
@@ -146,6 +146,7 @@
     }
   }
   function apply() {
+    globalThis.LarpbloxVerification?.setRecords(records);
     applyNames();
     applyCounts();
     for (const [id, surface] of portraits) if (!records.has(id)) { surface.update({active:false}); portraits.delete(id); }

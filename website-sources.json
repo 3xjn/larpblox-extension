@@ -7,7 +7,8 @@
     "classic-home-games.css",
     "classic-catalog.css",
     "classic-item.css",
-    "larpbux.css"
+    "larpbux.css",
+    "larpbux-verification.css"
   ],
   "js": [
     "identity-gate.js",
@@ -29,6 +30,7 @@
     "larpbux-names.js",
     "larpbux-characters.js",
     "larpbux-shared-users.js",
+    "larpbux-verification.js",
     "larpbux.js"
   ]
 }
