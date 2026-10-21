@@ -13,11 +13,11 @@
     root.classList.toggle('larpblox-modern', modern);
   };
   const get = () => read();
-  const set = value => {
+  const set = (value, reload = true) => {
     const next = value === 'modern' ? 'modern' : 'classic';
     try { localStorage.setItem(key, next); }
     catch (error) { throw new Error('Larpblox could not save the browser appearance preference.', {cause: error}); }
-    location.reload();
+    if (reload) location.reload();
   };
 
   globalThis.LarpbloxAppearance = {get, set};

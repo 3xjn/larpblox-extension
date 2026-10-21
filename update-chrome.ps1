@@ -27,6 +27,16 @@ if ($sourceVersion -lt $installedVersion) {
 $relativeFiles = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 [void]$relativeFiles.Add('manifest.json')
 if ($sourceManifest.background.service_worker) { [void]$relativeFiles.Add($sourceManifest.background.service_worker) }
+if ($sourceManifest.action.default_popup) {
+  [void]$relativeFiles.Add($sourceManifest.action.default_popup)
+  $popupSource = Join-Path $SourcePath $sourceManifest.action.default_popup
+  if (Test-Path -LiteralPath $popupSource -PathType Leaf) {
+    $popupMarkup = Get-Content -LiteralPath $popupSource -Raw
+    foreach ($match in [regex]::Matches($popupMarkup, '(?:src|href)="([^"]+\.(?:js|css))"')) {
+      [void]$relativeFiles.Add($match.Groups[1].Value)
+    }
+  }
+}
 foreach ($contentScript in $sourceManifest.content_scripts) {
   foreach ($field in @('js', 'css')) {
     foreach ($relativePath in $contentScript.$field) { [void]$relativeFiles.Add($relativePath) }

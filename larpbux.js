@@ -261,12 +261,11 @@
     return {version: 1, userId: String(userId), definition, ...(definition.backgroundId ? {backgroundId: definition.backgroundId} : {}), items: definition.assets.map(asset => items.get(asset.id)).filter(Boolean).map(({id, name, assetType}) => ({id, name, assetType, itemType: 'Asset'}))};
   }
   if (typeof module !== 'undefined' && module.exports) { module.exports = {changedBodyColors, addToCart, checkoutCart, changeUsername, localNames, localSocialCounts, amount, formatBalance, collect, equip, outfit, supportsOutfit, supportsCosmetic, isBackground, previewDefinition, matchesAvatarCategory, mergeGameSnapshot, gamePreviewDefinition, gameCommand, gameOutfitMatches}; return; }
-  let state, userId, panel, controls, avatarAccordion, list, balance, mode, message, exportBox, purchaseDialog, previewElement, previewViewer, previewSignature, previewController;
+  let state, userId, panel, controls, avatarAccordion, list, message, exportBox, purchaseDialog, previewElement, previewViewer, previewSignature, previewController;
   // Catalog Try On is deliberately separate from the saved Larp outfit.  It is
   // a disposable render only: no save(), bridge message, purchase, or equip is
   // performed for the item being previewed.
   let catalogTryOn = {generation:0};
-  let appearanceSettings;
   const thumbnails = new Map();
   const thumbnailPending = new Map();
   let thumbnailTimer, thumbnailBusy = false, thumbnailBlockedUntil = 0;
@@ -346,10 +345,35 @@
     } catch (error) { if (account === userId && bridgeStatus) bridgeStatus.textContent = error.message; }
     finally { bridgePending = false; if (account === userId && queuedGameCommand && !bridgeSending) sendGameOutfit(); }
   }
-  if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage?.addListener) chrome.runtime.onMessage.addListener(message => {
-    if (message?.type !== 'larpblox-game-state' || String(message.userId) !== String(userId)) return;
-    // A socket push is authoritative and wakes the existing sync path immediately.
-    syncGame();
+  if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage?.addListener) chrome.runtime.onMessage.addListener((message, sender, respond) => {
+    if (message?.type === 'larpblox-game-state' && String(message.userId) === String(userId)) {
+      // A socket push is authoritative and wakes the existing sync path immediately.
+      syncGame();
+      return;
+    }
+    if (typeof message?.type !== 'string' || !message.type.startsWith('larpblox-popup-')) return;
+    if (!userId || !state) { respond({ok:false, error:'Open a signed-in Roblox page first.'}); return; }
+    if (message.type === 'larpblox-popup-get-state') {
+      respond({ok:true, mode:state.mode, balance:state.balance, appearance:LarpbloxAppearance.get()});
+      return;
+    }
+    if (message.type === 'larpblox-popup-update') {
+      try {
+        const next = {...state};
+        if (typeof message.mode === 'boolean') next.mode = message.mode;
+        if (message.balance !== undefined) next.balance = amount(message.balance);
+        if (message.appearance !== undefined && !['classic','modern'].includes(message.appearance)) throw new Error('Choose a valid website appearance.');
+        if (next.mode !== state.mode) closePurchase();
+        if (typeof message.mode === 'boolean' || message.balance !== undefined) save(next);
+        if (message.appearance !== undefined) {
+          LarpbloxAppearance.set(message.appearance, false);
+          respond({ok:true, mode:state.mode, balance:state.balance, appearance:LarpbloxAppearance.get()});
+          setTimeout(() => location.reload(), 100);
+          return;
+        }
+        respond({ok:true, mode:state.mode, balance:state.balance, appearance:LarpbloxAppearance.get()});
+      } catch (error) { respond({ok:false, error:error.message}); }
+    }
   });
   async function sendGameOutfit() {
     if (!state?.mode || !state.gameLook || typeof LarpbloxGameBridge === 'undefined') return;
@@ -1209,7 +1233,6 @@
     if (typeof LarpbloxIdentityGate !== 'undefined') LarpbloxIdentityGate.update();
     document.documentElement.classList.toggle('larpblox-pretend-mode', state.mode);
     updateHeaderBalance();
-    mode.checked = state.mode; balance.value = String(state.balance);
     for (const kind of ['followers', 'following']) {
       const input = controls?.querySelector(`[name="${kind}"]`);
       if (input && document.activeElement !== input) input.value = state.socialCounts ? String(state.socialCounts[kind]) : '';
@@ -1229,10 +1252,6 @@
     controls.setAttribute('aria-label', 'Larpblox avatar');
     avatarAccordion = node('details', '', 'larpbux-avatar-settings');
     avatarAccordion.append(node('summary', 'Larpblox'), controls);
-    const label = node('label'); mode = node('input'); mode.type = 'checkbox'; mode.setAttribute('aria-label', 'Larp mode'); label.append(mode, document.createTextNode(' Larp mode'));
-    mode.addEventListener('change', () => action(() => { closePurchase(); save({...state, mode: mode.checked}); message.textContent = state.mode ? 'Larp mode on. Existing Roblox items are kept.' : 'Real mode on. Roblox purchases use real Robux.'; }));
-    const funds = node('form'); balance = node('input'); balance.type = 'number'; balance.min = '0'; balance.max = String(MAX); balance.step = '1'; balance.setAttribute('aria-label', 'Pretend Larpbux balance');
-    funds.append(balance, node('button', 'Save')); funds.addEventListener('submit', event => { event.preventDefault(); action(() => { save({...state, balance: amount(balance.value)}); message.textContent = 'Pretend balance saved.'; }); });
     message = node('p'); message.setAttribute('role', 'status');
     list = node('div', '', 'larpbux-inventory larpbux-inventory-grid');
     exportBox = node('textarea'); exportBox.readOnly = true; exportBox.setAttribute('aria-label', 'Larpblox outfit export');
@@ -1253,18 +1272,7 @@
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       message.textContent = 'Preview details saved. Attach larpblox-preview-details.json in our chat.';
     }));
-    controls.append(label, node('p', 'Pretend Robux amount'), funds, message);
-    appearanceSettings=node('section','','larpbux-browser-preferences-appearance');
-    const appearanceLabel=node('label','Website appearance');
-    appearanceLabel.htmlFor='larpbux-website-appearance';
-    const appearance=node('select');appearance.id='larpbux-website-appearance';appearance.setAttribute('aria-label','Website appearance');
-    for (const [value,text] of [['classic','Classic Roblox (2016)'],['modern','Current Roblox']]) {
-      const option=node('option',text);option.value=value;appearance.append(option);
-    }
-    appearance.value=typeof LarpbloxAppearance!=='undefined' ? LarpbloxAppearance.get() : 'classic';
-    appearance.addEventListener('change',()=>action(()=>LarpbloxAppearance.set(appearance.value)));
-    appearanceSettings.append(appearanceLabel,appearance,node('p','Changes the website look only. Switching reloads this page.'));
-
+    controls.append(message);
     const nameSettings = node('a', 'Change Larp username · R$ 1,000'); nameSettings.href = '/my/account#!/info';
     controls.append(nameSettings);
     const social = node('details', '', 'larpbux-social-counts');
@@ -1314,20 +1322,6 @@
     panel.append(node('h3', 'Your Larpbux collection'), list,
       node('p', 'Game import supports accessories, classic clothes, movement animations, and held gear visuals. Gear actions are not included. Other items are collection only. The updated game script must be installed first. For games: copy this export, then paste it into Accessories → Browser cosmetic outfit in Larpblox. Supported cosmetics are added to your current look.'), exportBox, select, diagnostics);
     document.body.append(panel);
-  }
-  function updateSettingsRoute() {
-    if (!appearanceSettings || !/^\/my\/account\/?$/i.test(location.pathname)) { appearanceSettings?.remove(); return; }
-    const browserLink = [...document.querySelectorAll('a[href]')].find(link => /^browser preferences$/i.test(link.textContent.trim().replace(/\s+/g, ' ')));
-    const main = document.querySelector('#settings-container, .settings-container, main, [role="main"]');
-    const content = main?.querySelector('.tab-content, [data-testid="settings-content"], .settings-content');
-    const linkRoute = browserLink?.hash.split('?')[0];
-    const currentRoute = location.hash.split('?')[0];
-    const activeLink = browserLink?.matches('[aria-current="page"],.active,.selected') || browserLink?.closest('li')?.matches('.active,.selected');
-    const activeRoute = Boolean(linkRoute && currentRoute && linkRoute === currentRoute);
-    const activeHeading = [...(content?.querySelectorAll('h1,h2') || [])].some(heading => /browser preferences/i.test(heading.textContent));
-    if (content && (activeLink || activeRoute || activeHeading)) {
-      if (appearanceSettings.parentElement !== content) content.append(appearanceSettings);
-    } else appearanceSettings.remove();
   }
   function nativePrice() {
     const element = document.querySelector('#item-details .item-price-value .text-robux-lg, #item-details .item-price-value, #item-details .price-row-container .text-robux-lg, #item-details-container .item-price-value .text-robux-lg, #item-details-container .item-price-value, #item-details-container .price-row-container .text-robux-lg, .price-row-container .item-price-value');
@@ -1992,7 +1986,6 @@
     }
     if (!panel) mount();
     if (userId !== id) { closePurchase(); clearCatalogTryOn(); queuedGameCommand = undefined; awaitingGameOutfit = undefined; userId = id; state = read(id); if (bridgeStatus) bridgeStatus.textContent = 'Checking connection…'; render(); }
-    updateSettingsRoute();
     updateProfileMenu();
     updateNames();
     updateHeaderBalance();
@@ -2030,10 +2023,8 @@
       if (!state?.mode || !settingsNameRow(event.target)) return;
       event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();purchaseUsername();
     },true);
-    window.addEventListener('hashchange', updateSettingsRoute);
     window.addEventListener('hashchange', update);
     window.addEventListener('popstate', update);
-    window.addEventListener('popstate', updateSettingsRoute);
     window.addEventListener('popstate', updateCatalogTryOn);
     update(); let queued = false;
     new MutationObserver(() => { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; update(); }); }).observe(document.body, {childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ['src', 'srcset', 'sizes', 'data-user-id', 'data-userid']});
