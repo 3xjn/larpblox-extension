@@ -19,9 +19,9 @@ const {chromium} = require('playwright');
     await page.addScriptTag({path:path.join(__dirname,'..','larpbux.js')});
     const accordion = page.locator('.left-wrapper > details.larpbux-avatar-settings');
     await accordion.waitFor();
-    assert.equal(await accordion.locator('summary').textContent(), 'Larpblox');
+    assert.equal(await accordion.locator(':scope > summary').textContent(), 'Larpblox');
     assert.equal(await accordion.locator('[aria-label="Larp mode"]').isVisible(), false);
-    await accordion.locator('summary').click();
+    await accordion.locator(':scope > summary').click();
     assert.equal(await accordion.locator('[aria-label="Larp mode"]').isVisible(), true);
     console.log('PASS: Larpblox controls appear as a collapsed, keyboard-native accordion below the avatar preview.');
   } finally { await browser.close(); }

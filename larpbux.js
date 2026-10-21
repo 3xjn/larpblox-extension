@@ -472,6 +472,74 @@
       row.append(link, button); target.append(row);
     }
   }
+  let nativeInventoryHost;
+  function nativeInventoryCategory() {
+    const params = new URLSearchParams(`${location.search}${location.hash.includes('?') ? `&${location.hash.split('?')[1]}` : ''}`);
+    const type = params.get('assetTypeId');
+    if (type && /^\d+$/.test(type)) return Number(type);
+    const category = location.hash.match(/^#!?\/([^?]+)/)?.[1]?.toLowerCase() || 'accessories';
+    return ({accessories:8, hair:41, heads:[17,79], faces:18, backgrounds:92, animations:24, emotes:61, audio:3, decals:13, meshes:4, video:62, shirts:11, pants:12, tshirts:2})[category] ?? category;
+  }
+  function nativeInventoryRoot() {
+    if (!/^\/users\/(?:\d+\/)?inventory\/?$/i.test(location.pathname)) return null;
+    return [...document.querySelectorAll('#inventory-container, #inventory-page-container, .inventory-container, [data-testid="inventory-container"]')]
+      .find(element => element.getClientRects().length && (element.querySelector('.item-card, .items-container, [data-testid*="item"]') || /inventory/i.test(element.textContent)));
+  }
+  function clearNativeInventory() {
+    nativeInventoryHost?.remove(); nativeInventoryHost = undefined;
+  }
+  function updateNativeInventory() {
+    const root = nativeInventoryRoot();
+    const routeAccount = location.pathname.match(/^\/users\/(\d+)\//i)?.[1] || new URLSearchParams(location.search).get('userId') || userId;
+    if (!state?.mode || !userId || !root || routeAccount !== String(userId)) { clearNativeInventory(); return; }
+    const category = nativeInventoryCategory();
+    repairPurchasedTypes();
+    const types = Array.isArray(category) ? category : typeof category === 'number' ? [category] : null;
+    const items = state.items.filter(item => types ? item.itemType === 'Asset' && types.includes(Number(item.assetType)) :
+      category === 'bundles' ? item.itemType === 'Bundle' : category === 'avatar-animations' ? isAnimationBundle(item) || animationAssetTypes.includes(Number(item.assetType)) :
+      category === 'all' || category === 'purchased');
+    const entries = items.map(item => ({item, count: item.isLimited || item.isLimitedUnique ? (Number.isSafeInteger(item.quantity) && item.quantity > 0 ? item.quantity : 1) : 1}));
+    const total = entries.reduce((sum, entry) => sum + entry.count, 0);
+    const signature = JSON.stringify([userId, category, entries.map(({item, count}) => [keyFor(item), count, item.name, item.thumbnail, item.isLimited, item.isLimitedUnique])]);
+    const nativeGrid = root.querySelector('.item-cards, .inventory-items, .items-container') || root.querySelector('.item-card:not(.larpbux-native-inventory-card)')?.parentElement || root;
+    if (nativeInventoryHost && (!nativeInventoryHost.isConnected || nativeInventoryHost.parentElement !== nativeGrid)) clearNativeInventory();
+    if (!nativeInventoryHost) { nativeInventoryHost = node('div', '', 'larpbux-native-inventory'); nativeGrid.prepend(nativeInventoryHost); }
+    nativeInventoryHost.dataset.integrated = String(nativeGrid !== root);
+    if (nativeInventoryHost.dataset.signature === signature) return;
+    nativeInventoryHost.dataset.signature = signature;
+    nativeInventoryHost.replaceChildren();
+    const pageSize = 48, page = Number(nativeInventoryHost.dataset.page) || 0, pages = Math.max(1, Math.ceil(total / pageSize));
+    const currentPage = Math.min(page, pages - 1); nativeInventoryHost.dataset.page = String(currentPage);
+    const grid = node('div', '', 'larpbux-native-inventory-grid');
+    let skip = currentPage * pageSize, take = pageSize;
+    for (const {item, count} of entries) {
+      if (skip >= count) { skip -= count; continue; }
+      const start = skip; skip = 0;
+      for (let index = start; index < count && take > 0; index++, take--) {
+        const card = node('div', '', 'item-card larpbux-native-inventory-card');
+        card.dataset.larpAssetId = String(item.id);
+        const container = node('div', '', 'item-card-container');
+        const holder = node('div', '', 'item-card-thumb-container');
+        const link = node('a', '', 'item-card-link'); link.href = `/${item.itemType === 'Bundle' ? 'bundles' : 'catalog'}/${item.id}`; link.title = item.name;
+        const thumb = node('span', '', 'thumbnail-2d-container');
+        const image = node('img'); thumbnail(image, item); thumb.append(image); link.append(thumb); updateLimitedBadge(thumb, item); holder.append(link);
+        const caption = node('div', '', 'item-card-caption');
+        const name = node('a', item.name, 'item-card-name'); name.href = link.href; name.title = item.name; caption.append(name);
+        if (item.isLimited || item.isLimitedUnique) link.setAttribute('aria-label', `${item.name}, quantity ${index + 1}`);
+        container.append(holder, caption); card.append(container); grid.append(card);
+      }
+      if (!take) break;
+    }
+    nativeInventoryHost.append(grid);
+    if (pages > 1) {
+      const nav = node('nav', '', 'larpbux-native-inventory-pages'); nav.setAttribute('aria-label', 'Larp inventory pages');
+      const previous = node('button', 'Previous'); previous.type = 'button'; previous.disabled = currentPage === 0;
+      const next = node('button', 'Next'); next.type = 'button'; next.disabled = currentPage === pages - 1;
+      const status = node('span', `Page ${currentPage + 1} of ${pages}`); previous.addEventListener('click', () => { nativeInventoryHost.dataset.page = String(currentPage - 1); nativeInventoryHost.dataset.signature = ''; updateNativeInventory(); });
+      next.addEventListener('click', () => { nativeInventoryHost.dataset.page = String(currentPage + 1); nativeInventoryHost.dataset.signature = ''; updateNativeInventory(); });
+      nav.append(previous, status, next); nativeInventoryHost.append(nav);
+    }
+  }
   let browserAvatarBase;
   async function loadBrowserPreview(selected, signal, backgroundId = state?.backgroundId) {
     const account = userId;
@@ -1148,6 +1216,7 @@
     }
     updateNames();
     inventoryCards(list);
+    updateNativeInventory();
     exportBox.value = outfit(state, userId);
     updateItem(); updateAvatar();
   }
@@ -1911,6 +1980,7 @@
     if (!/^[1-9]\d*$/.test(id || '')) {
       userId = undefined; state = undefined;
       document.documentElement.classList.remove('larpblox-pretend-mode');
+      clearNativeInventory();
       clearCatalogTryOn();
       if (panel) { panel.hidden = true; avatarAccordion.remove(); }
       closePurchase(); updateAvatar();
@@ -1923,7 +1993,7 @@
     updateProfileMenu();
     updateNames();
     updateHeaderBalance();
-    updateItem(); updateAvatar();
+    updateItem(); updateAvatar(); updateNativeInventory();
   }
   function start() {
     let colorQueue = Promise.resolve();
@@ -1957,6 +2027,8 @@
       event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();purchaseUsername();
     },true);
     window.addEventListener('hashchange', updateSettingsRoute);
+    window.addEventListener('hashchange', update);
+    window.addEventListener('popstate', update);
     window.addEventListener('popstate', updateSettingsRoute);
     window.addEventListener('popstate', updateCatalogTryOn);
     update(); let queued = false;

@@ -14,6 +14,18 @@ html:is(.rbx2016, .larpblox-modern) .larpbux-inventory-item img { display: block
 html:is(.rbx2016, .larpblox-modern) .larpbux-inventory-item a span { display: block; margin: 5px 0; overflow-wrap: anywhere; }
 html:is(.rbx2016, .larpblox-modern) .larpbux-inventory-item button { color: #0074bd; background: transparent; border: 0; padding: 2px 0; cursor: pointer; }
 html:is(.rbx2016, .larpblox-modern) .larpbux-inventory-item button:disabled { color: #777; cursor: default; }
+html:is(.rbx2016, .larpblox-modern) .larpbux-native-inventory { width:100%; }
+html:is(.rbx2016, .larpblox-modern) .larpbux-native-inventory[data-integrated=true], html:is(.rbx2016, .larpblox-modern) .larpbux-native-inventory[data-integrated=true] .larpbux-native-inventory-grid { display:contents; }
+html:is(.rbx2016, .larpblox-modern) .larpbux-native-inventory-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 16px; list-style: none; margin: 0; padding: 0; }
+html:is(.rbx2016, .larpblox-modern) .larpbux-native-inventory-card { min-width: 0; }
+html:is(.rbx2016, .larpblox-modern) .larpbux-native-inventory-card a { color:inherit; text-decoration:none; }
+.larpbux-native-inventory-card .thumbnail-2d-container { display:block; position:relative; width:100%; aspect-ratio:1; }
+.larpbux-native-inventory-card img { display:block; width:100%; height:100%; object-fit:contain; }
+.larpbux-native-inventory-card .larpbux-limited-badge { position:absolute; bottom:0; left:0; width:123px; height:18px; background:url('https://images.rbxcdn.com/3db361bbb7b87ce1.svg') 0 -54px no-repeat; pointer-events:none; }
+.larpbux-native-inventory-card .larpbux-limited-unique { background-position:0 -126px; }
+.larpbux-native-inventory-card .larpbux-limited-badge > span { display:none; }
+html:is(.rbx2016, .larpblox-modern) .larpbux-native-inventory-pages { display:flex; width:100%; grid-column:1 / -1; align-items:center; justify-content:center; gap:12px; margin:16px 0; }
+html:is(.rbx2016, .larpblox-modern) .larpbux-native-inventory-pages button { padding: 6px 12px; }
 html:is(.rbx2016, .larpblox-modern) .larpbux-panel textarea { display: block; width: 100%; height: 65px; font-size: 12px; }
 html:is(.rbx2016, .larpblox-modern) .larpbux-item-actions { display: none; }
 html:is(.rbx2016, .larpblox-modern).larpblox-pretend-mode :is(#item-details, #item-details-container) .item-purchase-btns-container { display: none !important; }
