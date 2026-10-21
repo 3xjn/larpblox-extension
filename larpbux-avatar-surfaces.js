@@ -10,14 +10,14 @@
   function savedPictures(userId, definition) {
     try {
       const saved = JSON.parse(localStorage.getItem(`larpblox-profile-pictures:${userId}`) || 'null');
-      if (saved?.key === pictureKey(definition) && saved.expires > Date.now() &&
+      if (saved?.version === 2 && saved.key === pictureKey(definition) && saved.expires > Date.now() &&
           [saved.result.headshot,saved.result.fullBody,saved.result.transparentBody].every(url=>url?.startsWith('data:image/png'))) return saved.result;
     } catch (_) {}
   }
   function savePictures(userId, definition, result) {
     if (peer) return;
     try {
-      const saved = JSON.stringify({key:pictureKey(definition), expires:Date.now()+86400000, result});
+      const saved = JSON.stringify({version:2, key:pictureKey(definition), expires:Date.now()+86400000, result});
       if (saved.length < 1500000) localStorage.setItem(`larpblox-profile-pictures:${userId}`, saved);
     } catch (_) {}
   }
