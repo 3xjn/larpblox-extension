@@ -98,6 +98,33 @@ function descriptorView(camera) {
   return { position: p.toArray(), direction: d.toArray() };
 }
 
+export function headshotFrame(root, avatarBox) {
+  // Roblox's OBJ exporter puts the head in Player1; later numbered meshes
+  // include accessories. Their height does not identify the anatomical head.
+  let namedHead, exportedHead;
+  root.traverse(part => {
+    if (!part.isMesh) return;
+    if (/^Head$/i.test(part.name)) namedHead = part;
+    else if (/^Player1$/i.test(part.name)) exportedHead = part;
+  });
+  const size = avatarBox.getSize(new THREE.Vector3());
+  let head = namedHead || exportedHead;
+  let bounds = head && new THREE.Box3().setFromObject(head);
+  // A headless/unrecognized export still gets an upper-body portrait.
+  if (!bounds || bounds.getCenter(new THREE.Vector3()).y < avatarBox.min.y + size.y * 0.55) {
+    bounds = avatarBox.clone();
+    bounds.min.y = avatarBox.min.y + size.y * 0.65;
+  }
+  const headSize = bounds.getSize(new THREE.Vector3());
+  const target = bounds.getCenter(new THREE.Vector3());
+  target.y -= headSize.y * 0.1;
+  const bottom = bounds.min.y - headSize.y * 0.25;
+  const top = Math.max(bounds.max.y, avatarBox.max.y);
+  // Keep the face centered while leaving room for headwear and the round mask.
+  const radius = Math.max(Math.hypot(headSize.x / 2, Math.max(top - target.y, target.y - bottom)), headSize.z / 2, 0.25) * 1.1;
+  return {target, radius};
+}
+
 export function avatarMaterials(mtlText, manager) {
   const materials = new MTLLoader(manager).parse(mtlText, '');
   materials.preload();
@@ -315,17 +342,7 @@ export async function create(host, descriptorUrl, options = {}) {
         const photoCamera = camera.clone();
         photoCamera.aspect = 1;
         if (kind === 'headshot') {
-          let headBox;
-          root.traverse(part => {
-            if (!part.isMesh || !/^(Head|Player\d+)$/i.test(part.name)) return;
-            const candidate = new THREE.Box3().setFromObject(part);
-            if (!headBox || candidate.getCenter(new THREE.Vector3()).y > headBox.getCenter(new THREE.Vector3()).y) headBox = candidate;
-          });
-          const bottom = headBox?.min.y ?? box.min.y + size.y * 0.65;
-          const top = box.max.y;
-          const target = new THREE.Vector3(center.x, (bottom + top) / 2, center.z);
-          const headWidth = headBox ? headBox.getSize(new THREE.Vector3()).x : size.x * 0.4;
-          const photoRadius = Math.max((top - bottom) * 0.6, headWidth * 0.85, 0.25);
+          const {target, radius: photoRadius} = headshotFrame(root, box);
           const direction = camera.position.clone().sub(controls.target).normalize();
           photoCamera.position.copy(target).addScaledVector(direction, photoRadius / Math.sin(THREE.MathUtils.degToRad(photoCamera.fov / 2)));
           photoCamera.lookAt(target);

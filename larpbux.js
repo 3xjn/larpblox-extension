@@ -209,7 +209,11 @@
     }
     const equipped = snapshotItems.filter(item => !bundled.has(keyFor(item)) && !removedBodySlots.has(bodySlot(item.assetType))).map(keyFor);
     for (const key of bundled) if (state.items.some(item => keyFor(item) === key)) equipped.push(key);
-    const backgroundId = Number.isSafeInteger(Number(snapshot.backgroundId)) && Number(snapshot.backgroundId) > 0 ? Number(snapshot.backgroundId) : state.backgroundId;
+    for (const background of snapshot.backgrounds || []) {
+      if (!items.some(item => isBackground(item) && item.id === background.id)) items.push({...background, itemType:'Asset', assetType:92, price:0, source:'game'});
+    }
+    const selectedBackground = snapshot.backgroundId ?? snapshot.definition?.backgroundId ?? snapshot.definition?.backgroundRequestModel?.id;
+    const backgroundId = selectedBackground === undefined ? state.backgroundId : Number(selectedBackground) || undefined;
     return {...state, items, equipped, ...(backgroundId ? {backgroundId} : {backgroundId:undefined}), gameLook: snapshot};
   }
   function gamePreviewDefinition(state) {
@@ -252,13 +256,25 @@
     const normalizeColor = value => typeof value === 'string' ? value.replace(/^#/, '').toLowerCase() : value;
     const colors = ['headColor', 'torsoColor', 'leftArmColor', 'rightArmColor', 'leftLegColor', 'rightLegColor'];
     const bodyColorsMatch = colors.every(color => normalizeColor(snapshot.definition?.bodyColors?.[color]) === normalizeColor(command.definition?.bodyColors?.[color]));
-    return String(snapshot.userId) === String(command.userId) && keys(snapshot) === keys(command) && bodyColorsMatch;
+    const background = value => Number(value.backgroundId ?? value.definition?.backgroundId ?? value.definition?.backgroundRequestModel?.id ?? 0);
+    const actualAssets = new Map(snapshot.definition.assets.map(asset => [asset.id, asset]));
+    const close = (a, b) => Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) < 0.0001;
+    const adjustmentsMatch = command.definition.assets.every(asset => {
+      const actual = actualAssets.get(asset.id);
+      if (!actual) return false;
+      return ['scale', 'position', 'rotation'].every(field => ['X', 'Y', 'Z'].every(axis => {
+        const fallback = field === 'scale' ? 1 : 0;
+        return close(asset.meta?.[field]?.[axis] ?? fallback, actual.meta?.[field]?.[axis] ?? fallback);
+      }));
+    });
+    return String(snapshot.userId) === String(command.userId) && keys(snapshot) === keys(command) && bodyColorsMatch && adjustmentsMatch && background(snapshot) === background(command);
   }
   function gameCommand(state, userId) {
     const definition = gamePreviewDefinition(state);
     const items = new Map(state.gameLook.items.map(item => [item.id, item]));
     for (const item of outfitAssets(state.items.filter(item => state.equipped.includes(keyFor(item))))) items.set(item.id, item);
-    return {version: 1, userId: String(userId), definition, ...(definition.backgroundId ? {backgroundId: definition.backgroundId} : {}), items: definition.assets.map(asset => items.get(asset.id)).filter(Boolean).map(({id, name, assetType}) => ({id, name, assetType, itemType: 'Asset'}))};
+    const backgrounds = state.items.filter(isBackground).map(({id, name}) => ({id, name}));
+    return {version: 1, userId: String(userId), definition, backgroundId: definition.backgroundId || 0, backgrounds, items: definition.assets.map(asset => items.get(asset.id)).filter(Boolean).map(({id, name, assetType}) => ({id, name, assetType, itemType: 'Asset'}))};
   }
   if (typeof module !== 'undefined' && module.exports) { module.exports = {changedBodyColors, addToCart, checkoutCart, changeUsername, localNames, localSocialCounts, amount, formatBalance, collect, equip, outfit, supportsOutfit, supportsCosmetic, isBackground, previewDefinition, matchesAvatarCategory, mergeGameSnapshot, gamePreviewDefinition, gameCommand, gameOutfitMatches}; return; }
   let state, userId, panel, list, message, exportBox, purchaseDialog, previewElement, previewViewer, previewSignature, previewController;
@@ -269,6 +285,20 @@
   const thumbnails = new Map();
   const thumbnailPending = new Map();
   let thumbnailTimer, thumbnailBusy = false, thumbnailBlockedUntil = 0;
+  const thumbnailStorageKey = 'larpblox-item-thumbnails-v1';
+  let thumbnailSaved;
+  function readThumbnailCache() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(thumbnailStorageKey) || 'null');
+      return {entries:Array.isArray(saved?.entries) ? saved.entries.filter(entry => entry && typeof entry.key === 'string') : [],
+        retryAt:Number.isFinite(saved?.retryAt) ? saved.retryAt : 0};
+    }
+    catch (_) { return {entries:[], retryAt:0}; }
+  }
+  function cachedThumbnail(cache, key) {
+    return cache.entries?.find(entry => entry.key === key && entry.expires > Date.now() &&
+      typeof entry.url === 'string' && /^https:\/\/(?:tr|t[0-7])\.rbxcdn\.com\//i.test(entry.url))?.url;
+  }
   const counts = new Map();
   const details = new Map();
   let namesPending=false, namesQueued=false;
@@ -335,14 +365,14 @@
         const known = new Set(state.items.map(keyFor));
         const desired = state.equipped;
         const merged = mergeGameSnapshot(state, snapshot);
-        save({...merged, equipped: [...new Set([...merged.equipped.filter(item => !known.has(item)), ...desired])]});
+        save({...merged, backgroundId: state.backgroundId, equipped: [...new Set([...merged.equipped.filter(item => !known.has(item)), ...desired])]});
         queuedGameCommand = gameCommand(state, account);
         return;
       }
       if (state.pendingOutfit && !awaitingGameOutfit && state.gameLook) awaitingGameOutfit = {command: gameCommand(state, account)};
       if (awaitingGameOutfit) {
         if (!gameOutfitMatches(snapshot, awaitingGameOutfit.command)) {
-          if (!queuedGameCommand && account === userId && state?.mode) queuedGameCommand = awaitingGameOutfit.command;
+          if (!awaitingGameOutfit.sent && !queuedGameCommand && account === userId && state?.mode) queuedGameCommand = awaitingGameOutfit.command;
           if (bridgeStatus) bridgeStatus.textContent = 'Waiting for the game to apply your outfit...';
           return;
         }
@@ -453,6 +483,7 @@
           if (bridgeStatus) bridgeStatus.textContent = 'Not connected. Retrying when the game connection returns.';
           break;
         }
+        if (awaitingGameOutfit?.command === command) awaitingGameOutfit.sent = true;
         if (command.userId !== userId) continue;
         if (bridgeStatus) bridgeStatus.textContent = 'Waiting for the game to confirm your outfit. If this stays here, check Accessories → Browser Connection in the game.';
       }
@@ -490,32 +521,60 @@
     thumbnailBusy = true;
     const type = ready[0].item.itemType;
     const batch = ready.filter(entry => entry.item.itemType === type).slice(0, 100);
-    const ids = batch.map(entry => entry.item.id).join(',');
-    const endpoint = type === 'Bundle' ? `bundles/thumbnails?bundleIds=${ids}` : `assets?assetIds=${ids}`;
-    const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 15000);
     try {
-      const response = await fetch(`https://thumbnails.roblox.com/v1/${endpoint}&size=150x150&format=Png&isCircular=false`, {signal:controller.signal});
-      if (response.status === 429) {
-        thumbnailBlockedUntil = Date.now() + Math.max(1, LarpbloxAvatarRequests.retryAfter(response, 20)) * 1000;
-        return;
-      }
-      if (!response.ok) throw new Error('Item thumbnails are temporarily unavailable.');
-      const results = new Map(((await response.json()).data || []).map(entry => [String(entry.targetId), entry]));
-      for (const entry of batch) {
-        const result = results.get(String(entry.item.id));
-        if (result?.imageUrl || result?.state === 'Blocked' || result?.state === 'InReview') {
-          thumbnailPending.delete(entry.key); entry.resolve(result.imageUrl || null);
-        } else if (++entry.attempts >= 6) {
-          thumbnailPending.delete(entry.key); entry.resolve(null);
-        } else entry.due = Date.now() + Math.min(10000, 1000 * entry.attempts);
-      }
+      await navigator.locks.request('larpblox-item-thumbnails', async () => {
+        const shared = readThumbnailCache(); thumbnailSaved = shared;
+        const missing = batch.filter(entry => {
+          const url = cachedThumbnail(shared, entry.key);
+          if (url) { thumbnailPending.delete(entry.key); entry.resolve(url); return false; }
+          const pending = shared.entries.find(saved => saved.key === entry.key && saved.retryAt > Date.now());
+          if (pending) { entry.due = pending.retryAt; return false; }
+          return true;
+        });
+        if (!missing.length) return;
+        if (shared.retryAt > Date.now()) { thumbnailBlockedUntil = shared.retryAt; return; }
+        const ids = missing.map(entry => entry.item.id).join(',');
+        const endpoint = type === 'Bundle' ? `bundles/thumbnails?bundleIds=${ids}` : `assets?assetIds=${ids}`;
+        const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 15000);
+        try {
+          const response = await fetch(`https://thumbnails.roblox.com/v1/${endpoint}&size=150x150&format=Png&isCircular=false`, {credentials:'include',signal:controller.signal});
+          if (response.status === 429) {
+            thumbnailBlockedUntil = Date.now() + Math.max(1, LarpbloxAvatarRequests.retryAfter(response, 20)) * 1000;
+            shared.retryAt = thumbnailBlockedUntil;
+            localStorage.setItem(thumbnailStorageKey, JSON.stringify(shared));
+            return;
+          }
+          if (!response.ok) throw new Error('Item thumbnails are temporarily unavailable.');
+          const results = new Map(((await response.json()).data || []).map(entry => [String(entry.targetId), entry]));
+          shared.entries = (shared.entries || []).filter(entry => entry.expires > Date.now());
+          for (const entry of missing) {
+            const result = results.get(String(entry.item.id));
+            shared.entries = shared.entries.filter(saved => saved.key !== entry.key);
+            if (result?.imageUrl || result?.state === 'Blocked' || result?.state === 'InReview') {
+              thumbnailPending.delete(entry.key); entry.resolve(result.imageUrl || null);
+              if (result?.imageUrl) {
+                shared.entries.push({key:entry.key,url:result.imageUrl,expires:Date.now()+86400000});
+              }
+            } else if (++entry.attempts >= 6) {
+              thumbnailPending.delete(entry.key); entry.resolve(null);
+            } else {
+              entry.due = Date.now() + Math.min(10000, 1000 * entry.attempts);
+              shared.entries.push({key:entry.key,retryAt:entry.due,expires:entry.due});
+            }
+          }
+          shared.entries = shared.entries.slice(-1000);
+          shared.retryAt = Date.now() + 250;
+          localStorage.setItem(thumbnailStorageKey, JSON.stringify(shared));
+        } finally { clearTimeout(timeout); }
+      });
     } catch (_) {
       for (const entry of batch) {
+        if (!thumbnailPending.has(entry.key)) continue;
         if (++entry.attempts >= 6) { thumbnailPending.delete(entry.key); entry.resolve(null); }
         else entry.due = Date.now() + Math.min(30000, 2000 * entry.attempts);
       }
     } finally {
-      clearTimeout(timeout); thumbnailBusy = false;
+      thumbnailBusy = false;
       thumbnailBlockedUntil = Math.max(thumbnailBlockedUntil, Date.now() + 250);
       scheduleThumbnails();
     }
@@ -529,6 +588,9 @@
     ready();
     if (item.thumbnail) { image.src = item.thumbnail; return; }
     const key = keyFor(item);
+    thumbnailSaved ||= readThumbnailCache();
+    const saved = cachedThumbnail(thumbnailSaved, key);
+    if (saved) { image.src = saved; return; }
     if (!thumbnails.has(key)) {
       const promise = new Promise(resolve => thumbnailPending.set(key, {key,item,resolve,due:Date.now(),attempts:0}));
       thumbnails.set(key,promise); scheduleThumbnails();
@@ -711,7 +773,7 @@
         }));
         items.push(...batch);
       }
-      if (account !== userId || !state.mode || JSON.stringify(current.equipped) !== JSON.stringify(state.equipped) || JSON.stringify(current.gameLook) !== JSON.stringify(state.gameLook)) throw new Error('Your outfit changed while saving. Try again.');
+      if (account !== userId || !state.mode || current.backgroundId !== state.backgroundId || JSON.stringify(current.equipped) !== JSON.stringify(state.equipped) || JSON.stringify(current.gameLook) !== JSON.stringify(state.gameLook)) throw new Error('Your outfit changed while saving. Try again.');
       const snapshot = {version: 1, userId: String(account), definition, ...(current.backgroundId ? {backgroundId: current.backgroundId} : {}), items};
       return JSON.parse(JSON.stringify(LarpbloxGameBridge.validateSnapshot(snapshot, account)));
     } finally { clearTimeout(timer); }
@@ -907,6 +969,14 @@
     const pending = node('div', '', 'larpbux-avatar-scene');
     pending.classList.add('larpbux-avatar-loading');
     surface.append(pending);
+    const hasPicture = () => Boolean(surface.querySelector('.larpbux-avatar-scene:not(.larpbux-avatar-loading) img, .larpbux-avatar-scene:not(.larpbux-avatar-loading) canvas'));
+    const showStatus = text => {
+      if (hasPicture()) return;
+      let status = surface.querySelector('.larpbux-avatar-status');
+      if (!status) { status = node('div', '', 'thumbnail-loader larpbux-avatar-status'); status.setAttribute('role','status'); surface.append(status); }
+      status.textContent = text; surface.hidden = false;
+    };
+    showStatus('Loading avatar…');
     let nextViewer, committed = false;
     try {
       let definition;
@@ -916,11 +986,12 @@
       }
       if (account !== userId || signature !== previewSignature || signal.aborted) return;
       const cachedImage = LarpbloxAvatarRequests.cached?.(definition, account, '2d');
-      if (cachedImage && surface.hidden) {
+      if (cachedImage && !hasPicture()) {
         const fallback = node('div', '', 'larpbux-avatar-scene');
         const image = node('img'); image.alt = 'Your avatar with selected items';
         image.onload = () => {
           if (committed || account !== userId || signature !== previewSignature || signal.aborted) return;
+          surface.querySelector('.larpbux-avatar-status')?.remove();
           fallback.append(image); surface.prepend(fallback); surface.hidden = false;
         };
         image.src = cachedImage;
@@ -976,6 +1047,7 @@
           previewViewer?.dispose(); previewViewer = nextViewer;
           pending.classList.remove('larpbux-avatar-loading');
           surface.replaceChildren(pending); surface.hidden = false;
+          surface.removeAttribute('title');
           holder.classList.add('larpbux-local-preview');
           committed = true; previewRetries = 0;
           previewFailure = undefined;
@@ -990,6 +1062,7 @@
       const reason = error.message;
       previewFailure = {status:error.status, message:reason};
       surface.title = reason;
+      showStatus(error.status === 429 ? 'Roblox is limiting avatar requests. Retrying…' : 'Avatar could not load. Use Redraw to retry.');
       if (error.status === 429 || previewRetries < 2) {
         if (error.status !== 429) previewRetries++;
         previewRetryTimer = setTimeout(() => {
@@ -1005,7 +1078,7 @@
   function updateOwnAvatarSurfaces() {
     const current = state, account = userId;
     const selected = current?.items.filter(item => current.equipped.includes(keyFor(item)) && supportsOutfit(item)) || [];
-    const signature = JSON.stringify([account, selected.map(item => item.id), current?.backgroundId, current?.gameLook?.definition, current?.names]);
+    const signature = JSON.stringify([account, selected.map(item => item.id), current?.backgroundId, current?.gameLook?.definition]);
     const loadDefinition = signal => current?.gameLook ? Promise.resolve(gamePreviewDefinition(current)) : loadBrowserPreview(selected, signal);
     if (typeof LarpbloxProfileWearing !== 'undefined') LarpbloxProfileWearing.update({
       userId: account, active: Boolean(current?.mode), signature,
@@ -1492,43 +1565,22 @@
     } else { dialog.close(); dialog.remove(); }
   }
   async function avatarCopyQuote(target, account, signal) {
-    const readJson = async (url, label) => {
-      const cooldownKey = 'larpblox.avatar-copy-cooldown-until';
-      let blockedUntil = 0;
-      try { blockedUntil = Number(localStorage.getItem(cooldownKey)) || 0; } catch (_) {}
-      if (blockedUntil > Date.now()) throw Object.assign(new Error(`Roblox asked us to wait before loading ${label}.`), {retryAfter:(blockedUntil - Date.now()) / 1000});
-      const response = await fetch(url, {credentials:'include', signal});
-      if (!response.ok) {
-        if (response.status === 429) {
-          const retryAfter = Math.max(1, LarpbloxAvatarRequests.retryAfter(response, 30));
-          try { localStorage.setItem(cooldownKey, String(Math.max(blockedUntil, Date.now() + retryAfter * 1000))); } catch (_) {}
-          throw Object.assign(new Error(`Roblox is limiting ${label}.`), {retryAfter});
-        }
-        throw new Error(`Could not load ${label}. Retry in a moment.`);
-      }
-      return response.json();
-    };
-    const cacheKey = `larpblox.avatar-copy-cache:v1:${target}`;
-    let cached;
-    try {
-      const entry = JSON.parse(localStorage.getItem(cacheKey) || 'null');
-      if (entry?.expires > Date.now() && entry.avatar) cached = entry;
-      else if (entry) localStorage.removeItem(cacheKey);
-    } catch (_) {}
-    const avatar = cached?.avatar || await readJson(`https://avatar.roblox.com/v1/users/${target}/avatar`, 'this avatar');
-    if (!cached) {
-      cached = {expires:Date.now() + 300000, avatar};
-      try { localStorage.setItem(cacheKey, JSON.stringify(cached)); } catch (_) {}
+    if (signal?.aborted) throw new DOMException('Avatar lookup cancelled.', 'AbortError');
+    let result;
+    try { result = await LarpbloxGameBridge.request('clientRequest', account, {method:'avatar.lookup',params:{targetUserId:target}}); }
+    catch (error) {
+      if (error.message === 'Unsupported connection action.') throw new Error('Install the latest extension loader, then reload the extension to copy avatars through the client.');
+      throw error;
     }
-    if (!Array.isArray(avatar.assets) || avatar.assets.length > 100) throw new Error('This avatar could not be loaded.');
-    const rules = avatar.bodyColor3s ? {} : cached?.rules || await readJson('https://avatar.roblox.com/v1/avatar-rules', 'avatar colors');
-    if (!cached.rules) { cached.rules = rules; try { localStorage.setItem(cacheKey, JSON.stringify(cached)); } catch (_) {} }
-    const assets = avatar.assets.map(asset => ({id:asset.id, itemType:'Asset', name:String(asset.name || `Item ${asset.id}`).slice(0,128), assetType:Number(asset.assetType?.id), ...(asset.meta ? {meta:asset.meta} : {})}));
-    const supported = assets.filter(isWearableAsset);
-    const definition = previewDefinition({...avatar, assets:avatar.assets.filter(asset => supported.some(item => item.id === asset.id))}, rules, []);
-    const items = supported.map(item => ({...item, price:0, assetTypeVerified:true, limitedVerified:false}));
-    return {snapshot:LarpbloxGameBridge.validateSnapshot({version:1,userId:String(account),definition,items},account), items, skipped:assets.length - supported.length};
+    if (signal?.aborted) throw new DOMException('Avatar lookup cancelled.', 'AbortError');
+    if (!result?.connected || !result.result?.snapshot) throw new Error('Connect your game to copy an avatar.');
+    if (result.result.targetUserId !== target) throw new Error('The client returned a different avatar.');
+    const snapshot = LarpbloxGameBridge.validateSnapshot(result.result.snapshot, account);
+    const items = snapshot.items.filter(isWearableAsset).map(item => ({...item,price:0,assetTypeVerified:true,limitedVerified:false}));
+    const supported = new Set(items.map(item => item.id));
+    return {snapshot:{...snapshot,items,definition:{...snapshot.definition,assets:snapshot.definition.assets.filter(asset=>supported.has(asset.id))}},items,skipped:snapshot.items.length-items.length};
   }
+
   function stealAvatar(target) {
     if (!userId || !/^[1-9]\d*$/.test(target)) return;
     closePurchase();
@@ -2188,6 +2240,10 @@
       });
     });
     window.addEventListener('click',event=>{
+      if (editingLarp() && event.target?.closest?.('#avatar-web-app .redraw-link')) {
+        event.preventDefault(); event.stopImmediatePropagation();
+        previewSignature = undefined; previewRetries = 0; updateAvatar(); return;
+      }
       if (marketplaceCartClick(event)) return;
       if (state?.mode && /^\/(?:catalog|bundles)\/\d+/.test(location.pathname)) {
         const control = event.target?.closest?.('button, [role="button"]');

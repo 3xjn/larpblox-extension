@@ -2,7 +2,7 @@
 // Packaged background code: downloaded code runs only through userScripts.
 (() => {
   'use strict';
-  const API = 1;
+  const API = 3;
   const KEY = 'larpblox-website-release';
   const SCRIPT = 'larpblox-website';
   const LATEST = 'https://github.com/3xjn/larpblox-extension/releases/download/main-latest/website-latest.json';
@@ -18,7 +18,7 @@
   };
   const newer = (a, b) => { const x = version(a), y = version(b); for (let i = 0; i < 4; i++) if (x[i] !== y[i]) return x[i] > y[i]; return false; };
   function validate(bundle) {
-    if (!bundle || bundle.schema !== 1 || bundle.loaderApi !== API) throw new Error('This update needs a newer Larpblox loader.');
+    if (!bundle || bundle.schema !== 1 || !Number.isInteger(bundle.loaderApi) || bundle.loaderApi < 1 || bundle.loaderApi > API) throw new Error('This update needs a newer Larpblox loader.');
     version(bundle.version);
     if (typeof bundle.css !== 'string' || !Array.isArray(bundle.scripts) || !bundle.scripts.length || bundle.scripts.length > 60 ||
         bundle.scripts.some(s => !s || !/^[a-z0-9-]+\.js$/.test(s.name) || typeof s.code !== 'string') ||
@@ -92,7 +92,7 @@
       }));
       pendingReload = versions.some(loaded => loaded && loaded !== bundle.version);
     }
-    return {enabled, version:bundle.version, pendingReload};
+    return {enabled, version:bundle.version, loaderVersion:chrome.runtime.getManifest().version, pendingReload};
   }
   async function read(url, limit) {
     const response = await fetch(url, {cache:'no-store', credentials:'omit', signal:AbortSignal.timeout(20000)});
@@ -109,7 +109,7 @@
     const {bundle, enabled} = await state();
     if (!enabled) return {enabled, version:bundle.version};
     const meta = JSON.parse(new TextDecoder().decode(await read(LATEST, 16384)));
-    if (meta.schema !== 1 || meta.loaderApi !== API) throw new Error('This update needs a newer Larpblox loader.');
+    if (meta.schema !== 1 || !Number.isInteger(meta.loaderApi) || meta.loaderApi < 1 || meta.loaderApi > API) throw new Error('This update needs a newer Larpblox loader.');
     version(meta.version);
     if (!newer(meta.version, bundle.version)) return {enabled:true, version:bundle.version, updated:false};
     if (!Number.isInteger(meta.size) || meta.size <= 0 || meta.size > MAX || !/^[a-f0-9]{64}$/.test(meta.sha256) ||

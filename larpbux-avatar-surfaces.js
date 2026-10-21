@@ -10,14 +10,14 @@
   function savedPictures(userId, definition) {
     try {
       const saved = JSON.parse(localStorage.getItem(`larpblox-profile-pictures:${userId}`) || 'null');
-      if (saved?.key === pictureKey(definition) && saved.expires > Date.now() &&
+      if (saved?.version === 2 && saved.key === pictureKey(definition) && saved.expires > Date.now() &&
           [saved.result.headshot,saved.result.fullBody,saved.result.transparentBody].every(url=>url?.startsWith('data:image/png'))) return saved.result;
     } catch (_) {}
   }
   function savePictures(userId, definition, result) {
     if (peer) return;
     try {
-      const saved = JSON.stringify({key:pictureKey(definition), expires:Date.now()+86400000, result});
+      const saved = JSON.stringify({version:2, key:pictureKey(definition), expires:Date.now()+86400000, result});
       if (saved.length < 1500000) localStorage.setItem(`larpblox-profile-pictures:${userId}`, saved);
     } catch (_) {}
   }
@@ -227,10 +227,17 @@
       entry.promise = (async () => {
         const definition = await loadDefinition(controller.signal);
         const previous = savedPictures(userId, definition);
-        const flat = globalThis.LarpbloxAvatarRequests?.cached?.(definition,userId,'2d') || options.imageUrl;
+        let flat = globalThis.LarpbloxAvatarRequests?.cached?.(definition,userId,'2d') || options.imageUrl;
+        // A cold profile must not depend on a 3D render before it can show any
+        // avatar. Get a matching still first, then enhance it with the model.
+        if (!previous && !flat && !globalThis.LarpbloxAvatarRequests?.cached?.(definition,userId,'3d')) {
+          try { flat = await render(definition, userId, controller.signal, '2d'); }
+          catch (error) { if (controller.signal.aborted) throw error; }
+        }
         if (previous || flat) {
           try {
             entry.result = previous || await flatPictures(flat, controller.signal, definition);
+            savePictures(userId, definition, entry.result);
             if (cache === entry && !controller.signal.aborted) update(options);
           } catch (error) { if (controller.signal.aborted) throw error; }
         }

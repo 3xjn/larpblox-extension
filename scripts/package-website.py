@@ -20,7 +20,9 @@ def asset(match):
 
 css = "\n".join((root / name).read_text(encoding="utf-8") for name in sources["css"])
 css = re.sub(r"chrome-extension://__MSG_@@extension_id__/assets/([^'\")\s]+)", asset, css)
-payload = {"schema": 1, "version": version, "loaderApi": 1, "css": css,
+# Client features use the stable data-request bridge introduced in API 3.
+loader_api = 3
+payload = {"schema": 1, "version": version, "loaderApi": loader_api, "css": css,
            "scripts": [{"name": name, "code": (root / name).read_text(encoding="utf-8")} for name in sources["js"]]}
 payload["popup"] = {"schema": 1,
     "js": (root / "assets/popup/popup.js").read_text(encoding="utf-8"),
@@ -33,7 +35,7 @@ output.mkdir(exist_ok=True)
 name = f"website-{version}.json"
 (output / name).write_bytes(data)
 (output / "website-latest.json").write_text(json.dumps({
-    "schema": 1, "version": version, "loaderApi": 1, "size": len(data),
+    "schema": 1, "version": version, "loaderApi": loader_api, "size": len(data),
     "sha256": hashlib.sha256(data).hexdigest(),
     "url": f"https://github.com/3xjn/larpblox-extension/releases/download/v{version}/{name}",
 }, separators=(",", ":")) + "\n", encoding="utf-8")

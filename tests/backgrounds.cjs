@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const {
-  collect, equip, matchesAvatarCategory, previewDefinition, supportsCosmetic, gamePreviewDefinition, gameOutfitMatches,
+  collect, equip, matchesAvatarCategory, previewDefinition, supportsCosmetic, gamePreviewDefinition, gameOutfitMatches, gameCommand, mergeGameSnapshot,
 } = require('../larpbux.js');
 
 const background = {id: 75789087422384, itemType: 'Asset', assetType: 92, name: 'Staring Cat Explosion', price: 200};
@@ -27,5 +27,15 @@ const look = {definition: {...definition}, items: []};
 const withoutBackground = gamePreviewDefinition({gameLook: look, items: [], equipped: []});
 assert.equal('backgroundId' in withoutBackground, false);
 assert.equal('backgroundRequestModel' in withoutBackground, false);
-assert.equal(gameOutfitMatches({userId: '1', definition: {...definition, backgroundId: 1}, items: []}, {userId: '1', definition: {...definition, backgroundId: 2}, items: []}), true);
+assert.equal(gameOutfitMatches({userId: '1', definition: {...definition, backgroundId: 1}, items: []}, {userId: '1', definition: {...definition, backgroundId: 2}, items: []}), false);
+const command = gameCommand({...state, gameLook:look}, '1');
+assert.equal(command.backgroundId, background.id);
+assert.deepEqual(command.backgrounds, [{id:background.id,name:background.name}]);
+const cleared = gameCommand({...state, gameLook:look, backgroundId:undefined}, '1');
+assert.equal(cleared.backgroundId, 0, 'removal must be explicit across the relay');
+assert.equal(gameOutfitMatches({...command, backgroundId:0}, command), false);
+assert.equal(mergeGameSnapshot(state, {...command, backgroundId:0}).backgroundId, undefined);
+const imported = mergeGameSnapshot({items:[],equipped:[]}, command);
+assert.equal(imported.backgroundId, background.id);
+assert.equal(imported.items.find(item=>item.id===background.id).assetType,92);
 console.log('PASS: type 92 backgrounds purchase, equip, toggle, categorize, and propagate to preview definitions.');
