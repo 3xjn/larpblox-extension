@@ -71,7 +71,7 @@ const initial = {
     await install();
     const reloaded = await state();
     assert.equal(reloaded.verified, true, 'verified setting survives page reload');
-    assert.equal(await page.locator('.larpblox-verified-badge').count(), 2);
+    await page.waitForFunction(() => document.querySelectorAll('.larpblox-verified-badge').length === 2);
 
     const invalid = await message({type: 'larpblox-popup-update', verified: 'true'});
     assert.equal(invalid.ok, false);
