@@ -276,7 +276,7 @@
   const node = (tag, text, className) => { const element = document.createElement(tag); if (text) element.textContent = text; if (className) element.className = className; return element; };
   const key = () => `larpblox-cosmetics-v1:${userId}`;
   function popupState() {
-    return {mode:state?.mode === true, balance:state?.balance || 0, appearance:LarpbloxAppearance.get(), socialCounts:state?.socialCounts || null, username:state?.names?.username || '', avatarPage:/^\/my\/avatar\/?$/i.test(location.pathname), avatarView:avatarEditorView, previewStatus:previewFailure?.message || '', gameStatus:bridgeStatus?.textContent || 'Checking connection…'};
+    return {mode:state?.mode === true, sharing:state?.sharing === true, balance:state?.balance || 0, appearance:LarpbloxAppearance.get(), socialCounts:state?.socialCounts || null, username:state?.names?.username || '', avatarPage:/^\/my\/avatar\/?$/i.test(location.pathname), avatarView:avatarEditorView, previewStatus:previewFailure?.message || '', gameStatus:bridgeStatus?.textContent || 'Checking connection…'};
   }
   function save(next, syncOutfit = false) {
     next = {...next, pendingOutfit: Boolean(next.mode && (syncOutfit || next.pendingOutfit))};
@@ -301,7 +301,7 @@
     const cart = Array.isArray(saved?.cart) ? saved.cart.filter(item => Number.isSafeInteger(item.id) && item.id > 0 && ['Asset', 'Bundle'].includes(item.itemType) && typeof item.name === 'string' && Number.isSafeInteger(item.price) && item.price >= 0 && Number.isSafeInteger(item.quantity) && item.quantity > 0).slice(0, 2000) : [];
     let socialCounts; try { socialCounts = localSocialCounts(saved?.socialCounts); } catch (_) { socialCounts = null; }
     const backgroundId = Number.isSafeInteger(saved?.backgroundId) && saved.backgroundId > 0 && items.some(item => isBackground(item) && item.id === saved.backgroundId) ? saved.backgroundId : undefined;
-    return {version: 1, cart, names, socialCounts, mode: saved?.mode === true, pendingOutfit: saved?.mode === true && saved?.pendingOutfit === true, balance: Number.isSafeInteger(saved?.balance) && saved.balance >= 0 ? saved.balance : 0, items, backgroundId, equipped: Array.isArray(saved?.equipped) ? saved.equipped.filter(value => items.some(item => keyFor(item) === value) && !isBackground(items.find(item => keyFor(item) === value))).slice(0, 100) : [], ...(gameLook ? {gameLook} : {})};
+    return {version: 1, cart, names, socialCounts, mode: saved?.mode === true, sharing: typeof saved?.sharing === 'boolean' ? saved.sharing : gameLook?.sharing?.enabled === true, pendingOutfit: saved?.mode === true && saved?.pendingOutfit === true, balance: Number.isSafeInteger(saved?.balance) && saved.balance >= 0 ? saved.balance : 0, items, backgroundId, equipped: Array.isArray(saved?.equipped) ? saved.equipped.filter(value => items.some(item => keyFor(item) === value) && !isBackground(items.find(item => keyFor(item) === value))).slice(0, 100) : [], ...(gameLook ? {gameLook} : {})};
   }
   const avatarUrl = () => '/my/avatar';
   async function syncNames() {
@@ -310,7 +310,7 @@
     const name=state.names?.username || '';
     namesPending=true;
     try {
-      await LarpbloxGameBridge.request('publishNames',account,{names:{version:1,userId:account,enabled:Boolean(state.mode),name}});
+      await LarpbloxGameBridge.request('publishNames',account,{names:{version:1,userId:account,enabled:Boolean(state.mode),name,sharing:Boolean(state.mode && state.sharing)}});
     } catch (error) {
       if (account===userId && bridgeStatus) bridgeStatus.textContent=error.message;
     } finally { namesPending=false; }
@@ -364,13 +364,18 @@
       try {
         const next = {...state};
         if (typeof message.mode === 'boolean') next.mode = message.mode;
+        if (message.sharing !== undefined) {
+          if (typeof message.sharing !== 'boolean') throw new Error('Choose a valid sharing setting.');
+          if (message.sharing && !next.mode) throw new Error('Turn Larp mode on before sharing your appearance.');
+          next.sharing = message.sharing;
+        }
         if (message.balance !== undefined) next.balance = amount(message.balance);
         if (message.appearance !== undefined && !['classic','modern'].includes(message.appearance)) throw new Error('Choose a valid website appearance.');
         if (next.mode !== state.mode) closePurchase();
-        if (typeof message.mode === 'boolean' || message.balance !== undefined) save(next);
+        if (typeof message.mode === 'boolean' || message.sharing !== undefined || message.balance !== undefined) save(next);
         if (message.appearance !== undefined) {
           LarpbloxAppearance.set(message.appearance, false);
-          respond({ok:true, mode:state.mode, balance:state.balance, appearance:LarpbloxAppearance.get()});
+          respond({ok:true, ...popupState()});
           setTimeout(() => location.reload(), 100);
           return;
         }

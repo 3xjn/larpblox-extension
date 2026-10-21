@@ -234,3 +234,17 @@ Version 1.16.12 uses one **Larp name** in the Robux dropdown. The separate custo
 Version 1.16.13 sends the browser's single Larp name to the paired game through the local helper, including enabled/off state. The in-game Names tab is removed. Run the updated helper and reload the updated game script; then use only the browser Robux dropdown to set names. The local People menu name matcher recognizes the own-player @username row and leaves other players with the same display name unchanged. Live game confirmation remains necessary for protected Roblox menus.
 
 Version 1.16.14 fixes missed sidebar and top-right Larp names: normalizes absolute Roblox profile links and recognizes the current Foundation sidebar's self-avatar link without depending on legacy navigation IDs. The Chrome fixture reproduces the captured header/sidebar link structure, including missing display-name metadata, and checks that other users, external links, and plain navigation remain unchanged.
+
+
+## Editing the extension popup
+
+The popup uses React, TypeScript, Tailwind CSS v4, and Coss UI. Its source is in `src/popup/`.
+
+```sh
+npm ci
+npm run build
+```
+
+The build updates `assets/popup/popup.js` and `popup.css`. Keep these generated files with source changes so the unpacked extension and release ZIP work without a build step. Reload the extension and refresh Roblox after updating.
+
+Larp mode contains a separate **Share appearance** option. Sharing is off unless enabled, is suspended while Larp mode is off, and remembers your choice when Larp mode returns.
