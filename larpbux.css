@@ -230,12 +230,9 @@ html #avatar-web-app .avatar-thumbnail.larpbux-local-preview > :not(.larpbux-ava
 html #avatar-web-app .avatar-thumbnail.larpbux-local-preview > :not(.larpbux-avatar-look):not(.larpbux-avatar-hats) .toggle-three-dee * { visibility:visible !important; }
 html #avatar-web-app .avatar-thumbnail.larpbux-local-preview .toggle-three-dee { z-index:3; }
 
-/* Keep the local viewer inside the same frame and use the native backdrop. */
-html #avatar-web-app .avatar-thumbnail:has(> .larpbux-avatar-look) { max-width:100% !important; min-width:0; overflow:hidden; border-radius:inherit; isolation:isolate; }
-/* Hats may inset the native thumbnail inside the backdrop. Keep the local
-   viewer's outer frame full width; its hat buttons are absolute overlays. */
-html #avatar-web-app .avatar-back:has(.larpbux-avatar-look:not([hidden])) { padding:0 !important; }
-html #avatar-web-app .avatar-thumbnail:has(> .larpbux-avatar-look:not([hidden])) { width:100% !important; margin:0 !important; padding:0 !important; left:0 !important; right:auto !important; transform:none !important; box-sizing:border-box; }
+/* Roblox owns the square thumbnail canvas, its centering/slot offset, and the
+   toggle position. Its narrower avatar-back clips that canvas horizontally. */
+html #avatar-web-app .avatar-thumbnail:has(> .larpbux-avatar-look) { isolation:isolate; }
 html #avatar-web-app .larpbux-avatar-look { position:absolute !important; inset:0 !important; margin:0 !important; padding:0 !important; transform:none !important; box-sizing:border-box; max-width:100%; overflow:hidden; border-radius:inherit; background-color:var(--larpbux-preview-background,transparent) !important; background-image:var(--larpbux-preview-image,none) !important; background-size:cover !important; background-repeat:no-repeat !important; background-position:center !important; }
 html #avatar-web-app .larpbux-avatar-look .larpbux-avatar-scene { position:absolute !important; inset:0 !important; width:auto !important; height:auto !important; min-width:0; margin:0 !important; padding:0 !important; transform:none !important; overflow:hidden; }
 html #avatar-web-app .larpbux-avatar-look .larpbux-avatar-scene > :is(canvas,img) { position:absolute !important; inset:0 !important; width:100% !important; height:100% !important; max-width:none !important; margin:0 !important; padding:0 !important; transform:none !important; }
@@ -275,11 +272,6 @@ html.larpblox-modern #avatar-web-app .larpbux-limited-badge > span { display:inl
 
 html #avatar-web-app .larpbux-character-card .larpbux-character-gear { display:flex; align-items:center; justify-content:center; width:24px; height:24px; padding:3px; border:0; background:transparent; color:inherit; line-height:1; }
 html #avatar-web-app .larpbux-character-gear svg { display:block; width:18px; height:18px; pointer-events:none; }
-
-/* Roblox's fallback PNG already includes its backdrop. Fill the whole preview
-   frame so a second, unrelated backdrop cannot show underneath it. */
-html #avatar-web-app .avatar-thumbnail:has(> .larpbux-avatar-look) > .thumbnail-holder .thumbnail-2d-container { position:absolute; inset:0; width:100%; height:100%; }
-html #avatar-web-app .avatar-thumbnail:has(> .larpbux-avatar-look) > .thumbnail-holder .thumbnail-2d-container > img { display:block; width:100% !important; height:100% !important; object-fit:cover; object-position:center; }
 
 .larpbux-username-dialog .larpbux-purchase-body > div { width:100%; }
 html.larpblox-modern .larpbux-item-buy-dialog h2 { font-size:22px; line-height:30px; }
