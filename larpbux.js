@@ -1272,6 +1272,7 @@
     updateNames();
     inventoryCards(list);
     updateNativeInventory();
+    updateMarketplaceCart();
     exportBox.value = outfit(state, userId);
     updateItem(); updateAvatar();
   }
@@ -1792,35 +1793,14 @@
       }
     });
   }
-  const marketplaceAdds = new Set();
-  async function addMarketplaceCart(control, card) {
-    if (control.dataset.larpCartPending) return;
-    const link = card.querySelector('a[href*="/catalog/"], a[href*="/bundles/"]');
-    if (!link) return;
-    const path = new URL(link.href, location.origin).pathname, account = userId;
-    const priceText = card.querySelector('.item-card-price .text-robux-tile, .item-card-price .text-robux, .item-card-price')?.textContent?.trim();
-    const quote = /^free$/i.test(priceText || '') ? 0 : /^[\d,]+$/.test(priceText || '') ? amount(priceText.replaceAll(',', '')) : undefined;
-    control.dataset.larpCartPending = 'true'; control.setAttribute('aria-busy', 'true');
-    try {
-      const item = await itemData(path, quote);
-      if (!item || userId !== account || !state?.mode) return;
-      const current = read(account); if (!current.mode) return;
-      const image = card.querySelector('img');
-      save(addToCart(current, {...item, thumbnail:image?.currentSrc || image?.src || undefined}));
-      control.title = 'Added to Larp cart';
-    } catch (error) {
-      control.title = error.message;
-      if (message) message.textContent = error.message;
-    } finally { delete control.dataset.larpCartPending; control.removeAttribute('aria-busy'); }
-  }
-  async function openMarketplaceCart() {
+  async function openMarketplaceCart(selectedOnly = false) {
     const account = userId;
     try {
-      await Promise.all(marketplaceAdds);
       if (account !== userId || !state?.mode) return;
       const native = JSON.parse(localStorage.getItem(`Roblox.AvatarMarketplace.Cart:${account}`) || 'null');
       if (Array.isArray(native?.items)) {
-        const imported = await Promise.all(native.items.map(async entry => {
+        const selected = native.items.filter(entry => !selectedOnly || native.selectedItems?.[`${entry.itemType.toLowerCase()}${entry.itemId}`] === true);
+        const imported = await Promise.all(selected.map(async entry => {
           const id = Number(entry.itemId), type = entry.itemType;
           if (!Number.isSafeInteger(id) || id <= 0 || !['Asset','Bundle'].includes(type)) throw new Error('A cart item could not be loaded.');
           const detail = native.itemDetails?.[id];
@@ -1829,6 +1809,7 @@
         }));
         if (account !== userId || !state?.mode) return;
         let current = read(account); if (!current.mode) return;
+        if (selectedOnly) current = {...current, cart:[]};
         for (const item of imported) if (item && !current.cart.some(entry => keyFor(entry) === keyFor(item))) current = addToCart(current, item);
         save(current);
       }
@@ -1844,19 +1825,40 @@
       for (const item of items) { if (native.selectedItems) delete native.selectedItems[`${item.itemType.toLowerCase()}${item.id}`]; }
       native.totalPrice = null;
       localStorage.setItem(storageKey, JSON.stringify(native));
+      for (const row of document.querySelectorAll('.shopping-cart-items-list .cart-item-container')) {
+        const path = row.querySelector('a.item-name')?.getAttribute('href') || '';
+        const match = path.match(/\/(catalog|bundles)\/(\d+)/);
+        if (match && bought.has(`${match[1] === 'bundles' ? 'Bundle' : 'Asset'}:${match[2]}`)) row.querySelector('.rm-item-btn-container button')?.click();
+      }
     } catch (_) {}
+  }
+  const nativeCartBuyControls = new Map();
+  function updateMarketplaceCart() {
+    for (const [button, saved] of nativeCartBuyControls) {
+      if (!button.isConnected) { nativeCartBuyControls.delete(button); continue; }
+      if (!state?.mode) {
+        button.disabled = saved.disabled;
+        if (saved.aria == null) button.removeAttribute('aria-disabled'); else button.setAttribute('aria-disabled', saved.aria);
+        button.classList.toggle('disabled', saved.disabledClass); button.style.pointerEvents = saved.pointerEvents;
+        nativeCartBuyControls.delete(button);
+      }
+    }
+    if (!state?.mode || !/^\/catalog\/?$/i.test(location.pathname)) return;
+    for (const button of document.querySelectorAll('.shopping-cart-footer button, .shopping-cart-footer [role="button"]')) {
+      if (!/^buy(?:\s|$)/i.test(button.textContent.trim())) continue;
+      if (!nativeCartBuyControls.has(button)) nativeCartBuyControls.set(button, {disabled:button.disabled, aria:button.getAttribute('aria-disabled'), disabledClass:button.classList.contains('disabled'), pointerEvents:button.style.pointerEvents});
+      if (button.disabled) button.disabled = false;
+      if (button.getAttribute('aria-disabled') !== 'false') button.setAttribute('aria-disabled', 'false');
+      button.classList.remove('disabled'); if (button.style.pointerEvents !== 'auto') button.style.pointerEvents = 'auto';
+    }
   }
   function marketplaceCartClick(event) {
     if (!state?.mode || !/^\/catalog\/?$/i.test(location.pathname)) return false;
     const control = event.target.closest?.('button, a, [role="button"]');
     if (!control || control.closest('.larpbux-buy-dialog, .larpbux-panel')) return false;
-    const label = control.getAttribute('aria-label') || control.getAttribute('title') || control.textContent.trim();
-    const cart = /^(?:shopping )?cart(?:\s*\(?\d+\)?)?$/i.test(label) || control.matches('.shopping-cart-btn, [data-testid="shopping-cart-button"], .shopping-cart-button') || control.querySelector('.icon-shopping-cart, .icon-cart');
-    const card = control.closest('.item-card, .item-card-container, .catalog-item-container');
-    const add = card && /^add(?: to cart)?$/i.test(control.textContent.trim()) && card.querySelector('a[href*="/catalog/"], a[href*="/bundles/"]');
-    if (!cart && !add) return false;
+    if (!control.closest('.shopping-cart-footer') || !/^buy(?:\s|$)/i.test(control.textContent.trim())) return false;
     event.preventDefault(); event.stopImmediatePropagation(); event.stopPropagation();
-    if (cart) void openMarketplaceCart(); else { const pending = addMarketplaceCart(control, card); marketplaceAdds.add(pending); pending.finally(() => marketplaceAdds.delete(pending)); }
+    void openMarketplaceCart(true);
     return true;
   }
   function showCart() {
@@ -2038,7 +2040,7 @@
     updateProfileMenu();
     updateNames();
     updateHeaderBalance();
-    updateItem(); updateAvatar(); updateNativeInventory();
+    updateItem(); updateAvatar(); updateNativeInventory(); updateMarketplaceCart();
   }
   function start() {
     let colorQueue = Promise.resolve();
