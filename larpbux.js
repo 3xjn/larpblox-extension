@@ -257,7 +257,17 @@
     const colors = ['headColor', 'torsoColor', 'leftArmColor', 'rightArmColor', 'leftLegColor', 'rightLegColor'];
     const bodyColorsMatch = colors.every(color => normalizeColor(snapshot.definition?.bodyColors?.[color]) === normalizeColor(command.definition?.bodyColors?.[color]));
     const background = value => Number(value.backgroundId ?? value.definition?.backgroundId ?? value.definition?.backgroundRequestModel?.id ?? 0);
-    return String(snapshot.userId) === String(command.userId) && keys(snapshot) === keys(command) && bodyColorsMatch && background(snapshot) === background(command);
+    const actualAssets = new Map(snapshot.definition.assets.map(asset => [asset.id, asset]));
+    const close = (a, b) => Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) < 0.0001;
+    const adjustmentsMatch = command.definition.assets.every(asset => {
+      const actual = actualAssets.get(asset.id);
+      if (!actual) return false;
+      return ['scale', 'position', 'rotation'].every(field => ['X', 'Y', 'Z'].every(axis => {
+        const fallback = field === 'scale' ? 1 : 0;
+        return close(asset.meta?.[field]?.[axis] ?? fallback, actual.meta?.[field]?.[axis] ?? fallback);
+      }));
+    });
+    return String(snapshot.userId) === String(command.userId) && keys(snapshot) === keys(command) && bodyColorsMatch && adjustmentsMatch && background(snapshot) === background(command);
   }
   function gameCommand(state, userId) {
     const definition = gamePreviewDefinition(state);
