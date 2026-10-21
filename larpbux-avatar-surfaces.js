@@ -229,8 +229,10 @@
         const previous = savedPictures(userId, definition);
         const flat = globalThis.LarpbloxAvatarRequests?.cached?.(definition,userId,'2d') || options.imageUrl;
         if (previous || flat) {
-          entry.result = previous || await flatPictures(flat, controller.signal, definition);
-          if (cache === entry && !controller.signal.aborted) update(options);
+          try {
+            entry.result = previous || await flatPictures(flat, controller.signal, definition);
+            if (cache === entry && !controller.signal.aborted) update(options);
+          } catch (error) { if (controller.signal.aborted) throw error; }
         }
         const descriptor = await render(definition, userId, controller.signal);
         const modelController = new AbortController(), abort = () => modelController.abort();
