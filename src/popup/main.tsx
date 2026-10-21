@@ -28,12 +28,11 @@ type Notice = { text: string; error?: boolean };
 
 function UpdateSettings() {
   const [result, setResult] = useState<{version?: string; enabled?: boolean; pendingReload?: boolean}>({});
-  const [notice, setNotice] = useState("Loading…");
-  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState(true);
   const [error, setError] = useState(false);
   async function run(action: string) {
-    setBusy(true); setError(false);
-    if (action === "check") setNotice("Checking for updates…");
+    setBusy(true); setError(false); setNotice("");
     try {
       const reply = await chrome.runtime.sendMessage({type:"larpblox-website-update", action});
       if (!reply?.ok) throw new Error(reply?.error || "Could not check for updates.");
@@ -50,15 +49,17 @@ function UpdateSettings() {
     window.addEventListener("focus", focus);
     return () => window.removeEventListener("focus", focus);
   }, []);
-  return <section aria-label="Extension settings" className="space-y-4">
-    <h2 className="text-base font-semibold">Updates</h2>
-    {result.version && <p className="help">Version {result.version}{result.pendingReload ? " is ready to apply." : ""}</p>}
-    {notice && <p role="status" className={error ? "notice error" : "notice"}>{notice}</p>}
+  return <section aria-label="Extension settings" className="update-settings">
+    <div className="update-heading">
+      <h2>Updates</h2>
+      {result.version && <span className="update-version" aria-label={`Version ${result.version}`}>v{result.version}</span>}
+    </div>
     {result.enabled === false ?
       <Button variant="outline" className="h-10 w-full" disabled={busy} onClick={() => void run("enable")}>Open extension settings</Button> :
       result.pendingReload ?
         <Button className="h-10 w-full" loading={busy} disabled={busy} onClick={() => void run("reload")}>Reload Roblox tabs</Button> :
         <Button variant="outline" className="h-10 w-full" loading={busy} disabled={busy} onClick={() => void run("check")}>Check for updates</Button>}
+    {notice && <p role="status" className={error ? "notice error" : "notice"}>{notice}</p>}
   </section>;
 }
 
@@ -166,7 +167,7 @@ function App() {
   const disabled = busy || !state?.mode;
   const status = (value: Notice) => value.text ? <p role="status" className={value.error ? "notice error" : "notice"}>{value.text}</p> : null;
 
-  return <main>
+  return <main className={settingsOpen ? "settings-view" : undefined}>
     <header className="popup-header"><img src="assets/larpblox-logo.png" alt="Larpblox" /><h1 className="sr-only">Larpblox</h1>
       <Button variant="ghost" size="icon" className="ml-auto" aria-label={settingsOpen ? "Back to Larpblox" : "Settings"} title={settingsOpen ? "Back" : "Settings"} aria-expanded={settingsOpen} onClick={() => setSettingsOpen(open => !open)}>
         {settingsOpen ? <ArrowLeftIcon aria-hidden="true" /> : <SettingsIcon aria-hidden="true" />}

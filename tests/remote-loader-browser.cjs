@@ -42,7 +42,7 @@ const executablePath = process.env.LARPBLOX_TEST_CHROME || path.join(process.env
     await ui.goto(`chrome-extension://${id}/popup.html`);
     await ui.getByRole('button',{name:'Settings',exact:true}).click();
     const settings = ui.getByRole('region',{name:'Extension settings'});
-    await settings.getByText(`Version ${baselineVersion}`,{exact:true}).waitFor();
+    await settings.getByLabel(`Version ${baselineVersion}`,{exact:true}).waitFor();
     const send = (action) => ui.evaluate(action => chrome.runtime.sendMessage({type:'larpblox-website-update', action}), action);
 
     const fixture = '<!doctype html><html><head></head><body><header id="header"><ul id="settings-popover-menu"><li><a href="/my/account">Settings</a></li></ul></header><main><h1>Avatar fixture</h1></main></body></html>';
@@ -133,7 +133,7 @@ const executablePath = process.env.LARPBLOX_TEST_CHROME || path.join(process.env
     await settings.getByRole('button',{name:'Reload Roblox tabs'}).waitFor();
     assert.equal(await settings.getByRole('button',{name:'Check for updates',exact:true}).count(),0);
     await ui.setViewportSize({width:380,height:300});
-    await ui.screenshot({path:path.join(root,'.test-artifacts/update-ready.png')});
+    await ui.locator('main').screenshot({path:path.join(root,'.test-artifacts/update-ready.png')});
     console.log('PASS: ready state has one reload action and survives reopening settings.');
     assert.equal(await page.locator('html').getAttribute('data-remote-website'),null);
     await page.reload();
@@ -180,10 +180,10 @@ const executablePath = process.env.LARPBLOX_TEST_CHROME || path.join(process.env
 
     await ui.getByRole('button',{name:'Back to Larpblox'}).click();
     await ui.getByRole('button',{name:'Settings',exact:true}).click();
-    await settings.getByText(`Version ${nextVersion}`,{exact:true}).waitFor();
+    await settings.getByLabel(`Version ${nextVersion}`,{exact:true}).waitFor();
     await fs.mkdir(path.join(root,'.test-artifacts'),{recursive:true});
     await ui.setViewportSize({width:380,height:400});
-    await ui.screenshot({path:path.join(root,'.test-artifacts/remote-updates.png')});
+    await ui.locator('main').screenshot({path:path.join(root,'.test-artifacts/remote-updates.png')});
     assert.deepEqual(errors, []);
     await cdp('Fetch.disable');
     await browserSession.send('Target.detachFromTarget',{sessionId});

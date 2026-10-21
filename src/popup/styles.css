@@ -101,6 +101,12 @@
 }
 .popup-header { display: flex; align-items: center; min-height: 36px; padding-bottom: 18px; }
 .popup-header img { width: 152px; height: 34px; object-fit: contain; object-position: left center; }
+.settings-view .popup-header { padding-bottom: 14px; }
+.update-settings { display: grid; gap: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+.update-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.update-heading h2 { margin: 0; font-size: 14px; line-height: 20px; font-weight: 600; }
+.update-version { color: var(--muted-foreground); font-size: 12px; line-height: 20px; font-variant-numeric: tabular-nums; }
+.update-settings .notice { margin: 0; }
 .section { padding: 0 0 18px; }
 .profile-section { display: grid; gap: 18px; padding: 20px 0; }
 
