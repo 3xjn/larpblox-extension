@@ -153,6 +153,7 @@
         respond({ok:false,error:'Invalid popup request.'}); return false;
       }
       (async () => {
+        if (!(await available())) throw new Error('Enable Allow User Scripts in the extension’s Details, then reload your Roblox tab.');
         const tab = await chrome.tabs.get(message.tabId);
         if (!/^https:\/\/www\.roblox\.com\//.test(tab.url || '')) throw new Error('Open a signed-in Roblox tab first.');
         const results = await chrome.userScripts.execute({target:{tabId:tab.id}, world:'USER_SCRIPT', js:[{code:`globalThis.LarpbloxExtension?.dispatchPopup(${JSON.stringify(message.message)})`}]});

@@ -27,6 +27,9 @@ const executablePath = process.env.LARPBLOX_TEST_CHROME || path.join(process.env
     await disabled.getByRole('button',{name:'Settings',exact:true}).click();
     await disabled.getByRole('button',{name:'Open extension settings'}).waitFor();
     assert.match(await disabled.getByRole('region',{name:'Extension settings'}).getByRole('status').textContent(), /Allow User Scripts/);
+    const missingPermission = await disabled.evaluate(() => chrome.runtime.sendMessage({type:'larpblox-popup-relay',tabId:1,message:{type:'larpblox-popup-get-state'}}));
+    assert.equal(missingPermission.ok,false);
+    assert.match(missingPermission.error,/Enable Allow User Scripts/);
     await disabled.close();
     const extensions = await context.newPage();
     await extensions.goto(`chrome://extensions/?id=${id}`);
