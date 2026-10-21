@@ -133,11 +133,11 @@ const executablePath = process.env.LARPBLOX_TEST_CHROME || path.join(process.env
     // Return to the signed-out fixture before update/restart checks.
     await page.evaluate(() => document.querySelector('meta[name="user-data"]').remove());
     await ui.frameLocator('#popup').getByRole('button',{name:'Check for updates',exact:true}).click();
-    await settings.getByRole('button',{name:'Reload Roblox tabs'}).waitFor();
+    await settings.getByRole('button',{name:'Apply update'}).waitFor();
     assert.equal(await settings.getByRole('button',{name:'Check for updates',exact:true}).count(),0);
     await ui.frameLocator('#popup').getByRole('button',{name:'Back to Larpblox'}).click();
     await ui.frameLocator('#popup').getByRole('button',{name:'Settings',exact:true}).click();
-    await settings.getByRole('button',{name:'Reload Roblox tabs'}).waitFor();
+    await settings.getByRole('button',{name:'Apply update'}).waitFor();
     assert.equal(await settings.getByRole('button',{name:'Check for updates',exact:true}).count(),0);
     await ui.setViewportSize({width:380,height:300});
     await ui.frameLocator('#popup').locator('main').screenshot({path:path.join(root,'.test-artifacts/update-ready.png')});
@@ -152,7 +152,7 @@ const executablePath = process.env.LARPBLOX_TEST_CHROME || path.join(process.env
     await ui.frameLocator('#popup').getByRole('button',{name:'Back to Larpblox'}).click();
     await ui.frameLocator('#popup').getByRole('button',{name:'Settings',exact:true}).click();
     await settings.getByRole('button',{name:'Check for updates',exact:true}).waitFor();
-    assert.equal(await settings.getByRole('button',{name:'Reload Roblox tabs'}).count(),0);
+    assert.equal(await settings.getByRole('button',{name:'Apply update'}).count(),0);
     console.log('PASS: refreshing the website clears the pending reload state.');
     const beforeOffline = requests.length;
     mode = 'offline';

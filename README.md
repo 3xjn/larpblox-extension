@@ -2,7 +2,7 @@
 
 Website updates do not need Desktop. Load the extension once, enable **Allow User
 Scripts** in its Chrome Details page, then use the **cog in the extension popup →
-Check for updates**. Choose **Reload Roblox tabs** after an update is ready.
+Check for updates**. Choose **Apply update** after an update is ready.
 Popup changes apply immediately; reloading applies the website changes.
 There is no update entry added to Roblox's menus.
 

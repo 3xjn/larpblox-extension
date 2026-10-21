@@ -61,7 +61,7 @@ function UpdateSettings() {
     {result.enabled === false ?
       <Button variant="outline" className="h-10 w-full" disabled={busy} onClick={() => void run("enable")}>Open extension settings</Button> :
       result.pendingReload ?
-        <Button className="h-10 w-full" loading={busy} disabled={busy} onClick={() => void run("reload")}>Reload Roblox tabs</Button> :
+        <Button className="h-10 w-full" loading={busy} disabled={busy} onClick={() => void run("reload")}>Apply update</Button> :
         <Button variant="outline" className="h-10 w-full" loading={busy} disabled={busy} onClick={() => void run("check")}>Check for updates</Button>}
     {notice && <p role="status" className={error ? "notice error" : "notice"}>{notice}</p>}
   </section>;
