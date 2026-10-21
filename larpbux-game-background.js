@@ -71,6 +71,7 @@ function socketFor(userId, token) {
         clearTimeout(authenticationTimeout);
         entry.reconnects = 0; entry.ready = true;
         entry.avatarLookup = message.avatarLookup === true;
+        entry.clientRequests = message.clientRequests === true;
         for (const waiter of entry.readyWaiters) waiter.resolve();
         entry.readyWaiters.clear();
         if (!entry.keepalive) entry.keepalive = setInterval(() => { try { ws.send(JSON.stringify({type: 'ping'})); } catch (_) {} }, 20000);
@@ -84,6 +85,13 @@ function socketFor(userId, token) {
       } else if (message?.type === 'state' && message.channel === 'game') {
         try { entry.snapshot = message.value == null ? null : LarpbloxGameBridge.validateSnapshot(message.value, userId); } catch (_) { return; }
         notify(userId, entry.snapshot);
+      } else if (message?.type === 'client-result') {
+        const waiter=entry.lookups.get(message.id);
+        if (waiter) {
+          entry.lookups.delete(message.id);clearTimeout(waiter.timer);
+          if (message.ok) waiter.resolve(message.result);
+          else waiter.reject(new Error(message.error || 'The client request failed.'));
+        }
       } else if (message?.type === 'avatar-lookup-result') {
         const waiter = entry.lookups.get(message.id);
         if (waiter) {
@@ -149,6 +157,28 @@ async function lookupAvatar(userId, token, target) {
   entry.lookupJobs.set(target,job);
   try {return await job;} finally {if (entry.lookupJobs.get(target) === job) entry.lookupJobs.delete(target);}
 }
+async function clientRequest(userId,token,method,params) {
+  if (typeof method !== 'string' || !/^[a-z0-9._]{1,64}$/.test(method) || !params || typeof params !== 'object' || Array.isArray(params) || JSON.stringify(params).length>65536) throw new Error('Invalid client request.');
+  const entry=socketFor(userId,token);
+  if (!entry) throw new Error('Open Larpblox Desktop and connect your game.');
+  if (!entry.ready) await new Promise((resolve,reject)=>{
+    const waiter={resolve:()=>{clearTimeout(timer);resolve();},reject:error=>{clearTimeout(timer);reject(error);}};
+    const timer=setTimeout(()=>{entry.readyWaiters.delete(waiter);reject(new Error('Open Larpblox Desktop and connect your game.'));},5000);
+    entry.readyWaiters.add(waiter);
+  });
+  if (!entry.clientRequests) throw new Error('Update Larpblox Desktop to enable the client bridge.');
+  const key=JSON.stringify([method,params]);
+  if (entry.lookupJobs.has(key)) return entry.lookupJobs.get(key);
+  const id=crypto.randomUUID();
+  const job=new Promise((resolve,reject)=>{
+    const timer=setTimeout(()=>{entry.lookups.delete(id);reject(new Error('The client request timed out. Try again.'));},35000);
+    entry.lookups.set(id,{resolve,reject,timer});
+    try {entry.ws.send(JSON.stringify({type:'client-request',id,method,params}));}
+    catch(error){clearTimeout(timer);entry.lookups.delete(id);reject(error);}
+  });
+  entry.lookupJobs.set(key,job);
+  try{return await job;}finally{if(entry.lookupJobs.get(key)===job)entry.lookupJobs.delete(key);}
+}
 async function call(path, token, body) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 4000);
@@ -197,6 +227,7 @@ async function handle(message, sender) {
   if (!/^[1-9]\d{0,15}$/.test(userId) || !Number.isSafeInteger(Number(userId))) throw new Error('Invalid Roblox account.');
   if (sender.tab?.id != null) tabs.set(userId, sender.tab.id);
   const token = await localToken(userId);
+  if (message.action === 'clientRequest') return {connected:true,result:await clientRequest(userId,token,message.method,message.params)};
   if (message.action === 'lookupAvatar') return {connected:true,snapshot:await lookupAvatar(userId,token,String(message.targetUserId || ''))};
   const socketValue = message.action === 'publish' ? LarpbloxGameBridge.validateSnapshot(message.snapshot, userId) : message.action === 'publishNames' ? LarpbloxGameBridge.validateNames(message.names, userId) : message.action === 'publishImage' ? LarpbloxGameBridge.validateImage(message.image, userId) : undefined;
   if (message.action === 'read') {

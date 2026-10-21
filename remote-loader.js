@@ -2,7 +2,7 @@
 // Packaged background code: downloaded code runs only through userScripts.
 (() => {
   'use strict';
-  const API = 2;
+  const API = 3;
   const KEY = 'larpblox-website-release';
   const SCRIPT = 'larpblox-website';
   const LATEST = 'https://github.com/3xjn/larpblox-extension/releases/download/main-latest/website-latest.json';
@@ -92,7 +92,7 @@
       }));
       pendingReload = versions.some(loaded => loaded && loaded !== bundle.version);
     }
-    return {enabled, version:bundle.version, pendingReload};
+    return {enabled, version:bundle.version, loaderVersion:chrome.runtime.getManifest().version, pendingReload};
   }
   async function read(url, limit) {
     const response = await fetch(url, {cache:'no-store', credentials:'omit', signal:AbortSignal.timeout(20000)});

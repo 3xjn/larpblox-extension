@@ -32,7 +32,7 @@ type Message = { type: string; [key: string]: unknown };
 type Notice = { text: string; error?: boolean };
 
 function UpdateSettings() {
-  const [result, setResult] = useState<{version?: string; enabled?: boolean; pendingReload?: boolean}>({});
+  const [result, setResult] = useState<{version?: string; loaderVersion?:string; enabled?: boolean; pendingReload?: boolean}>({});
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState(false);
@@ -42,7 +42,7 @@ function UpdateSettings() {
       const reply = await chrome.runtime.sendMessage({type:"larpblox-website-update", action});
       if (!reply?.ok) throw new Error(reply?.error || "Could not check for updates.");
       if (action === "enable") return;
-      setResult({...reply, pendingReload: reply.pendingReload ?? reply.updated === true});
+      setResult({...reply, loaderVersion:reply.loaderVersion || result.loaderVersion, pendingReload: reply.pendingReload ?? reply.updated === true});
       setNotice(reply.enabled === false ? "Enable Allow User Scripts in the extension’s details, then return here." :
         reply.updated === false ? "You’re up to date." : "");
     } catch (failure) { setError(true); setNotice(failure instanceof Error ? failure.message : "Could not check for updates."); }
@@ -57,7 +57,10 @@ function UpdateSettings() {
   return <section aria-label="Extension settings" className="update-settings">
     <div className="update-heading">
       <h2>Updates</h2>
-      {result.version && <span className="update-version" aria-label={`Version ${result.version}`}>v{result.version}</span>}
+    </div>
+    <div className="update-versions">
+      {result.version && <span className="update-version" aria-label={`Version ${result.version}`}>Website v{result.version}</span>}
+      {result.loaderVersion && <span className="update-version">Extension v{result.loaderVersion}</span>}
     </div>
     {result.enabled === false ?
       <Button variant="outline" className="h-10 w-full" disabled={busy} onClick={() => void run("enable")}>Open extension settings</Button> :

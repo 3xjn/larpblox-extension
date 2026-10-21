@@ -106,6 +106,7 @@
 .update-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .update-heading h2 { margin: 0; font-size: 14px; line-height: 20px; font-weight: 600; }
 .update-version { color: var(--muted-foreground); font-size: 12px; line-height: 20px; font-variant-numeric: tabular-nums; }
+.update-versions { display:flex; justify-content:space-between; flex-wrap:wrap; gap:4px 16px; }
 .update-settings .notice { margin: 0; }
 .section { padding: 0 0 18px; }
 .profile-section { display: grid; gap: 18px; padding: 20px 0; }

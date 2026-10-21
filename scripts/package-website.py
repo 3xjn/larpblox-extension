@@ -20,8 +20,8 @@ def asset(match):
 
 css = "\n".join((root / name).read_text(encoding="utf-8") for name in sources["css"])
 css = re.sub(r"chrome-extension://__MSG_@@extension_id__/assets/([^'\")\s]+)", asset, css)
-# Native avatar lookup requires the packaged background handler added in API 2.
-loader_api = 2
+# Client features use the stable data-request bridge introduced in API 3.
+loader_api = 3
 payload = {"schema": 1, "version": version, "loaderApi": loader_api, "css": css,
            "scripts": [{"name": name, "code": (root / name).read_text(encoding="utf-8")} for name in sources["js"]]}
 payload["popup"] = {"schema": 1,

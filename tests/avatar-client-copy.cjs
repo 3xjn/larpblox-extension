@@ -8,7 +8,8 @@ const snapshot={version:1,userId:'123',items:[{id:44,itemType:'Asset',name:'Copi
  const noop={addListener(){}};
  const context={console,URL,AbortController,crypto:webcrypto,setTimeout:later,clearTimeout:id=>{timers.delete(id);clearTimeout(id)},setInterval:()=>0,clearInterval(){},chrome:{runtime:{id:'test',onMessage:noop,onUserScriptMessage:noop,onUserScriptConnect:noop},storage:{local:{get:async()=>({}),set:async()=>{},remove:async()=>{}}}},fetch:async()=>({ok:true,json:async()=>({code:'a'.repeat(32)})}),WebSocket:class {
   static CLOSED=3;constructor(){socket=this;this.readyState=1;later(()=>this.onopen(),0)}
-  send(text){const v=JSON.parse(text);if(v.type==='auth')later(()=>this.onmessage({data:JSON.stringify({type:'ready',avatarLookup:!old})}),0);
+  send(text){const v=JSON.parse(text);if(v.type==='auth')later(()=>this.onmessage({data:JSON.stringify({type:'ready',avatarLookup:!old,clientRequests:!old})}),0);
+   if(v.type==='client-request')later(()=>this.onmessage({data:JSON.stringify({type:'client-result',id:v.id,ok:true,result:v.params})}),15);
    if(v.type==='avatar-lookup'){requests++;later(()=>this.onmessage({data:JSON.stringify({type:'avatar-lookup-result',id:v.id,ok:true,targetUserId:mismatch?'777':v.targetUserId,snapshot})}),15)}}
   close(){this.readyState=3;this.onclose?.()}
  }};
@@ -19,6 +20,9 @@ const snapshot={version:1,userId:'123',items:[{id:44,itemType:'Asset',name:'Copi
  try {
   const both=await Promise.all([request(),request()]);assert.equal(requests,1);assert.equal(both[0].snapshot.definition.playerAvatarType.playerAvatarType,'R6');
   mismatch=true;await assert.rejects(request(),/different avatar/);mismatch=false;
+  const generic=await context.handle({action:'clientRequest',userId:'123',method:'future.feature',params:{value:42}},sender);
+  assert.equal(generic.result.value,42,'a new data-only method does not need a packaged background handler');
+  await assert.rejects(context.handle({action:'clientRequest',userId:'123',method:'eval()',params:{}},sender),/Invalid client request/);
   await assert.rejects(context.handle({action:'lookupAvatar',userId:'123',targetUserId:'../99'},sender),/Invalid Roblox account/);
   await assert.rejects(context.handle({action:'lookupAvatar',userId:'123',targetUserId:'999'},{...sender,url:'https://evil.test'}),/only on Roblox/);
   socket.onmessage({data:JSON.stringify({type:'ready',avatarLookup:false})});
@@ -33,7 +37,7 @@ const snapshot={version:1,userId:'123',items:[{id:44,itemType:'Asset',name:'Copi
   await page.route('https://www.roblox.com/**',r=>r.fulfill({contentType:'text/html',body:'<meta name="user-data" data-userid="123"><button id="user-profile-header-contextual-menu-button" aria-expanded="true" aria-controls="menu">Menu</button><div id="menu"><div role="menu"><button role="menuitem">Report</button></div></div>'}));
   await page.route('https://avatar.roblox.com/**',r=>{webAvatarCalls++;return r.fulfill({status:429,body:'{}'})});
   await page.goto('https://www.roblox.com/users/999/profile');
-  await page.evaluate(snapshot=>{localStorage.setItem('larpblox-cosmetics-v1:123',JSON.stringify({mode:true,balance:777,items:[],equipped:[]}));window.copyCalls=0;window.LarpbloxExtension={sendMessage:async m=>{if(m.action==='lookupAvatar'){copyCalls++;return {ok:true,data:{connected:true,snapshot}}}return {ok:true,data:{connected:false}}}}},snapshot);
+  await page.evaluate(snapshot=>{localStorage.setItem('larpblox-cosmetics-v1:123',JSON.stringify({mode:true,balance:777,items:[],equipped:[]}));window.copyCalls=0;window.LarpbloxExtension={sendMessage:async m=>{if(m.action==='clientRequest'&&m.method==='avatar.lookup'){copyCalls++;return {ok:true,data:{connected:true,result:{targetUserId:m.params.targetUserId,snapshot}}}}return {ok:true,data:{connected:false}}}}},snapshot);
   await page.addScriptTag({path:path.join(root,'larpbux-game-bridge.js')});await page.addScriptTag({path:path.join(root,'larpbux.js')});
   await page.getByRole('menuitem',{name:'Steal avatar'}).click();await page.getByRole('button',{name:'Wear avatar',exact:true}).waitFor();
   assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('larpblox-cosmetics-v1:123')).gameLook),undefined,'lookup does not equip before confirmation');
