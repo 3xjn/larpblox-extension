@@ -262,6 +262,12 @@ Version 1.16.13 sends the browser's single Larp name to the paired game through 
 Version 1.16.14 fixes missed sidebar and top-right Larp names: normalizes absolute Roblox profile links and recognizes the current Foundation sidebar's self-avatar link without depending on legacy navigation IDs. The Chrome fixture reproduces the captured header/sidebar link structure, including missing display-name metadata, and checks that other users, external links, and plain navigation remain unchanged.
 
 
+## Shared avatar render queue
+
+Avatar render POSTs use a Web Lock shared by all `www.roblox.com` tabs in the same browser profile. Matching outfits share one polling job and its cached result; 3D keys exclude backdrop fields that are not sent to the geometry endpoint. Different outfits retain one-second global request spacing, and pending renders back off from one to ten seconds between polls. A 429 publishes its cooldown and exponential retry counter before releasing the network lock, so another tab cannot race ahead of it. Closing the tab holding a job releases its locks automatically. Queue coordination uses browser APIs and the remote website bundle; no Desktop connection or new extension permission is required.
+
+Run `node tests/avatar-cross-tab-queue.cjs` for real Chromium multi-tab request-count, pacing, cancellation, close/reload, and cooldown checks. `tests/remote-loader-browser.cjs` also verifies deduplication in separate extension USER_SCRIPT worlds.
+
 ## Editing the extension popup
 
 The popup uses React, TypeScript, Tailwind CSS v4, and Coss UI. Its source is in `src/popup/`.

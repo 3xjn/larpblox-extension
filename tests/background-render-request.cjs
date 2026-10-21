@@ -2,8 +2,8 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
 const vm=require('node:vm');
-const sent=[];
-const context={AbortController,setTimeout,clearTimeout,Date,localStorage:{getItem(){return null}},document:{querySelector(){return null}},fetch:async(url,options)=>{sent.push(JSON.parse(options.body));return {ok:true,status:200,headers:{get(){return null}},json:async()=>({state:'Completed',imageUrl:'https://tr.rbxcdn.com/avatar'})}}};
+const sent=[];const storage=new Map();
+const context={...require('./helpers/render-locks.cjs')(),AbortController,setTimeout,clearTimeout,Date,localStorage:{getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,value)},document:{querySelector(){return null}},fetch:async(url,options)=>{sent.push(JSON.parse(options.body));return {ok:true,status:200,headers:{get(){return null}},json:async()=>({state:'Completed',imageUrl:'https://tr.rbxcdn.com/avatar'})}}};
 vm.createContext(context);
 vm.runInContext(fs.readFileSync(path.join(__dirname,'../larpblox-avatar-requests.js'),'utf8'),context);
 (async()=>{

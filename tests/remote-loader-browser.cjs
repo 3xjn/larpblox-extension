@@ -65,6 +65,26 @@ const executablePath = process.env.LARPBLOX_TEST_CHROME || path.join(process.env
     assert.deepEqual(pageErrors, []);
     console.log('PASS: website loads through userScripts; update UI exists only inside the extension cog.');
 
+    let renderRequests=0;
+    await context.route('https://avatar.roblox.com/v1/avatar/render', route => {
+      const headers={'Access-Control-Allow-Origin':'https://www.roblox.com','Access-Control-Allow-Credentials':'true','Access-Control-Allow-Headers':'content-type,x-csrf-token'};
+      if (route.request().method()==='OPTIONS') return route.fulfill({status:204,headers});
+      renderRequests++;
+      return route.fulfill({headers,json:{state:'Completed',imageUrl:'https://tr.rbxcdn.com/shared-user-script.png'}});
+    });
+    const peerPage=await context.newPage();
+    await peerPage.goto('https://www.roblox.com/queue-peer');
+    await peerPage.waitForFunction(()=>document.querySelector('#larpblox-website-style'));
+    const sharedResults=await worker.evaluate(async()=>{
+      const tabs=(await chrome.tabs.query({url:'https://www.roblox.com/*'})).filter(tab=>['https://www.roblox.com/avatar','https://www.roblox.com/queue-peer'].includes(tab.url));
+      return Promise.all(tabs.map(tab=>chrome.userScripts.execute({target:{tabId:tab.id},world:'USER_SCRIPT',js:[{code:"LarpbloxAvatarRequests.render({assets:[{id:982300101}]},'123',new AbortController().signal,'3d')"}]})));
+    });
+    assert.equal(sharedResults.length,2);
+    assert.ok(sharedResults.every(results=>results[0].result==='https://tr.rbxcdn.com/shared-user-script.png'));
+    assert.equal(renderRequests,1,'real USER_SCRIPT worlds must share one render request across tabs');
+    await peerPage.close();
+    console.log('PASS: real extension user-script worlds deduplicate the same avatar request across tabs.');
+
     const bundle = JSON.parse(await fs.readFile(path.join(root,'website-bundle.json'),'utf8'));
     bundle.version = nextVersion;
     bundle.popup.js += `;document.documentElement.dataset.popupRelease=${JSON.stringify(nextVersion)};`;

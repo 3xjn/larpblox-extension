@@ -10,7 +10,7 @@ const definition = {assets:[{id:808}], bodyColors:Object.fromEntries(['head','to
 
 (async () => {
   const storage = new Map();
-  const context = {AbortController, Date, setTimeout, clearTimeout,
+  const context = {...require('./helpers/render-locks.cjs')(), AbortController, Date, setTimeout, clearTimeout,
     document:{querySelector:() => null},
     localStorage:{getItem:key => storage.get(key), setItem:(key,value) => storage.set(key,value)},
     fetch:async () => ({ok:true, status:200, headers:{get:() => null}, json:async () => ({state:'Completed',imageUrl:image})})};

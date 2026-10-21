@@ -1,19 +1,42 @@
-// One render queue for editor, profile pictures, and saved avatar cards.
+// One origin-wide render queue for every Roblox tab, editor, and profile.
 (() => {
   'use strict';
   const jobs = new Map();
   const cooldownKey = 'larpblox.avatar-render-cooldown';
-  let queue = Promise.resolve(), nextRequest = 0, rateLimits = 0;
+  const timingKey = 'larpblox.avatar-render-timing';
+  let queue = Promise.resolve();
   const cancelled = () => Object.assign(new Error('Avatar request cancelled.'), {name: 'AbortError'});
   const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object'
     ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
   function definitionKey(definition) {
     return JSON.stringify(canonical({...definition, assets:[...(definition.assets || [])].sort((a,b) => a.id - b.id)}));
   }
+  function renderDefinition(definition, thumbnailType) {
+    const result = {...definition};
+    // Backgrounds are loaded by the 3D viewer, not the geometry endpoint.
+    if (thumbnailType === '3d') { delete result.backgroundRequestModel; delete result.backgroundId; }
+    return JSON.parse(definitionKey(result));
+  }
+  function timing() {
+    let raw;
+    try { raw = localStorage.getItem(timingKey); }
+    catch (_) { throw new Error('Browser storage is unavailable; the shared avatar queue cannot start.'); }
+    let value; try { value = JSON.parse(raw || '{}'); } catch (_) { value = {}; }
+    const number = key => Number.isFinite(value?.[key]) && value[key] >= 0 ? value[key] : 0;
+    return {nextRequest:number('nextRequest'), blockedUntil:number('blockedUntil'), rateLimits:number('rateLimits')};
+  }
+  function saveTiming(value) {
+    try { localStorage.setItem(timingKey, JSON.stringify(value)); }
+    catch (_) { throw new Error('Browser storage is unavailable; the shared avatar queue cannot start.'); }
+  }
+  function lock(name, signal, work) {
+    if (!globalThis.navigator?.locks?.request) return Promise.reject(new Error('This browser cannot coordinate avatar requests across tabs.'));
+    return navigator.locks.request(name, signal ? {signal} : {}, work);
+  }
   const imageUrl = value => typeof value === 'string' && /^https:\/\/(?:[a-z0-9-]+\.)*rbxcdn\.com\//i.test(value);
   function cached(definition, userId, thumbnailType = '2d') {
     try {
-      const key = definitionKey(definition);
+      const key = definitionKey(renderDefinition(definition, thumbnailType));
       const entries = JSON.parse(localStorage.getItem(`larpblox-render-cache:${userId}`) || '[]');
       const match = entries.find(entry => entry.key === key && entry.type === thumbnailType && entry.expires > Date.now() && imageUrl(entry.url));
       if (match) return match.url;
@@ -22,13 +45,13 @@
       // useful on first load too, before the render cache has been populated.
       const profiles = JSON.parse(localStorage.getItem(`larpblox-characters-v1:${userId}`) || '{}').profiles || [];
       return profiles.find(profile => String(profile.snapshot?.userId) === String(userId) &&
-        profile.snapshot?.definition && definitionKey(profile.snapshot.definition) === key && imageUrl(profile.thumbnail))?.thumbnail;
+        profile.snapshot?.definition && definitionKey(renderDefinition(profile.snapshot.definition, thumbnailType)) === key && imageUrl(profile.thumbnail))?.thumbnail;
     } catch (_) { return undefined; }
   }
   function remember(definition, userId, thumbnailType, url) {
     if (!imageUrl(url)) return;
     try {
-      const storageKey = `larpblox-render-cache:${userId}`, key = definitionKey(definition);
+      const storageKey = `larpblox-render-cache:${userId}`, key = definitionKey(renderDefinition(definition, thumbnailType));
       const entries = JSON.parse(localStorage.getItem(storageKey) || '[]').filter(entry =>
         entry.expires > Date.now() && !(entry.key === key && entry.type === thumbnailType));
       entries.push({key, type:thumbnailType, url, expires:Date.now() + 86400000});
@@ -54,16 +77,16 @@
   function blockedUntil() {
     let stored = 0;
     try { stored = Number(localStorage.getItem(cooldownKey)) || 0; } catch (_) {}
-    return Math.max(stored, globalThis.LarpbloxRenderBlockedUntil || 0);
+    return Math.max(stored, timing().blockedUntil, globalThis.LarpbloxRenderBlockedUntil || 0);
   }
   async function waitForRender(signal) {
-    while (Date.now() < Math.max(nextRequest, blockedUntil())) {
-      await sleep(Math.max(nextRequest, blockedUntil()) - Date.now(), signal);
+    while (Date.now() < Math.max(timing().nextRequest, blockedUntil())) {
+      await sleep(Math.max(timing().nextRequest, blockedUntil()) - Date.now(), signal);
     }
     if (signal?.aborted) throw cancelled();
   }
   function request(body, token, signal) {
-    const pending = queue.then(async () => {
+    const pending = queue.then(() => lock('larpblox-avatar-request', signal, async () => {
       await waitForRender(signal);
       const controller = new AbortController();
       const abort = () => controller.abort();
@@ -72,25 +95,31 @@
       try {
         const headers = {'Content-Type': 'application/json'};
         if (token) headers['X-CSRF-TOKEN'] = token;
-        nextRequest = Date.now() + 1000;
+        const shared = timing(); shared.nextRequest = Date.now() + 1000; saveTiming(shared);
         const response = await fetch('https://avatar.roblox.com/v1/avatar/render', {method: 'POST', credentials: 'include', headers, body, signal: controller.signal});
         // Keep the timeout active while the response body is downloading too.
         const result = response.ok ? await response.json() : undefined;
+        // Publish backoff BEFORE releasing the request lock. A different tab
+        // must never start its queued request between a 429 and this update.
+        if (response.status === 429) {
+          const shared = timing();
+          const seconds = Math.max(1, retryAfter(response, Math.min(120, 20 * 2 ** Math.min(shared.rateLimits, 3))));
+          shared.rateLimits++; shared.blockedUntil = Math.max(blockedUntil(), Date.now() + seconds * 1000);
+          saveTiming(shared);
+          globalThis.LarpbloxRenderBlockedUntil = shared.blockedUntil;
+          try { localStorage.setItem(cooldownKey, String(shared.blockedUntil)); } catch (_) {}
+          throw Object.assign(new Error('Avatar render failed (429).'), {status:429, retryAfter:seconds});
+        }
+        if (result?.state === 'Completed') { const shared = timing(); shared.rateLimits = 0; saveTiming(shared); }
         return {response, result};
       } finally { clearTimeout(timeout); signal.removeEventListener('abort', abort); }
-    });
+    }));
     // Serialize network requests, not entire outfits waiting for Roblox to render.
     queue = pending.catch(() => {});
     return pending;
   }
   async function run(definition, userId, thumbnailType, signal) {
-    const avatarDefinition = {...definition};
-    // The interactive viewer loads the backdrop separately. Request only avatar
-    // geometry here; the native background request belongs to flat thumbnails.
-    if (thumbnailType === '3d') {
-      delete avatarDefinition.backgroundRequestModel;
-      delete avatarDefinition.backgroundId;
-    }
+    const avatarDefinition = renderDefinition(definition, thumbnailType);
     const body = JSON.stringify({avatarDefinition, thumbnailConfig: {thumbnailId: Number(userId), thumbnailType, size: '420x420'}});
     let token = globalThis.LarpbloxRenderToken || document.querySelector('meta[name="csrf-token"]')?.getAttribute('data-token');
     for (let attempt = 0; attempt < 32; attempt++) {
@@ -100,36 +129,45 @@
         token = refreshed; globalThis.LarpbloxRenderToken = token; continue;
       }
       if (!response.ok) {
-        const error = Object.assign(new Error(`Avatar render failed (${response.status}).`), {status: response.status});
-        if (response.status === 429) {
-          error.retryAfter = Math.max(1, retryAfter(response, Math.min(120, 20 * 2 ** rateLimits++)));
-          const until = Math.max(blockedUntil(), Date.now() + error.retryAfter * 1000);
-          globalThis.LarpbloxRenderBlockedUntil = until;
-          try { localStorage.setItem(cooldownKey, String(until)); } catch (_) {}
-        }
-        throw error;
+        throw Object.assign(new Error(`Avatar render failed (${response.status}).`), {status: response.status});
       }
-      if (result.state === 'Completed' && result.imageUrl) { rateLimits = 0; return result.imageUrl; }
+      if (result.state === 'Completed' && result.imageUrl) return result.imageUrl;
       if (result.state !== 'Pending') throw new Error('Roblox could not preview this outfit.');
-      await sleep(attempt < 5 ? 1000 : 2000, signal);
+      await sleep(Math.min(10000, 1000 * 2 ** Math.min(attempt, 4)), signal);
     }
     throw new Error('The avatar preview is still processing. Try again shortly.');
+  }
+  async function sharedRender(definition, userId, thumbnailType, signal, key) {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(key));
+    const name = [...new Uint8Array(digest)].map(byte=>byte.toString(16).padStart(2,'0')).join('');
+    // Hold an outfit lock across pending polls, but the global network lock
+    // only during each request. Other outfits can still progress between polls.
+    return lock(`larpblox-avatar-job:${name}`, signal, async () => {
+      const previous = cached(definition, userId, thumbnailType);
+      if (previous) return previous;
+      const remaining = blockedUntil() - Date.now();
+      if (remaining > 0) throw Object.assign(new Error('Avatar render failed (429).'), {status:429, retryAfter:Math.ceil(remaining / 1000)});
+      const url = await run(definition, userId, thumbnailType, signal);
+      // Commit the result before releasing the outfit lock, so waiting tabs
+      // consume it without sending the same render again.
+      await lock('larpblox-avatar-cache', undefined, () => remember(definition, userId, thumbnailType, url));
+      return url;
+    });
   }
   function render(definition, userId, signal, thumbnailType = '3d') {
     if (signal?.aborted) return Promise.reject(cancelled());
     const previous = cached(definition, userId, thumbnailType);
     if (previous) return Promise.resolve(previous);
-    const key = JSON.stringify([String(userId), thumbnailType, definition]);
+    const key = JSON.stringify([String(userId), thumbnailType, renderDefinition(definition, thumbnailType)]);
     let job = jobs.get(key);
     if (!job || job.controller.signal.aborted) {
       job = {controller: new AbortController(), users: 0, complete: false};
       jobs.set(key, job);
-      job.promise = run(definition, userId, thumbnailType, job.controller.signal);
+      job.promise = sharedRender(definition, userId, thumbnailType, job.controller.signal, key);
       job.promise.then(() => {
         job.complete = true;
         for (const [oldKey, old] of jobs) if (jobs.size > 16 && old.complete) jobs.delete(oldKey);
       }, () => { if (jobs.get(key) === job) jobs.delete(key); });
-      job.promise.then(url => remember(definition, userId, thumbnailType, url), () => {});
     }
     job.users++;
     return new Promise((resolve, reject) => {
