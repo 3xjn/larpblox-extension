@@ -9,6 +9,10 @@ import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "@/components/
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "@/components/ui/select";
 import "./styles.css";
 
+declare global {
+  var LarpbloxPopupContext: {logo: string; version: string; settingsOpen: boolean; ready: () => void} | undefined;
+}
+
 type PopupState = {
   mode: boolean;
   sharing: boolean;
@@ -88,7 +92,7 @@ function Choice({ id, label, value, items, disabled, onChange }: {
 }
 
 function App() {
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(globalThis.LarpbloxPopupContext?.settingsOpen === true);
   const [state, setState] = useState<PopupState | null>(null);
   const [pending, setPending] = useState<string | null>("initialize");
   const [notice, setNotice] = useState<Notice>({ text: "Connecting to Roblox…" });
@@ -142,7 +146,7 @@ function App() {
     }
   }
 
-  useEffect(() => { mounted.current = true; void initialize(); return () => { mounted.current = false; }; }, []);
+  useEffect(() => { mounted.current = true; void initialize(); globalThis.LarpbloxPopupContext?.ready(); return () => { mounted.current = false; }; }, []);
 
   async function act(key: string, message: Message, fields: string[] = [], success?: string, target: "main" | "counts" = "main") {
     if (inFlight.current) return;
@@ -167,8 +171,8 @@ function App() {
   const disabled = busy || !state?.mode;
   const status = (value: Notice) => value.text ? <p role="status" className={value.error ? "notice error" : "notice"}>{value.text}</p> : null;
 
-  return <main className={settingsOpen ? "settings-view" : undefined}>
-    <header className="popup-header"><img src="assets/larpblox-logo.png" alt="Larpblox" /><h1 className="sr-only">Larpblox</h1>
+  return <main className={settingsOpen ? "settings-view" : undefined} data-popup-version={globalThis.LarpbloxPopupContext?.version}>
+    <header className="popup-header"><img src={globalThis.LarpbloxPopupContext?.logo || "assets/larpblox-logo.png"} alt="Larpblox" /><h1 className="sr-only">Larpblox</h1>
       <Button variant="ghost" size="icon" className="ml-auto" aria-label={settingsOpen ? "Back to Larpblox" : "Settings"} title={settingsOpen ? "Back" : "Settings"} aria-expanded={settingsOpen} onClick={() => setSettingsOpen(open => !open)}>
         {settingsOpen ? <ArrowLeftIcon aria-hidden="true" /> : <SettingsIcon aria-hidden="true" />}
       </Button>

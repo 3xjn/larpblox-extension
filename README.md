@@ -3,6 +3,7 @@
 Website updates do not need Desktop. Load the extension once, enable **Allow User
 Scripts** in its Chrome Details page, then use the **cog in the extension popup →
 Check for updates**. Choose **Reload Roblox tabs** after an update is ready.
+Popup changes apply immediately; reloading applies the website changes.
 There is no update entry added to Roblox's menus.
 
 The loader downloads versioned website scripts and styles from this repository's
@@ -12,9 +13,11 @@ version; a synchronous startup failure restores the previous cached version.
 HTTPS protects the release origin; the hash is an integrity check, not a separate
 publisher signature. Game sync still uses the existing local bridge.
 
-The installed loader, extension popup, permissions, MAIN-world body-color hook,
-and background bridge remain local. Changes to those need a new loader package.
-Website scripts and styles update through the cached payload.
+The popup UI, website scripts, and styles update together through the cached
+payload. The popup runs in a sandbox with a narrow local message bridge, no
+direct extension APIs, and a restrictive CSP. The installed host, permissions,
+MAIN-world body-color hook, and game bridge remain local and need a loader update
+when those interfaces change. Older website-only caches use the bundled popup.
 
 Development: run `npm ci`, `npm run build`, and `python scripts/package-website.py`
 before loading/reloading the extension. The last command creates

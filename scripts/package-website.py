@@ -22,6 +22,10 @@ css = "\n".join((root / name).read_text(encoding="utf-8") for name in sources["c
 css = re.sub(r"chrome-extension://__MSG_@@extension_id__/assets/([^'\")\s]+)", asset, css)
 payload = {"schema": 1, "version": version, "loaderApi": 1, "css": css,
            "scripts": [{"name": name, "code": (root / name).read_text(encoding="utf-8")} for name in sources["js"]]}
+payload["popup"] = {"schema": 1,
+    "js": (root / "assets/popup/popup.js").read_text(encoding="utf-8"),
+    "css": (root / "assets/popup/popup.css").read_text(encoding="utf-8"),
+    "logo": "data:image/png;base64," + base64.b64encode((root / "assets/larpblox-logo.png").read_bytes()).decode()}
 data = (json.dumps(payload, separators=(",", ":"), ensure_ascii=False) + "\n").encode()
 (root / "website-bundle.json").write_bytes(data)
 output = root / "website-release"
@@ -38,6 +42,7 @@ loader = output / f"Larpblox-Loader-{version}.zip"
 with zipfile.ZipFile(loader, "w", zipfile.ZIP_DEFLATED) as archive:
     for name in ("manifest.json", "larpbux-game-background.js", "larpbux-game-bridge.js",
                  "remote-loader.js", "remote-bootstrap.js", "larpbux-body-colors.js", "popup.html",
+                 "popup-host.js", "popup-sandbox.html", "popup-sandbox.js",
                  "website-bundle.json", "README.md", "THEME-LICENSE.txt",
                  "src/popup/LICENSE-COSS.txt", "src/popup/NOTICE.txt"):
         archive.write(root / name, f"larpblox-extension/{name}")

@@ -26,7 +26,7 @@ if ($sourceVersion -lt $installedVersion) {
 
 $relativeFiles = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 [void]$relativeFiles.Add('manifest.json')
-foreach ($relativePath in @('remote-loader.js', 'larpbux-game-bridge.js', 'website-bundle.json')) {
+foreach ($relativePath in @('remote-loader.js', 'larpbux-game-bridge.js', 'website-bundle.json', 'popup-sandbox.html', 'popup-sandbox.js')) {
   [void]$relativeFiles.Add($relativePath)
 }
 if ($sourceManifest.background.service_worker) { [void]$relativeFiles.Add($sourceManifest.background.service_worker) }

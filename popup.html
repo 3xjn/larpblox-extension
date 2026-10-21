@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Larpblox</title>
-  <link rel="stylesheet" href="assets/popup/popup.css">
-  <script src="assets/popup/popup.js" defer></script>
+  <style>html,body{width:380px;margin:0;background:#fff}body{min-height:120px}iframe{display:block;width:380px;height:120px;border:0}#recovery{padding:20px;font:14px/1.5 system-ui}button{font:inherit;cursor:pointer}[hidden]{display:none!important}</style>
+  <script src="popup-host.js" defer></script>
 </head>
-<body><div id="root"></div></body>
+<body><iframe id="popup" title="Larpblox" src="popup-sandbox.html"></iframe><div id="recovery" hidden><p id="recovery-message" role="status"></p><button id="retry">Retry</button></div></body>
 </html>

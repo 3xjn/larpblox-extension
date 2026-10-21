@@ -24,9 +24,9 @@ const executablePath = process.env.LARPBLOX_TEST_CHROME || path.join(process.env
     const id = new URL(worker.url()).host;
     const disabled = await context.newPage();
     await disabled.goto(`chrome-extension://${id}/popup.html`);
-    await disabled.getByRole('button',{name:'Settings',exact:true}).click();
-    await disabled.getByRole('button',{name:'Open extension settings'}).waitFor();
-    assert.match(await disabled.getByRole('region',{name:'Extension settings'}).getByRole('status').textContent(), /Allow User Scripts/);
+    await disabled.frameLocator('#popup').getByRole('button',{name:'Settings',exact:true}).click();
+    await disabled.frameLocator('#popup').getByRole('button',{name:'Open extension settings'}).waitFor();
+    assert.match(await disabled.frameLocator('#popup').getByRole('region',{name:'Extension settings'}).getByRole('status').textContent(), /Allow User Scripts/);
     const missingPermission = await disabled.evaluate(() => chrome.runtime.sendMessage({type:'larpblox-popup-relay',tabId:1,message:{type:'larpblox-popup-get-state'}}));
     assert.equal(missingPermission.ok,false);
     assert.match(missingPermission.error,/Enable Allow User Scripts/);
@@ -40,9 +40,15 @@ const executablePath = process.env.LARPBLOX_TEST_CHROME || path.join(process.env
 
     const ui = await context.newPage();
     await ui.goto(`chrome-extension://${id}/popup.html`);
-    await ui.getByRole('button',{name:'Settings',exact:true}).click();
-    const settings = ui.getByRole('region',{name:'Extension settings'});
+    await ui.frameLocator('#popup').getByRole('button',{name:'Settings',exact:true}).click();
+    const settings = ui.frameLocator('#popup').getByRole('region',{name:'Extension settings'});
     await settings.getByLabel(`Version ${baselineVersion}`,{exact:true}).waitFor();
+    const sandbox = ui.frames().find(frame => frame.url().includes('popup-sandbox.html?'));
+    assert.equal(await sandbox.evaluate(() => typeof chrome.storage),'undefined');
+    assert.match(await sandbox.evaluate(async () => {
+      try { await chrome.runtime.sendMessage({type:'unapproved-command'}); return 'unexpectedly allowed'; }
+      catch (error) { return error.message; }
+    }), /Unsupported popup request/);
     const send = (action) => ui.evaluate(action => chrome.runtime.sendMessage({type:'larpblox-website-update', action}), action);
 
     const fixture = '<!doctype html><html><head></head><body><header id="header"><ul id="settings-popover-menu"><li><a href="/my/account">Settings</a></li></ul></header><main><h1>Avatar fixture</h1></main></body></html>';
@@ -61,6 +67,7 @@ const executablePath = process.env.LARPBLOX_TEST_CHROME || path.join(process.env
 
     const bundle = JSON.parse(await fs.readFile(path.join(root,'website-bundle.json'),'utf8'));
     bundle.version = nextVersion;
+    bundle.popup.js += `;document.documentElement.dataset.popupRelease=${JSON.stringify(nextVersion)};`;
     bundle.scripts.push({name:'remote-test.js', code:`document.documentElement.dataset.remoteWebsite = ${JSON.stringify(nextVersion)};`});
     let body = Buffer.from(JSON.stringify(bundle));
     let metadata = {schema:1, loaderApi:1, version:bundle.version, size:body.length,
@@ -118,29 +125,32 @@ const executablePath = process.env.LARPBLOX_TEST_CHROME || path.join(process.env
     console.log('PASS: existing extension popup reads and updates website state through the loader.');
     await ui.addInitScript(tabId => { const query = chrome.tabs.query; chrome.tabs.query = filter => filter.active ? Promise.resolve([{id:tabId,url:'https://www.roblox.com/avatar'}]) : query(filter); },tabId);
     await ui.reload();
-    await ui.getByRole('switch',{name:'Larp mode',exact:true}).waitFor();
+    await ui.frameLocator('#popup').getByRole('switch',{name:'Larp mode',exact:true}).waitFor();
     await fs.mkdir(path.join(root,'.test-artifacts'),{recursive:true});
     await ui.setViewportSize({width:380,height:600});
     await ui.screenshot({path:path.join(root,'.test-artifacts/extension-cog.png')});
-    await ui.getByRole('button',{name:'Settings',exact:true}).click();
+    await ui.frameLocator('#popup').getByRole('button',{name:'Settings',exact:true}).click();
     // Return to the signed-out fixture before update/restart checks.
     await page.evaluate(() => document.querySelector('meta[name="user-data"]').remove());
-    await ui.getByRole('button',{name:'Check for updates',exact:true}).click();
+    await ui.frameLocator('#popup').getByRole('button',{name:'Check for updates',exact:true}).click();
     await settings.getByRole('button',{name:'Reload Roblox tabs'}).waitFor();
     assert.equal(await settings.getByRole('button',{name:'Check for updates',exact:true}).count(),0);
-    await ui.getByRole('button',{name:'Back to Larpblox'}).click();
-    await ui.getByRole('button',{name:'Settings',exact:true}).click();
+    await ui.frameLocator('#popup').getByRole('button',{name:'Back to Larpblox'}).click();
+    await ui.frameLocator('#popup').getByRole('button',{name:'Settings',exact:true}).click();
     await settings.getByRole('button',{name:'Reload Roblox tabs'}).waitFor();
     assert.equal(await settings.getByRole('button',{name:'Check for updates',exact:true}).count(),0);
     await ui.setViewportSize({width:380,height:300});
-    await ui.locator('main').screenshot({path:path.join(root,'.test-artifacts/update-ready.png')});
+    await ui.frameLocator('#popup').locator('main').screenshot({path:path.join(root,'.test-artifacts/update-ready.png')});
+    await ui.frameLocator('#popup').locator('html').waitFor();
+    assert.equal(await ui.frameLocator('#popup').locator('html').getAttribute('data-popup-release'),nextVersion);
+    console.log('PASS: downloaded popup code replaces the UI without changing extension files.');
     console.log('PASS: ready state has one reload action and survives reopening settings.');
     assert.equal(await page.locator('html').getAttribute('data-remote-website'),null);
     await page.reload();
     await page.waitForFunction(expected => document.documentElement.dataset.remoteWebsite === expected, nextVersion);
     console.log('PASS: manual update verifies, registers, and runs downloaded website code on reload.');
-    await ui.getByRole('button',{name:'Back to Larpblox'}).click();
-    await ui.getByRole('button',{name:'Settings',exact:true}).click();
+    await ui.frameLocator('#popup').getByRole('button',{name:'Back to Larpblox'}).click();
+    await ui.frameLocator('#popup').getByRole('button',{name:'Settings',exact:true}).click();
     await settings.getByRole('button',{name:'Check for updates',exact:true}).waitFor();
     assert.equal(await settings.getByRole('button',{name:'Reload Roblox tabs'}).count(),0);
     console.log('PASS: refreshing the website clears the pending reload state.');
@@ -178,13 +188,23 @@ const executablePath = process.env.LARPBLOX_TEST_CHROME || path.join(process.env
     await page.waitForFunction(expected => document.documentElement.dataset.remoteWebsite === expected, nextVersion);
     console.log('PASS: synchronous startup failure restores the previous cached release.');
 
-    await ui.getByRole('button',{name:'Back to Larpblox'}).click();
-    await ui.getByRole('button',{name:'Settings',exact:true}).click();
+    await ui.frameLocator('#popup').getByRole('button',{name:'Back to Larpblox'}).click();
+    await ui.frameLocator('#popup').getByRole('button',{name:'Settings',exact:true}).click();
     await settings.getByLabel(`Version ${nextVersion}`,{exact:true}).waitFor();
     await fs.mkdir(path.join(root,'.test-artifacts'),{recursive:true});
     await ui.setViewportSize({width:380,height:400});
-    await ui.locator('main').screenshot({path:path.join(root,'.test-artifacts/remote-updates.png')});
+    await ui.frameLocator('#popup').locator('main').screenshot({path:path.join(root,'.test-artifacts/remote-updates.png')});
     assert.deepEqual(errors, []);
+    const brokenPopup = JSON.parse(JSON.stringify(bundle));
+    brokenPopup.scripts = brokenPopup.scripts.filter(script => script.name !== 'broken-test.js');
+    brokenPopup.popup.js = 'const broken = ;';
+    body = Buffer.from(JSON.stringify(brokenPopup)); metadata.size = body.length;
+    metadata.sha256 = crypto.createHash('sha256').update(body).digest('hex');
+    assert.equal((await send('check')).updated,true);
+    await ui.reload();
+    await settings.getByRole('button',{name:'Check for updates',exact:true}).waitFor();
+    assert.equal((await send('status')).version,nextVersion);
+    console.log('PASS: broken popup code restores the previous release and opens the bundled Coss UI.');
     await cdp('Fetch.disable');
     await browserSession.send('Target.detachFromTarget',{sessionId});
     await browserSession.detach();
@@ -217,5 +237,10 @@ const executablePath = process.env.LARPBLOX_TEST_CHROME || path.join(process.env
       throw error;
     }
     console.log('PASS: cached remote website survives a complete browser restart.');
+    const restoredPopup = await context.newPage();
+    await restoredPopup.goto(`chrome-extension://${id}/popup.html`);
+    await restoredPopup.frameLocator('#popup').getByRole('button',{name:'Settings',exact:true}).click();
+    assert.equal(await restoredPopup.frameLocator('#popup').locator('html').getAttribute('data-popup-release'),nextVersion);
+    console.log('PASS: cached remote Coss popup survives browser restart without a download.');
   } finally { await context.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

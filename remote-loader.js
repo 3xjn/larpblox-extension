@@ -23,6 +23,8 @@
     if (typeof bundle.css !== 'string' || !Array.isArray(bundle.scripts) || !bundle.scripts.length || bundle.scripts.length > 60 ||
         bundle.scripts.some(s => !s || !/^[a-z0-9-]+\.js$/.test(s.name) || typeof s.code !== 'string') ||
         new Set(bundle.scripts.map(s => s.name)).size !== bundle.scripts.length || JSON.stringify(bundle).length > MAX) throw new Error('Invalid website update.');
+    if (bundle.popup && (bundle.popup.schema !== 1 || typeof bundle.popup.js !== 'string' || typeof bundle.popup.css !== 'string' ||
+        typeof bundle.popup.logo !== 'string' || !bundle.popup.logo.startsWith('data:image/png;base64,'))) throw new Error('Invalid popup update.');
     return bundle;
   }
   async function available() {
@@ -132,6 +134,22 @@
   async function run(message, sender) {
     const ownPage = sender.url?.startsWith(chrome.runtime.getURL(''));
     if (sender.id !== chrome.runtime.id || (!ownPage && !/^https:\/\/www\.roblox\.com\//.test(sender.url || ''))) throw new Error('Updates are only available from Larpblox.');
+    if (message.action === 'popup' || message.action === 'popup-fallback') {
+      if (!ownPage) throw new Error('The popup is only available inside the extension.');
+      const base = await baseline();
+      const bundle = message.action === 'popup-fallback' ? base : (await state()).bundle;
+      const source = bundle.popup ? bundle : base;
+      return {popup:source.popup, version:source.version};
+    }
+    if (message.action === 'popup-failed') {
+      if (!ownPage) throw new Error('Invalid popup failure report.');
+      const record = await saved();
+      if (record.current?.version === message.version && record.previous) {
+        await register(record.previous);
+        await chrome.storage.local.set({[KEY]:{current:record.previous}});
+      }
+      return {};
+    }
     if (message.action === 'enable') {
       await chrome.tabs.create({url:`chrome://extensions/?id=${chrome.runtime.id}`}); return {};
     }
