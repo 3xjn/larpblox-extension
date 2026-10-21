@@ -3,6 +3,17 @@
   'use strict';
   let cache, record, retryTimer;
   const details = new Map();
+  async function mapConcurrent(items, limit, mapper) {
+    const results = new Array(items.length);
+    let next = 0;
+    await Promise.all(Array.from({length:Math.min(limit, items.length)}, async () => {
+      while (next < items.length) {
+        const index = next++;
+        results[index] = await mapper(items[index]);
+      }
+    }));
+    return results;
+  }
   function restore() {
     if (!record) return;
     record.host.remove();
@@ -96,9 +107,11 @@
         if (id && name && !known.has(Number(id))) known.set(Number(id), {name});
       }
       const entry = {key, controller}; cache = entry;
-      entry.promise = Promise.resolve().then(() => loadDefinition(controller.signal)).then(definition => Promise.all(
-        [...new Set(definition.assets.map(asset => Number(asset.id)).filter(id => Number.isSafeInteger(id) && id > 0))]
-          .map(id => itemDetails(id, known, controller.signal))));
+      entry.promise = Promise.resolve().then(() => loadDefinition(controller.signal)).then(definition => mapConcurrent(
+        [...new Set(definition.assets.map(asset => Number(asset.id)).filter(id => Number.isSafeInteger(id) && id > 0))],
+        4,
+        id => itemDetails(id, known, controller.signal)
+      ));
     }
     const entry = cache;
     try {

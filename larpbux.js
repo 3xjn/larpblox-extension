@@ -261,12 +261,12 @@
     return {version: 1, userId: String(userId), definition, ...(definition.backgroundId ? {backgroundId: definition.backgroundId} : {}), items: definition.assets.map(asset => items.get(asset.id)).filter(Boolean).map(({id, name, assetType}) => ({id, name, assetType, itemType: 'Asset'}))};
   }
   if (typeof module !== 'undefined' && module.exports) { module.exports = {changedBodyColors, addToCart, checkoutCart, changeUsername, localNames, localSocialCounts, amount, formatBalance, collect, equip, outfit, supportsOutfit, supportsCosmetic, isBackground, previewDefinition, matchesAvatarCategory, mergeGameSnapshot, gamePreviewDefinition, gameCommand, gameOutfitMatches}; return; }
-  let state, userId, panel, controls, list, balance, mode, message, exportBox, purchaseDialog, previewElement, previewViewer, previewSignature, previewController;
+  let state, userId, panel, controls, avatarAccordion, list, balance, mode, message, exportBox, purchaseDialog, previewElement, previewViewer, previewSignature, previewController;
   // Catalog Try On is deliberately separate from the saved Larp outfit.  It is
   // a disposable render only: no save(), bridge message, purchase, or equip is
   // performed for the item being previewed.
   let catalogTryOn = {generation:0};
-  let settingsCustomizeLink, settingsCustomizeItem, settingsSection, settingsNav, settingsHidden = new Map(), settingsNavState = new Map(), settingsActive = false;
+  let appearanceSettings;
   const thumbnails = new Map();
   const thumbnailPending = new Map();
   let thumbnailTimer, thumbnailBusy = false, thumbnailBlockedUntil = 0;
@@ -881,7 +881,7 @@
     if (entries.some(entry => !Number.isSafeInteger(Number(entry.assetType)) || Number(entry.assetType) <= 0)) {
       const outfit = (data.items || []).find(entry => entry.type === 'UserOutfit');
       if (outfit) {
-        const response = await fetch(`https://avatar.roblox.com/v1/outfits/${outfit.id}/details`, {signal});
+        const response = await fetch(`https://avatar.roblox.com/v1/outfits/${outfit.id}/details`, {credentials:'include', signal});
         if (!response.ok) throw new Error('Character parts could not load.');
         const owned = new Set(entries.map(entry => Number(entry.id)));
         entries = ((await response.json()).assets || []).filter(entry => owned.has(Number(entry.id)));
@@ -941,6 +941,11 @@
     updateOwnAvatarSurfaces();
     // Purchased cosmetics use the same grid and card markup as the real editor.
     const editor = document.querySelector('#avatar-web-app');
+    const previewColumn = editor?.querySelector('.left-wrapper');
+    if (avatarAccordion && previewColumn) {
+      if (previewColumn.lastElementChild !== avatarAccordion) previewColumn.append(avatarAccordion);
+      if (controls.parentElement !== avatarAccordion) avatarAccordion.append(controls);
+    } else if (avatarAccordion) avatarAccordion.remove();
     updateAvatarViewControls(editor);
     updateLarpHatRail(editor);
     if (typeof LarpbloxCharacters !== 'undefined') LarpbloxCharacters.update({editor, userId, active: editingLarp(), capture: captureCharacter, apply: applyCharacter, applyNative: applyNativeCharacter, thumbnail: characterThumbnail});
@@ -1151,8 +1156,10 @@
     const close = node('button', 'Close'); close.type = 'button'; close.addEventListener('click', () => { panel.hidden = true; });
     panel.append(node('h2', 'Larpbux · cosmetic inventory'), close);
     panel.append(node('p', 'Pretend currency and local cosmetics. Your real inventory stays available in Roblox. Added accessories keep your current accessories; clothing replaces its slot and gear replaces your held Larp gear. Real Robux and account ownership do not change.'));
-    controls = node('div', '', 'larpbux-dropdown');
-    controls.addEventListener('click', event => event.stopPropagation());
+    controls = node('section', '', 'larpbux-avatar-controls');
+    controls.setAttribute('aria-label', 'Larpblox avatar');
+    avatarAccordion = node('details', '', 'larpbux-avatar-settings');
+    avatarAccordion.append(node('summary', 'Larpblox'), controls);
     const label = node('label'); mode = node('input'); mode.type = 'checkbox'; mode.setAttribute('aria-label', 'Larp mode'); label.append(mode, document.createTextNode(' Larp mode'));
     mode.addEventListener('change', () => action(() => { closePurchase(); save({...state, mode: mode.checked}); message.textContent = state.mode ? 'Larp mode on. Existing Roblox items are kept.' : 'Real mode on. Roblox purchases use real Robux.'; }));
     const funds = node('form'); balance = node('input'); balance.type = 'number'; balance.min = '0'; balance.max = String(MAX); balance.step = '1'; balance.setAttribute('aria-label', 'Pretend Larpbux balance');
@@ -1161,8 +1168,6 @@
     list = node('div', '', 'larpbux-inventory larpbux-inventory-grid');
     exportBox = node('textarea'); exportBox.readOnly = true; exportBox.setAttribute('aria-label', 'Larpblox outfit export');
     const select = node('button', 'Select outfit export'); select.type = 'button'; select.addEventListener('click', () => { exportBox.focus(); exportBox.select(); });
-    const inventory = node('button', 'Larp inventory'); inventory.type = 'button';
-    inventory.addEventListener('click', () => { panel.hidden = !panel.hidden; });
     const diagnostics = node('button', 'Save preview details'); diagnostics.type = 'button';
     diagnostics.addEventListener('click', () => action(() => {
       const data = {...(previewViewer?.getDiagnostics?.() || {}),
@@ -1179,19 +1184,17 @@
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       message.textContent = 'Preview details saved. Attach larpblox-preview-details.json in our chat.';
     }));
-    controls.append(label, node('p', 'Pretend Robux amount'), funds, message, inventory);
-    const outfitLogs = node('button', 'Save outfit logs'); outfitLogs.type = 'button';
-    outfitLogs.addEventListener('click', () => diagnostics.click()); controls.append(outfitLogs);
+    controls.append(label, node('p', 'Pretend Robux amount'), funds, message);
+    appearanceSettings=node('section','','larpbux-browser-preferences-appearance');
     const appearanceLabel=node('label','Website appearance');
-    appearanceLabel.className='larpbux-appearance';
-    const appearance=node('select');appearance.setAttribute('aria-label','Website appearance');
+    appearanceLabel.htmlFor='larpbux-website-appearance';
+    const appearance=node('select');appearance.id='larpbux-website-appearance';appearance.setAttribute('aria-label','Website appearance');
     for (const [value,text] of [['classic','Classic Roblox (2016)'],['modern','Current Roblox']]) {
       const option=node('option',text);option.value=value;appearance.append(option);
     }
     appearance.value=typeof LarpbloxAppearance!=='undefined' ? LarpbloxAppearance.get() : 'classic';
     appearance.addEventListener('change',()=>action(()=>LarpbloxAppearance.set(appearance.value)));
-    appearanceLabel.append(appearance);
-    controls.append(appearanceLabel,node('p','Changes the website look only. Switching reloads this page.'));
+    appearanceSettings.append(appearanceLabel,appearance,node('p','Changes the website look only. Switching reloads this page.'));
 
     const nameSettings = node('a', 'Change Larp username · R$ 1,000'); nameSettings.href = '/my/account#!/info';
     controls.append(nameSettings);
@@ -1243,83 +1246,19 @@
       node('p', 'Game import supports accessories, classic clothes, movement animations, and held gear visuals. Gear actions are not included. Other items are collection only. The updated game script must be installed first. For games: copy this export, then paste it into Accessories → Browser cosmetic outfit in Larpblox. Supported cosmetics are added to your current look.'), exportBox, select, diagnostics);
     document.body.append(panel);
   }
-  function settingsLink() {
-    if (!/^\/my\/account\/?$/i.test(location.pathname)) return null;
-    return [...document.querySelectorAll('a[href]')].find(link => {
-      const href = link.getAttribute('href') || '';
-      const text = link.textContent.trim().replace(/\s+/g, ' ');
-      return /#!\/info(?:$|&)/i.test(href) || /^account info$/i.test(text) || /browser preferences/i.test(text);
-    });
-  }
   function updateSettingsRoute() {
-    const info = settingsLink();
-    if (!panel) return;
-    if (!info) {
-      if (!settingsActive) return;
-      settingsHidden.forEach((hidden, child) => { if (child.isConnected) child.hidden = hidden; delete child.dataset.larpbuxSettingsNative; });
-      settingsHidden.clear();
-      settingsNavState.forEach((value, link) => { if (link.isConnected && value.current !== null && link.hash.split('?')[0] === location.hash.split('?')[0]) link.setAttribute('aria-current', value.current); });
-      settingsNavState.clear(); settingsNav?.classList.remove('larpbux-settings-nav-active');
-      if (settingsSection?.contains(controls)) controls.remove();
-      settingsSection?.remove();
-      settingsActive = false; return;
-    }
-    if (!settingsCustomizeLink || !settingsCustomizeLink.isConnected) {
-      const browser = [...document.querySelectorAll('a[href]')].find(link => /^browser preferences$/i.test(link.textContent.trim()));
-      const source = browser || info;
-      const sourceItem = source.closest('li') || (source.parentElement?.children.length === 1 ? source.parentElement : source);
-      settingsCustomizeItem = sourceItem.cloneNode(true);
-      settingsCustomizeLink = settingsCustomizeItem.matches('a') ? settingsCustomizeItem : settingsCustomizeItem.querySelector('a');
-      settingsCustomizeItem.classList.remove('active', 'selected');
-      settingsCustomizeLink.classList.add('larpbux-settings-customize-link');
-      settingsCustomizeLink.textContent = 'Customize';
-      // Keep Roblox on its recognised settings route; the query flag survives reloads.
-      settingsCustomizeLink.href = source.href.split('?')[0] + '?larpbloxCustomize=1';
-      settingsCustomizeLink.removeAttribute('aria-current');
-      sourceItem.after(settingsCustomizeItem);
-      settingsCustomizeLink.addEventListener('click', event => {
-        event.preventDefault(); event.stopPropagation();
-        if (!/larpbloxCustomize=1/i.test(location.hash)) history.pushState({}, '', settingsCustomizeLink.href);
-        updateSettingsRoute();
-      });
-    }
+    if (!appearanceSettings || !/^\/my\/account\/?$/i.test(location.pathname)) { appearanceSettings?.remove(); return; }
+    const browserLink = [...document.querySelectorAll('a[href]')].find(link => /^browser preferences$/i.test(link.textContent.trim().replace(/\s+/g, ' ')));
     const main = document.querySelector('#settings-container, .settings-container, main, [role="main"]');
-    if (!main) return;
-    const active = new URLSearchParams(location.hash.split('?')[1] || '').get('larpbloxCustomize') === '1';
-    if (active) {
-      const content = main.querySelector('.tab-content, [data-testid="settings-content"], .settings-content');
-      const native = content ? [content] : [...main.children].filter(child => child !== settingsSection && !child.contains(settingsCustomizeLink) && !settingsCustomizeItem?.contains(child) && !settingsCustomizeLink.closest('nav, aside, ul, .menu-vertical, [role="navigation"]')?.contains(child) && !(/^h[12]$/i.test(child.tagName) && /settings/i.test(child.textContent.trim())));
-      for (const child of native) {
-        if (!settingsHidden.has(child)) settingsHidden.set(child, child.hidden);
-        child.hidden = true; child.dataset.larpbuxSettingsNative = 'true';
-      }
-      if (!settingsActive) {
-        settingsNav = settingsCustomizeLink.closest('nav, aside, ul, .menu-vertical, [role="navigation"]');
-        settingsNav?.classList.add('larpbux-settings-nav-active');
-        for (const link of settingsNav?.querySelectorAll('a') || []) if (link !== settingsCustomizeLink) {
-          settingsNavState.set(link, {current: link.getAttribute('aria-current')});
-          link.removeAttribute('aria-current');
-        }
-      }
-      settingsCustomizeLink.setAttribute('aria-current', 'page');
-      settingsCustomizeLink.classList.add('active'); settingsCustomizeItem.classList.add('active');
-      if (!settingsSection) {
-        settingsSection = node('section', '', 'larpbux-settings-section');
-        settingsSection.append(node('h2', 'Customize'));
-      }
-      if (!settingsSection.contains(controls)) settingsSection.append(controls);
-      const target = content?.parentElement || main;
-      if (settingsSection.parentElement !== target) target.append(settingsSection);
-      settingsActive = true;
-    } else if (settingsActive || panel.classList.contains('larpbux-settings-panel')) {
-      settingsHidden.forEach((hidden, child) => { if (child.isConnected) child.hidden = hidden; delete child.dataset.larpbuxSettingsNative; });
-      settingsHidden.clear();
-      settingsNavState.forEach((value, link) => { if (link.isConnected && value.current !== null && link.hash.split('?')[0] === location.hash.split('?')[0]) link.setAttribute('aria-current', value.current); });
-      settingsNavState.clear(); settingsNav?.classList.remove('larpbux-settings-nav-active'); settingsCustomizeItem.classList.remove('active'); settingsCustomizeLink.classList.remove('active'); settingsCustomizeLink.removeAttribute('aria-current');
-      if (settingsSection?.contains(controls)) controls.remove();
-      settingsSection?.remove();
-      settingsActive = false;
-    }
+    const content = main?.querySelector('.tab-content, [data-testid="settings-content"], .settings-content');
+    const linkRoute = browserLink?.hash.split('?')[0];
+    const currentRoute = location.hash.split('?')[0];
+    const activeLink = browserLink?.matches('[aria-current="page"],.active,.selected') || browserLink?.closest('li')?.matches('.active,.selected');
+    const activeRoute = Boolean(linkRoute && currentRoute && linkRoute === currentRoute);
+    const activeHeading = [...(content?.querySelectorAll('h1,h2') || [])].some(heading => /browser preferences/i.test(heading.textContent));
+    if (content && (activeLink || activeRoute || activeHeading)) {
+      if (appearanceSettings.parentElement !== content) content.append(appearanceSettings);
+    } else appearanceSettings.remove();
   }
   function nativePrice() {
     const element = document.querySelector('#item-details .item-price-value .text-robux-lg, #item-details .item-price-value, #item-details .price-row-container .text-robux-lg, #item-details-container .item-price-value .text-robux-lg, #item-details-container .item-price-value, #item-details-container .price-row-container .text-robux-lg, .price-row-container .item-price-value');
@@ -1493,6 +1432,174 @@
       setTimeout(() => { dialog.close(); dialog.remove(); }, 300);
     } else { dialog.close(); dialog.remove(); }
   }
+  async function avatarCopyQuote(target, account, signal) {
+    const readJson = async (url, label) => {
+      const cooldownKey = 'larpblox.avatar-copy-cooldown-until';
+      let blockedUntil = 0;
+      try { blockedUntil = Number(localStorage.getItem(cooldownKey)) || 0; } catch (_) {}
+      if (blockedUntil > Date.now()) throw Object.assign(new Error(`Roblox asked us to wait before loading ${label}.`), {retryAfter:(blockedUntil - Date.now()) / 1000});
+      const response = await fetch(url, {credentials:'include', signal});
+      if (!response.ok) {
+        if (response.status === 429) {
+          const retryAfter = Math.max(1, LarpbloxAvatarRequests.retryAfter(response, 30));
+          try { localStorage.setItem(cooldownKey, String(Math.max(blockedUntil, Date.now() + retryAfter * 1000))); } catch (_) {}
+          throw Object.assign(new Error(`Roblox is limiting ${label}.`), {retryAfter});
+        }
+        throw new Error(`Could not load ${label}. Retry in a moment.`);
+      }
+      return response.json();
+    };
+    const cacheKey = `larpblox.avatar-copy-cache:v1:${target}`;
+    let cached;
+    try {
+      const entry = JSON.parse(localStorage.getItem(cacheKey) || 'null');
+      if (entry?.expires > Date.now() && entry.avatar) cached = entry;
+      else if (entry) localStorage.removeItem(cacheKey);
+    } catch (_) {}
+    const avatar = cached?.avatar || await readJson(`https://avatar.roblox.com/v1/users/${target}/avatar`, 'this avatar');
+    if (!cached) {
+      cached = {expires:Date.now() + 300000, avatar};
+      try { localStorage.setItem(cacheKey, JSON.stringify(cached)); } catch (_) {}
+    }
+    if (!Array.isArray(avatar.assets) || avatar.assets.length > 100) throw new Error('This avatar could not be loaded.');
+    const rules = avatar.bodyColor3s ? {} : cached?.rules || await readJson('https://avatar.roblox.com/v1/avatar-rules', 'avatar colors');
+    if (!cached.rules) { cached.rules = rules; try { localStorage.setItem(cacheKey, JSON.stringify(cached)); } catch (_) {} }
+    const assets = avatar.assets.map(asset => ({id:asset.id, itemType:'Asset', name:String(asset.name || `Item ${asset.id}`).slice(0,128), assetType:Number(asset.assetType?.id), ...(asset.meta ? {meta:asset.meta} : {})}));
+    const supported = assets.filter(isWearableAsset);
+    const definition = previewDefinition({...avatar, assets:avatar.assets.filter(asset => supported.some(item => item.id === asset.id))}, rules, []);
+    const items = supported.map(item => ({...item, price:0, assetTypeVerified:true, limitedVerified:false}));
+    return {snapshot:LarpbloxGameBridge.validateSnapshot({version:1,userId:String(account),definition,items},account), items, skipped:assets.length - supported.length};
+  }
+  function stealAvatar(target) {
+    if (!userId || !/^[1-9]\d*$/.test(target)) return;
+    closePurchase();
+    const account = userId, path = location.pathname;
+    const dialog = node('dialog','','larpbux-buy-dialog larpbux-avatar-copy-dialog'); purchaseDialog = dialog;
+    dialog.setAttribute('aria-label','Steal avatar');
+    const title = node('h2','Steal avatar');
+    const close = node('button','×','larpbux-modal-close'); close.type = 'button'; close.setAttribute('aria-label','Close'); close.addEventListener('click',closePurchase);
+    const body = node('div','','larpbux-avatar-copy-body');
+    const status = node('p','Loading avatar…','larpbux-purchase-status'); status.setAttribute('role','status');
+    const rows = node('div','','larpbux-cart-items');
+    const summary = node('p');
+    const footer = node('div','','larpbux-purchase-footer');
+    const confirm = node('button','Wear avatar','larpbux-buy-confirm'); confirm.type = 'button'; confirm.disabled = true;
+    const cancel = node('button','Cancel','larpbux-buy-cancel'); cancel.type = 'button'; cancel.addEventListener('click',closePurchase);
+    const avatarLink = node('a','Open Avatar'); avatarLink.href = avatarUrl(); avatarLink.hidden = true;
+    body.append(status,rows,summary,avatarLink); footer.append(confirm,cancel); dialog.append(title,close,body,footer);
+    const controller = new AbortController();
+    let retryTimer;
+    dialog.addEventListener('close',() => { controller.abort(); clearTimeout(retryTimer); },{once:true});
+    document.body.append(dialog); dialog.showModal();
+    const active = () => dialog.isConnected && dialog.open && account === userId && path === location.pathname;
+    const missingItems = (quote,current) => {
+      const owned = new Set(outfitAssets(current.items).map(keyFor));
+      return quote.items.filter(item => !owned.has(keyFor(item)));
+    };
+    let quote;
+    function present(next) {
+      quote = next;
+      const current = read(account), missing = missingItems(quote,current);
+      rows.replaceChildren();
+      for (const item of quote.items) {
+        const row = node('div','','larpbux-cart-row');
+        row.append(node('span',item.name),node('span',!missing.includes(item) ? 'Collected' : 'Add · Free'));
+        rows.append(row);
+      }
+      summary.textContent = `${missing.length} new items · no Larpbux charged. Balance: ${current.balance.toLocaleString('en-US')}.`;
+      status.textContent = 'Copy this appearance into your local collection and wear it. No item prices are requested.';
+      if (quote.skipped) status.textContent += ` ${quote.skipped} unsupported items will be skipped.`;
+      confirm.textContent = 'Wear avatar';
+      confirm.disabled = !current.mode || !quote.items.length;
+      if (!quote.items.length) status.textContent = 'This avatar has no supported items to copy.';
+    }
+    async function load() {
+      const actionKey = 'larpblox.avatar-action-until', until = String(Date.now() + 180000);
+      try { localStorage.setItem(actionKey,until); } catch (_) {}
+      const timeout = setTimeout(() => controller.abort(),180000);
+      try { return await avatarCopyQuote(target,account,controller.signal); }
+      finally {
+        clearTimeout(timeout);
+        try { if (localStorage.getItem(actionKey) === until) localStorage.removeItem(actionKey); } catch (_) {}
+      }
+    }
+    function failed(error) {
+      if (!active()) return;
+      status.textContent = error.name === 'AbortError' ? 'Loading took too long. Close this dialog and try again.' : error.message;
+      confirm.textContent = 'Retry'; confirm.disabled = controller.signal.aborted;
+      const retryAt = Date.now() + Math.max(0, Number(error.retryAfter) || 0) * 1000;
+      if (retryAt > Date.now()) {
+        const updateRetry = () => {
+          if (!active()) return;
+          const remaining = Math.ceil((retryAt - Date.now()) / 1000);
+          if (remaining <= 0) { confirm.textContent = 'Retry'; confirm.disabled = false; return; }
+          confirm.textContent = `Retry in ${remaining}s`; confirm.disabled = true;
+          retryTimer = setTimeout(updateRetry, 1000);
+        };
+        updateRetry();
+      }
+    }
+    confirm.addEventListener('click',async () => {
+      if (!active()) return;
+      if (!quote) {
+        confirm.disabled = true; status.textContent = 'Loading avatar…';
+        try { const result = await load(); if (active()) present(result); }
+        catch (error) { failed(error); }
+        return;
+      }
+      confirm.disabled = true;
+      try {
+        if (!read(account).mode) throw new Error('Turn Larp mode on in Avatar, then try again.');
+        status.textContent = 'Copying avatar…';
+        let next = read(account);
+        for (const item of missingItems(quote,next)) next = collect(next,item);
+        next = mergeGameSnapshot(next,quote.snapshot);
+        if (next.items.length > 2000) throw new Error('Your cosmetic inventory is full.');
+        save(next,true);
+        title.textContent = 'Avatar equipped'; rows.replaceChildren(); summary.textContent = '';
+        status.textContent = 'Your Larp avatar is saved. It will sync when your game connects.';
+        avatarLink.hidden = false; confirm.remove(); cancel.textContent = 'Done';
+      } catch (error) { failed(error); }
+    });
+    if (!state.mode) {
+      status.textContent = 'Turn Larp mode on in Avatar, then return to this profile.'; avatarLink.hidden = false; confirm.remove();
+    } else load().then(result => { if (active()) present(result); }).catch(failed);
+  }
+  function updateProfileMenu() {
+    const target = location.pathname.match(/^\/users\/([1-9]\d*)\/profile\/?$/i)?.[1];
+    if (!userId || !target || target === String(userId)) {
+      document.querySelectorAll('.larpbux-steal-avatar').forEach(button => button.remove()); return;
+    }
+    for (const trigger of document.querySelectorAll('#user-profile-header-contextual-menu-button[aria-expanded="true"]')) {
+      const popover = document.getElementById(trigger.getAttribute('aria-controls'));
+      const menu = popover?.querySelector('[role="menu"]'), template = menu?.querySelector('button[role="menuitem"]');
+      if (!template) continue;
+      const existing = menu.querySelector('.larpbux-steal-avatar');
+      if (existing?.dataset.userId === target) continue;
+      existing?.remove();
+      const button = node('button','','larpbux-steal-avatar'); button.type = 'button'; button.setAttribute('role','menuitem'); button.tabIndex = 0;
+      button.dataset.userId = target;
+      button.className += ` ${template.className}`;
+      button.append(node('span','Steal avatar',template.querySelector('.foundation-web-menu-item-title')?.className));
+      button.addEventListener('click',event => {
+        event.preventDefault(); event.stopPropagation();
+        trigger.click(); requestAnimationFrame(() => stealAvatar(target));
+      });
+      const inventory = menu.querySelector('a[href$="/inventory"]');
+      if (inventory) inventory.before(button); else template.parentElement.append(button);
+      if (menu._larpbuxKeys) continue;
+      menu._larpbuxKeys = true;
+      menu.addEventListener('keydown',event => {
+        if (!['ArrowDown','ArrowUp','Home','End'].includes(event.key)) return;
+        const items = [...menu.querySelectorAll('[role="menuitem"]')].filter(item => !item.disabled && item.getAttribute('aria-disabled') !== 'true');
+        const index = items.indexOf(document.activeElement);
+        if (index < 0) return;
+        event.preventDefault(); event.stopImmediatePropagation();
+        const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+        items[next].focus();
+      },true);
+    }
+  }
   function purchaseUsername() {
     if (!state?.mode || !userId) return;
     closePurchase();
@@ -1544,7 +1651,7 @@
   function settingsNameRow(target) {
     if (!/^\/my\/account\/?$/i.test(location.pathname)) return false;
     const button=target.closest?.('button, a, [role="button"], .icon-edit, [class*="btn-generic-edit"], [tabindex="0"]');
-    if (!button || button.closest('.larpbux-buy-dialog, .larpbux-dropdown')) return false;
+    if (!button || button.closest('.larpbux-buy-dialog, .larpbux-avatar-controls')) return false;
     if (button.matches('#account-username-edit, [data-testid="username-edit"], [aria-label="Edit Username"], [aria-label="Edit username"]')) return true;
     let row=button.parentElement;
     for(let depth=0;row && depth<4;depth++,row=row.parentElement) {
@@ -1805,7 +1912,7 @@
       userId = undefined; state = undefined;
       document.documentElement.classList.remove('larpblox-pretend-mode');
       clearCatalogTryOn();
-      if (panel) { panel.hidden = true; controls.remove(); }
+      if (panel) { panel.hidden = true; avatarAccordion.remove(); }
       closePurchase(); updateAvatar();
       updateHeaderBalance(); updateNames();
       return;
@@ -1813,6 +1920,7 @@
     if (!panel) mount();
     if (userId !== id) { closePurchase(); clearCatalogTryOn(); queuedGameCommand = undefined; awaitingGameOutfit = undefined; userId = id; state = read(id); if (bridgeStatus) bridgeStatus.textContent = 'Checking connection…'; render(); }
     updateSettingsRoute();
+    updateProfileMenu();
     updateNames();
     updateHeaderBalance();
     updateItem(); updateAvatar();
