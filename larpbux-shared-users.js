@@ -160,27 +160,30 @@
       }
     }
   }
-  let searchKey = '', searchTime = 0, searchPending = false, searchRecords = new Map();
+  let searchKey = '', searchTime = 0, searchPending = false, searchRecords = new Map(), searchRoot, searchReady = false;
   function searchKeyword() {
     return /^\/search\/users\/?$/i.test(location.pathname) ? (new URLSearchParams(location.search).get('keyword') || '').trim().slice(0, 50) : '';
   }
   function renderSearch() {
-    let root = document.getElementById('larpblox-people-results');
-    if (!context.mode || !searchKeyword() || !searchRecords.size) { root?.remove(); return; }
+    let root = searchRoot;
+    if (!context.mode || !searchKeyword() || !searchRecords.size) { root?.remove(); searchRoot = undefined; return; }
     const native = document.querySelector('[data-testid="player-search-results"], .player-search-results-grid, .people-list, .users-list, .people-search-results, #people-search-container .section-content');
     if (!native) return;
     const nativeResults = [...native.children].filter(element => element !== root);
     const loading = native.matches('[aria-busy="true"]') || nativeResults.some(element =>
       element.matches('[aria-busy="true"],[role="progressbar"]') || element.querySelector('[aria-busy="true"],[role="progressbar"]') ||
       [...element.querySelectorAll('img[src]')].some(image => !image.complete));
-    if (loading || !nativeResults.some(element => element.textContent.trim())) { root?.remove(); return; }
+    // Wait once per search; later thumbnail refreshes must not hide a visible card.
+    if (!searchReady && (loading || !nativeResults.some(element => element.textContent.trim()))) return;
+    searchReady = true;
     if (!root) {
-      root = document.createElement('div'); root.id = 'larpblox-people-results';
+      root = searchRoot = document.createElement('div'); root.id = 'larpblox-people-results';
       root.className = 'larpblox-people-results'; root.setAttribute('aria-label', 'Larp player results');
     }
-    if (native.firstElementChild !== root) native.prepend(root);
+    const moved = native.firstElementChild !== root;
+    if (moved) native.prepend(root);
     const key = JSON.stringify([...searchRecords].map(([id, record]) => [id, record.name, record.imageUrl]));
-    if (root.dataset.results === key) return;
+    if (root.dataset.results === key) return moved;
     root.dataset.results = key; root.replaceChildren();
     for (const [id, record] of searchRecords) {
       const card = document.createElement('article'); card.className = 'larpblox-person-card';
@@ -194,16 +197,17 @@
       const profile = document.createElement('a'); profile.href = portrait.href; profile.className = 'larpblox-person-profile'; profile.textContent = 'View profile';
       info.append(name, username); card.append(portrait, info, profile); root.append(card);
     }
+    return true;
   }
   async function search() {
     const keyword = context.mode ? searchKeyword() : '';
-    if (keyword !== searchKey) { searchKey = keyword; searchTime = 0; searchRecords.clear(); }
+    if (keyword !== searchKey) { searchKey = keyword; searchTime = 0; searchRecords.clear(); searchReady = false; }
     renderSearch();
     if (!keyword || searchPending || Date.now() - searchTime < 5000) return;
     searchPending = true; searchTime = Date.now(); const mine = generation;
     try {
       const response = await (globalThis.LarpbloxExtension || chrome.runtime).sendMessage({type:'larpblox-search-users',keyword});
-      if (mine !== generation || keyword !== searchKeyword() || !context.mode) return;
+      if (mine !== generation || keyword !== searchKeyword() || !context.mode || !response?.ok) return;
       const next = new Map();
       for (const record of (response?.ok && response.data?.players || []).slice(0, 50)) {
         try {
@@ -232,7 +236,7 @@
     try {
       const response = await (globalThis.LarpbloxExtension || chrome.runtime).sendMessage({type:'larpblox-shared-users', userIds:ids});
       if (mine !== generation) return;
-      if (!response?.ok) { records.clear(); apply(); return; }
+      if (!response?.ok) { records = new Map(searchRecords); apply(); return; }
       const next = new Map();
       for (let record of response.data.players || []) {
         try {
@@ -247,7 +251,7 @@
       for (const [id, record] of searchRecords) next.set(id, record);
       records = next; apply();
     } catch {
-      if (mine === generation) { records.clear(); apply(); }
+      if (mine === generation) { records = new Map(searchRecords); apply(); }
     } finally { pending = false; }
   }
   function update(next) {
@@ -255,6 +259,20 @@
     context = next;
     if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; scan(); }); }
   }
+  let searchFrame = false;
+  function refreshSearchPlacement() {
+    if (searchFrame) return;
+    searchFrame = true;
+    requestAnimationFrame(() => {
+      searchFrame = false;
+      // Navigation can happen before the next relay poll.
+      if (searchKey !== (context.mode ? searchKeyword() : '')) { scan(); return; }
+      if (renderSearch()) apply();
+    });
+  }
+  new MutationObserver(refreshSearchPlacement).observe(document, {childList:true, subtree:true, attributes:true, attributeFilter:['aria-busy']});
+  document.addEventListener('load', refreshSearchPlacement, true);
+  window.addEventListener('popstate', refreshSearchPlacement);
   setInterval(scan, 5000);
   setInterval(flushProfile, 60000);
   globalThis.LarpbloxSharedUsers = {update, publishProfile};
