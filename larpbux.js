@@ -910,6 +910,16 @@
         definition = await loadBrowserPreview(selected, signal);
       }
       if (account !== userId || signature !== previewSignature || signal.aborted) return;
+      const cachedImage = LarpbloxAvatarRequests.cached?.(definition, account, '2d');
+      if (cachedImage && surface.hidden) {
+        const fallback = node('div', '', 'larpbux-avatar-scene');
+        const image = node('img'); image.alt = 'Your avatar with selected items';
+        image.onload = () => {
+          if (committed || account !== userId || signature !== previewSignature || signal.aborted) return;
+          fallback.append(image); surface.prepend(fallback); surface.hidden = false;
+        };
+        image.src = cachedImage;
+      }
       if (!selected.length && !backgroundId && !gameLook) {
         previewViewer?.dispose(); previewElement?.remove();
         previewViewer = undefined; previewElement = undefined; previewController = undefined;
@@ -920,8 +930,13 @@
         let imageUrl;
         try { imageUrl = await LarpbloxAvatarRequests.render(definition, account, signal, renderKind); }
         catch (error) {
-          if (renderKind === '3d' && error.status !== 429 && !signal.aborted) { renderKind = '2d'; continue; }
-          throw error;
+          const cachedImage = renderKind === '3d' && error.status === 429 && !signal.aborted
+            ? LarpbloxAvatarRequests.cached?.(definition, account, '2d') : undefined;
+          if (cachedImage) { imageUrl = cachedImage; renderKind = '2d'; }
+          else {
+            if (renderKind === '3d' && error.status !== 429 && !signal.aborted) { renderKind = '2d'; continue; }
+            throw error;
+          }
         }
         if (account !== userId || signature !== previewSignature || signal.aborted) return;
           if (renderKind === '3d') {

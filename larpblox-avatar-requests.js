@@ -5,6 +5,36 @@
   const cooldownKey = 'larpblox.avatar-render-cooldown';
   let queue = Promise.resolve(), nextRequest = 0, rateLimits = 0;
   const cancelled = () => Object.assign(new Error('Avatar request cancelled.'), {name: 'AbortError'});
+  const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object'
+    ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
+  function definitionKey(definition) {
+    return JSON.stringify(canonical({...definition, assets:[...(definition.assets || [])].sort((a,b) => a.id - b.id)}));
+  }
+  const imageUrl = value => typeof value === 'string' && /^https:\/\/(?:[a-z0-9-]+\.)*rbxcdn\.com\//i.test(value);
+  function cached(definition, userId, thumbnailType = '2d') {
+    try {
+      const key = definitionKey(definition);
+      const entries = JSON.parse(localStorage.getItem(`larpblox-render-cache:${userId}`) || '[]');
+      const match = entries.find(entry => entry.key === key && entry.type === thumbnailType && entry.expires > Date.now() && imageUrl(entry.url));
+      if (match) return match.url;
+      if (thumbnailType !== '2d') return;
+      // Saved character thumbnails already describe this exact outfit. They are
+      // useful on first load too, before the render cache has been populated.
+      const profiles = JSON.parse(localStorage.getItem(`larpblox-characters-v1:${userId}`) || '{}').profiles || [];
+      return profiles.find(profile => String(profile.snapshot?.userId) === String(userId) &&
+        profile.snapshot?.definition && definitionKey(profile.snapshot.definition) === key && imageUrl(profile.thumbnail))?.thumbnail;
+    } catch (_) { return undefined; }
+  }
+  function remember(definition, userId, thumbnailType, url) {
+    if (!imageUrl(url)) return;
+    try {
+      const storageKey = `larpblox-render-cache:${userId}`, key = definitionKey(definition);
+      const entries = JSON.parse(localStorage.getItem(storageKey) || '[]').filter(entry =>
+        entry.expires > Date.now() && !(entry.key === key && entry.type === thumbnailType));
+      entries.push({key, type:thumbnailType, url, expires:Date.now() + 86400000});
+      localStorage.setItem(storageKey, JSON.stringify(entries.slice(-16)));
+    } catch (_) {}
+  }
   function retryAfter(response, fallback = 20) {
     const value = response.headers.get('retry-after');
     if (value === null) return fallback;
@@ -87,6 +117,8 @@
   }
   function render(definition, userId, signal, thumbnailType = '3d') {
     if (signal?.aborted) return Promise.reject(cancelled());
+    const previous = cached(definition, userId, thumbnailType);
+    if (previous) return Promise.resolve(previous);
     const key = JSON.stringify([String(userId), thumbnailType, definition]);
     let job = jobs.get(key);
     if (!job || job.controller.signal.aborted) {
@@ -97,6 +129,7 @@
         job.complete = true;
         for (const [oldKey, old] of jobs) if (jobs.size > 16 && old.complete) jobs.delete(oldKey);
       }, () => { if (jobs.get(key) === job) jobs.delete(key); });
+      job.promise.then(url => remember(definition, userId, thumbnailType, url), () => {});
     }
     job.users++;
     return new Promise((resolve, reject) => {
@@ -112,5 +145,5 @@
       job.promise.then(value => finish(resolve, value), error => finish(reject, error));
     });
   }
-  globalThis.LarpbloxAvatarRequests = {render, waitForRender, retryAfter};
+  globalThis.LarpbloxAvatarRequests = {render, cached, waitForRender, retryAfter};
 })();
