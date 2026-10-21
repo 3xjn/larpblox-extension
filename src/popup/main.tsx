@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { ChevronRightIcon, SettingsIcon, ArrowLeftIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -172,7 +172,12 @@ function App() {
     }
   }
 
-  const submit = (event: FormEvent, callback: () => void) => { event.preventDefault(); callback(); };
+  // The installed popup sandbox blocks native form submissions. Handle the
+  // button click directly, retaining field validation and Enter-key activation.
+  const submit = (event: MouseEvent<HTMLButtonElement>, callback: () => void) => {
+    event.preventDefault();
+    if (event.currentTarget.form?.reportValidity()) callback();
+  };
   const busy = pending !== null;
   const disabled = busy || !state?.mode;
   const status = (value: Notice) => value.text ? <p role="status" className={value.error ? "notice error" : "notice"}>{value.text}</p> : null;
@@ -204,18 +209,18 @@ function App() {
       </section>
 
       <section className="profile-section">
-        <form className="field" onSubmit={event => submit(event, () => void act("balance", { type: "larpblox-popup-update", balance }, ["balance"], "Balance saved."))}>
+        <form className="field">
           <Label htmlFor="balance">Larpbux balance</Label>
           <div className="flex items-center gap-2.5">
             <div className="relative min-w-0 flex-1"><span className="input-prefix" aria-hidden="true">R$</span><Input id="balance" type="number" min="0" step="1" inputMode="numeric" required className="h-10 pl-10" aria-describedby="balance-help" disabled={disabled} value={balance} onChange={event => setBalance(event.target.value)} /></div>
-            <Button type="submit" variant="outline" className="h-10 px-4" disabled={disabled} loading={pending === "balance"}>Save</Button>
+            <Button type="submit" onClick={event => submit(event, () => void act("balance", { type: "larpblox-popup-update", balance }, ["balance"], "Balance saved."))} variant="outline" className="h-10 px-4" disabled={disabled} loading={pending === "balance"}>Save</Button>
           </div>
           <p id="balance-help" className="help">Pretend balance only.</p>
         </form>
-        <form className="field" onSubmit={event => submit(event, () => void act("username", { type: "larpblox-popup-username", username }, ["username", "balance"]))}>
+        <form className="field">
           <div className="flex items-center justify-between"><Label htmlFor="username">Larp username</Label><span className="help">R$ 1,000</span></div>
           <div className="flex items-center gap-2.5"><Input className="h-10 min-w-0 flex-1" id="username" autoComplete="off" maxLength={20} required disabled={disabled} value={username} onChange={event => setUsername(event.target.value)} aria-describedby="username-help" />
-          <Button type="submit" variant="outline" className="h-10 px-4" disabled={disabled} loading={pending === "username"}>Change</Button></div>
+          <Button type="submit" onClick={event => submit(event, () => void act("username", { type: "larpblox-popup-username", username }, ["username", "balance"]))} variant="outline" className="h-10 px-4" disabled={disabled} loading={pending === "username"}>Change</Button></div>
           <p id="username-help" className="help">Also updates your Larp display name.</p>
         </form>
       </section>
@@ -229,13 +234,13 @@ function App() {
         <div className="secondary-group">
         <h2>Profile counts</h2>
         <p className="help">Choose the counts other Larpblox users see while Larp mode is on.</p>
-        <form className="space-y-3" onSubmit={event => submit(event, () => void act("counts", { type: "larpblox-popup-profile-counts", socialCounts: { followers, following, friends } }, ["counts"], "Profile counts saved.", "counts"))}>
+        <form className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div className="field"><Label htmlFor="followers">Followers</Label><Input id="followers" type="number" min="0" step="1" disabled={disabled} value={followers} onChange={event => setFollowers(event.target.value)} /></div>
             <div className="field"><Label htmlFor="following">Following</Label><Input id="following" type="number" min="0" step="1" disabled={disabled} value={following} onChange={event => setFollowing(event.target.value)} /></div>
             <div className="field"><Label htmlFor="friends">Friends</Label><Input id="friends" type="number" min="0" max="1000" step="1" placeholder="Roblox count" disabled={disabled} value={friends} onChange={event => setFriends(event.target.value)} /><p className="help">Up to 1,000. Leave blank to use Roblox’s count.</p></div>
           </div>
-          <div className="flex flex-wrap gap-2.5"><Button type="submit" disabled={disabled} loading={pending === "counts"}>Save counts</Button><Button type="button" variant="outline" disabled={disabled} loading={pending === "reset-counts"} onClick={() => void act("reset-counts", { type: "larpblox-popup-profile-counts", socialCounts: null }, ["counts"], "Roblox counts restored.", "counts")}>Use Roblox counts</Button></div>
+          <div className="flex flex-wrap gap-2.5"><Button type="submit" onClick={event => submit(event, () => void act("counts", { type: "larpblox-popup-profile-counts", socialCounts: { followers, following, friends } }, ["counts"], "Profile counts saved.", "counts"))} disabled={disabled} loading={pending === "counts"}>Save counts</Button><Button type="button" variant="outline" disabled={disabled} loading={pending === "reset-counts"} onClick={() => void act("reset-counts", { type: "larpblox-popup-profile-counts", socialCounts: null }, ["counts"], "Roblox counts restored.", "counts")}>Use Roblox counts</Button></div>
         </form>
         {status(countsNotice)}
         </div>
