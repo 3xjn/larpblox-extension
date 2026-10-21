@@ -271,7 +271,7 @@
   let thumbnailTimer, thumbnailBusy = false, thumbnailBlockedUntil = 0;
   const counts = new Map();
   const details = new Map();
-  let namesPending=false;
+  let namesPending=false, namesQueued=false;
   let bridgeStatus, bridgePending = false, bridgeSending = false, queuedGameCommand, awaitingGameOutfit;
   const node = (tag, text, className) => { const element = document.createElement(tag); if (text) element.textContent = text; if (className) element.className = className; return element; };
   const key = () => `larpblox-cosmetics-v1:${userId}`;
@@ -305,7 +305,9 @@
   }
   const avatarUrl = () => '/my/avatar';
   async function syncNames() {
-    if (typeof LarpbloxGameBridge === 'undefined' || !userId || !state || namesPending) return;
+    if (typeof LarpbloxGameBridge === 'undefined' || !userId || !state) return;
+    if (namesPending) { namesQueued=true; return; }
+    namesQueued=false;
     const account=userId;
     const name=state.names?.username || '';
     namesPending=true;
@@ -313,7 +315,10 @@
       await LarpbloxGameBridge.request('publishNames',account,{names:{version:1,userId:account,enabled:Boolean(state.mode),name,verified:Boolean(state.mode && state.verified),sharing:Boolean(state.mode && state.sharing)}});
     } catch (error) {
       if (account===userId && bridgeStatus) bridgeStatus.textContent=error.message;
-    } finally { namesPending=false; }
+    } finally {
+      namesPending=false;
+      if (namesQueued) void syncNames();
+    }
   }
   async function syncGame() {
     if (typeof LarpbloxGameBridge === 'undefined' || !userId || !state?.mode || bridgePending || bridgeSending) return;

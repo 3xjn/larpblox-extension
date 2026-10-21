@@ -1,0 +1,20 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const vm=require('node:vm');
+const source=fs.readFileSync('larpbux.js','utf8');
+const fn=source.slice(source.indexOf('  async function syncNames()'),source.indexOf('  async function syncGame()'));
+const sent=[],pending=[];
+const context=vm.createContext({userId:'7',state:{mode:true,verified:false,sharing:true,names:{username:'Alias'}},namesPending:false,namesQueued:false,bridgeStatus:{},LarpbloxGameBridge:{request:async(action,id,payload)=>{sent.push({id,...payload.names});await new Promise(resolve=>pending.push(resolve));}}});
+vm.runInContext(fn,context);
+(async()=>{
+ const initial=context.syncNames();
+ context.state={...context.state,verified:true};
+ await context.syncNames();
+ assert.equal(sent.length,1,'in-flight publication must coalesce');
+ pending.shift()();await initial;await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(sent.length,2,'verification changed during publication must be sent immediately');
+ assert.equal(sent[1].verified,true);
+ pending.shift()();await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(sent.length,2,'queue must stop when no further change arrives');
+ console.log('PASS: verification toggle during pending name publication reaches bridge without polling');
+})().catch(error=>{console.error(error);process.exitCode=1;});
