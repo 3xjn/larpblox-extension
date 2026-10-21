@@ -14,3 +14,7 @@
 .larpblox-verified-badge.larpblox-profile-verified { width:24px; height:24px; margin-left:4px; flex:0 0 auto; vertical-align:middle; }
 .profile-header-title-container > .larpblox-profile-verified,
 .larpblox-verified-badge.larpblox-foundation-profile-verified { margin:0; align-self:center; }
+
+/* Match Roblox's player-search-verified-badge (28px) and name gap (2px). */
+.larpblox-person-card .display-name { display:flex; align-items:center; gap:2px; }
+.larpblox-person-card .larpblox-verified-badge { width:28px; height:28px; flex:0 0 28px; margin:0; vertical-align:middle; }

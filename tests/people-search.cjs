@@ -15,6 +15,7 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
    window.LarpbloxAvatarSurfaces={createForPeer:()=>({update:()=>{}})};
   });
   await page.addStyleTag({path:path.join(__dirname,'../larpbux.css')});
+  await page.addStyleTag({path:path.join(__dirname,'../larpbux-verification.css')});
   await page.addScriptTag({path:path.join(__dirname,'../larpbux-verification.js')});
   await page.addScriptTag({path:path.join(__dirname,'../larpbux-shared-users.js')});
   await page.evaluate(()=>{LarpbloxVerification.update({mode:true,userId:'123',verified:true});LarpbloxSharedUsers.update({mode:true,userId:'123'});});
@@ -23,6 +24,12 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
   await page.evaluate(()=>{document.querySelector('.player-search-results-grid').append(window.savedNativeCard);LarpbloxSharedUsers.update({mode:true,userId:'123'});});
   await page.waitForSelector('#larpblox-people-results .larpblox-verified-badge', {timeout:2000});
   assert.equal(await page.locator('.larpblox-person-card').count(),2);
+  // Measured on Roblox_RTC's native search card: badge 28x28, name gap 2px.
+  const badgeSize = await page.locator('.larpblox-person-card .larpblox-verified-badge').evaluate(node => {
+    const rect=node.getBoundingClientRect(), image=node.querySelector('img').getBoundingClientRect();
+    return {width:rect.width,height:rect.height,imageWidth:image.width,imageHeight:image.height,gap:getComputedStyle(node.parentElement).columnGap};
+  });
+  assert.deepEqual(badgeSize,{width:28,height:28,imageWidth:28,imageHeight:28,gap:'2px'}, 'Larp badge matches native Roblox search dimensions and spacing');
   assert.equal(await page.locator('.player-search-results-grid > #larpblox-people-results:first-child').count(),1, 'Larp cards belong inside the native grid');
   const boxes=await page.locator('.larpblox-person-card, .native-card').evaluateAll(nodes=>nodes.map(n=>{const r=n.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width};}));
   assert.ok(boxes.every(box=>Math.abs(box.width-boxes[0].width)<2), 'Larp and real cards have the same column width');
