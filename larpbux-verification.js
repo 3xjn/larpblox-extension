@@ -76,9 +76,11 @@
       if (!root.querySelector(`:scope > .${markerClass}`) && !root.querySelector(`:scope > ${nativeBadgeSelector}`)) {
         const mark = badge();
         const title = root.matches('.profile-header-title-container') ? root.querySelector(':scope > h1') : null;
-        if (title) {
+        if (title || root.matches(profileSelector)) {
           mark.classList.add('larpblox-profile-verified');
           mark.querySelector('img').classList.add('profile-verified-badge-icon');
+        }
+        if (title) {
           root.insertBefore(mark, title.nextSibling);
         } else root.append(mark);
       }
