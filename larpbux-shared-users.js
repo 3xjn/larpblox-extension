@@ -160,12 +160,66 @@
       }
     }
   }
+  let searchKey = '', searchTime = 0, searchPending = false, searchRecords = new Map();
+  function searchKeyword() {
+    return /^\/search\/users\/?$/i.test(location.pathname) ? (new URLSearchParams(location.search).get('keyword') || '').trim().slice(0, 50) : '';
+  }
+  function renderSearch() {
+    let root = document.getElementById('larpblox-people-results');
+    if (!context.mode || !searchKeyword() || !searchRecords.size) { root?.remove(); return; }
+    const native = document.querySelector('.people-list, .users-list, .people-search-results, #people-search-container .section-content');
+    if (!native) return;
+    if (!root) {
+      root = document.createElement('div'); root.id = 'larpblox-people-results';
+      root.className = 'larpblox-people-results'; root.setAttribute('aria-label', 'Larp player results');
+    }
+    if (native.previousElementSibling !== root) native.before(root);
+    const key = JSON.stringify([...searchRecords].map(([id, record]) => [id, record.name, record.imageUrl]));
+    if (root.dataset.results === key) return;
+    root.dataset.results = key; root.replaceChildren();
+    for (const [id, record] of searchRecords) {
+      const card = document.createElement('article'); card.className = 'larpblox-person-card';
+      const portrait = document.createElement('a'); portrait.href = `/users/${id}/profile`; portrait.className = 'larpblox-person-avatar';
+      const image = document.createElement('img'); image.alt = record.name.displayName || record.name.username;
+      if (record.imageUrl && /^https:\/\//.test(record.imageUrl)) image.src = record.imageUrl;
+      portrait.append(image);
+      const info = document.createElement('div');
+      const name = document.createElement('a'); name.href = portrait.href; name.className = 'display-name'; name.textContent = record.name.displayName || record.name.username;
+      const username = document.createElement('a'); username.href = portrait.href; username.className = 'text-name username'; username.textContent = '@' + record.name.username;
+      const profile = document.createElement('a'); profile.href = portrait.href; profile.className = 'larpblox-person-profile'; profile.textContent = 'View profile';
+      info.append(name, username); card.append(portrait, info, profile); root.append(card);
+    }
+  }
+  async function search() {
+    const keyword = context.mode ? searchKeyword() : '';
+    if (keyword !== searchKey) { searchKey = keyword; searchTime = 0; searchRecords.clear(); }
+    renderSearch();
+    if (!keyword || searchPending || Date.now() - searchTime < 5000) return;
+    searchPending = true; searchTime = Date.now(); const mine = generation;
+    try {
+      const response = await (globalThis.LarpbloxExtension || chrome.runtime).sendMessage({type:'larpblox-search-users',keyword});
+      if (mine !== generation || keyword !== searchKeyword() || !context.mode) return;
+      const next = new Map();
+      for (const record of (response?.ok && response.data?.players || []).slice(0, 50)) {
+        try {
+          const id = String(record.userId);
+          if (!/^[1-9]\d{0,15}$/.test(id) || !record.name?.enabled || !/^[A-Za-z0-9_]{1,20}$/.test(record.name.username) || typeof record.name.displayName !== 'string' || record.name.displayName.length > 50) continue;
+          LarpbloxGameBridge.validateSnapshot(record.snapshot, id);
+          next.set(id, record);
+        } catch {}
+      }
+      searchRecords = next; renderSearch();
+    } catch { /* Keep ordinary Roblox results available when the relay is offline. */ }
+    finally { searchPending = false; }
+  }
   async function scan() {
     if (typeof document === 'undefined' || document.hidden) return;
+    await search();
     if (!context.mode || !context.userId) {
-      records.clear(); apply(); return;
+      searchRecords.clear(); renderSearch(); records.clear(); apply(); return;
     }
-    const ids = collect(), visible = new Set(ids);
+    const ids = collect(), visible = new Set([...ids, ...searchRecords.keys()]);
+    for (const [id, record] of searchRecords) records.set(id, record);
     for (const id of records.keys()) if (!visible.has(id)) records.delete(id);
     apply();
     if (pending || !ids.length || Date.now() - lastPoll < 5000) return;
@@ -185,6 +239,7 @@
           next.set(id, record);
         } catch {}
       }
+      for (const [id, record] of searchRecords) next.set(id, record);
       records = next; apply();
     } catch {
       if (mine === generation) { records.clear(); apply(); }

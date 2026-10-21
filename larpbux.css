@@ -443,3 +443,11 @@ html body .shopping-cart-footer [data-larp-cart-disabled="true"]:active {
   opacity:1 !important;
   cursor:default !important;
 }
+
+.larpblox-people-results { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; margin:12px 0; }
+.larpblox-person-card { display:grid; grid-template-columns:96px 1fr; gap:16px; padding:16px; border-radius:8px; background:var(--color-surface-100,#191a1f); color:inherit; }
+.larpblox-person-avatar { width:96px; height:96px; border-radius:50%; overflow:hidden; background:#c8cad1; }
+.larpblox-person-avatar img { width:100%; height:100%; object-fit:cover; }
+.larpblox-person-card .display-name { display:block; font-weight:600; margin:4px 0; }
+.larpblox-person-card .username { display:block; font-size:12px; }
+.larpblox-person-profile { grid-column:1 / -1; text-align:center; padding:8px; border-radius:8px; background:var(--color-surface-300,#30323d); font-weight:600; }

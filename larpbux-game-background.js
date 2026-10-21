@@ -192,6 +192,16 @@ function onBridgeMessage(message, sender, respond) {
       .finally(() => clearTimeout(timer));
     return true;
   }
+  if (message?.type === 'larpblox-search-users') {
+    if (!/^https:\/\/www\.roblox\.com\//.test(sender.url || '') || sender.id !== chrome.runtime.id || typeof message.keyword !== 'string' || !message.keyword.trim() || message.keyword.length > 50) {
+      respond({ok:false}); return false;
+    }
+    const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 5000);
+    fetch('https://larp.3xjn.dev/v1/profiles?keyword=' + encodeURIComponent(message.keyword.trim()), {credentials:'omit',cache:'no-store',signal:controller.signal})
+      .then(async response => respond(response.ok ? {ok:true,data:await response.json()} : {ok:false}), () => respond({ok:false}))
+      .catch(() => respond({ok:false})).finally(() => clearTimeout(timer));
+    return true;
+  }
   if (message?.type === 'larpblox-shared-users') {
     if (!/^https:\/\/www\.roblox\.com\//.test(sender.url || '') || sender.id !== chrome.runtime.id || !Array.isArray(message.userIds) || message.userIds.length > 50 || !message.userIds.length || message.userIds.some(id => !/^[1-9]\d{0,15}$/.test(String(id)))) {
       respond({ok:false}); return false;
