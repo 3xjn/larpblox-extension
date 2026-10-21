@@ -1370,11 +1370,11 @@
     const isLimited = isLimitedUnique || Boolean(document.querySelector('#item-thumbnail-container-frontend .icon-limited-label, #item-details .icon-limited-label'));
     return {id: Number(match[2]), itemType: match[1] === 'bundles' ? 'Bundle' : 'Asset', assetType, isLimited, isLimitedUnique, name: name.slice(0, 128), price, thumbnail: image?.currentSrc || image?.src || undefined};
   }
-  async function itemData() {
+  async function itemData(requestedPath, quotedPrice) {
     // A local quote must not wait on a remote service when the page has the details.
-    const visible = visibleItem();
+    const visible = !requestedPath && visibleItem();
     if (visible && visible.itemType === 'Asset') return visible;
-    const match = location.pathname.match(/^\/(catalog|bundles)\/(\d+)/);
+    const match = (requestedPath || location.pathname).match(/^\/(catalog|bundles)\/(\d+)/);
     if (!match) return null;
     const path = location.pathname, id = Number(match[2]), type = match[1] === 'bundles' ? 'Bundle' : 'Asset';
     const key = `${type}:${id}`;
@@ -1398,14 +1398,14 @@
     try { item = await details.get(key); }
     catch (error) {
       if (path !== location.pathname) return null;
-      const loaded = visibleItem();
+      const loaded = !requestedPath && visibleItem();
       if (!loaded) throw error;
       return loaded;
     }
     if (path !== location.pathname) return null;
-    const price = nativePrice() ?? item.price;
+    const price = requestedPath ? quotedPrice ?? item.price : nativePrice() ?? item.price;
     if (price === null) throw new Error('A price is not available for this item. Try again once its price loads.');
-    const image = document.querySelector('#item-thumbnail-container-frontend img');
+    const image = !requestedPath && document.querySelector('#item-thumbnail-container-frontend img');
     return {...item, price, thumbnail: image?.currentSrc || image?.src || undefined};
   }
   function catalogControls() {
@@ -1817,6 +1817,73 @@
       }
     });
   }
+  const marketplaceAdds = new Set();
+  async function addMarketplaceCart(control, card) {
+    if (control.dataset.larpCartPending) return;
+    const link = card.querySelector('a[href*="/catalog/"], a[href*="/bundles/"]');
+    if (!link) return;
+    const path = new URL(link.href, location.origin).pathname, account = userId;
+    const priceText = card.querySelector('.item-card-price .text-robux-tile, .item-card-price .text-robux, .item-card-price')?.textContent?.trim();
+    const quote = /^free$/i.test(priceText || '') ? 0 : /^[\d,]+$/.test(priceText || '') ? amount(priceText.replaceAll(',', '')) : undefined;
+    control.dataset.larpCartPending = 'true'; control.setAttribute('aria-busy', 'true');
+    try {
+      const item = await itemData(path, quote);
+      if (!item || userId !== account || !state?.mode) return;
+      const current = read(account); if (!current.mode) return;
+      const image = card.querySelector('img');
+      save(addToCart(current, {...item, thumbnail:image?.currentSrc || image?.src || undefined}));
+      control.title = 'Added to Larp cart';
+    } catch (error) {
+      control.title = error.message;
+      if (message) message.textContent = error.message;
+    } finally { delete control.dataset.larpCartPending; control.removeAttribute('aria-busy'); }
+  }
+  async function openMarketplaceCart() {
+    const account = userId;
+    try {
+      await Promise.all(marketplaceAdds);
+      if (account !== userId || !state?.mode) return;
+      const native = JSON.parse(localStorage.getItem(`Roblox.AvatarMarketplace.Cart:${account}`) || 'null');
+      if (Array.isArray(native?.items)) {
+        const imported = await Promise.all(native.items.map(async entry => {
+          const id = Number(entry.itemId), type = entry.itemType;
+          if (!Number.isSafeInteger(id) || id <= 0 || !['Asset','Bundle'].includes(type)) throw new Error('A cart item could not be loaded.');
+          const detail = native.itemDetails?.[id];
+          const quote = [detail?.lowestPrice, detail?.price].find(value => Number.isSafeInteger(value) && value >= 0);
+          return itemData(`/${type === 'Bundle' ? 'bundles' : 'catalog'}/${id}`, quote);
+        }));
+        if (account !== userId || !state?.mode) return;
+        let current = read(account); if (!current.mode) return;
+        for (const item of imported) if (item && !current.cart.some(entry => keyFor(entry) === keyFor(item))) current = addToCart(current, item);
+        save(current);
+      }
+      if (account === userId && state?.mode) showCart();
+    } catch (error) { if (account !== userId || !state?.mode) return; showCart(); const status = purchaseDialog?.querySelector('.larpbux-purchase-status'); if (status) status.textContent = error.message; }
+  }
+  function clearPurchasedNativeCart(items) {
+    try {
+      const storageKey = `Roblox.AvatarMarketplace.Cart:${userId}`, native = JSON.parse(localStorage.getItem(storageKey) || 'null');
+      if (!Array.isArray(native?.items)) return;
+      const bought = new Set(items.map(keyFor));
+      native.items = native.items.filter(item => !bought.has(`${item.itemType}:${item.itemId}`));
+      for (const item of items) { if (native.selectedItems) delete native.selectedItems[`${item.itemType.toLowerCase()}${item.id}`]; }
+      native.totalPrice = null;
+      localStorage.setItem(storageKey, JSON.stringify(native));
+    } catch (_) {}
+  }
+  function marketplaceCartClick(event) {
+    if (!state?.mode || !/^\/catalog\/?$/i.test(location.pathname)) return false;
+    const control = event.target.closest?.('button, a, [role="button"]');
+    if (!control || control.closest('.larpbux-buy-dialog, .larpbux-panel')) return false;
+    const label = control.getAttribute('aria-label') || control.getAttribute('title') || control.textContent.trim();
+    const cart = /^(?:shopping )?cart(?:\s*\(?\d+\)?)?$/i.test(label) || control.matches('.shopping-cart-btn, [data-testid="shopping-cart-button"], .shopping-cart-button') || control.querySelector('.icon-shopping-cart, .icon-cart');
+    const card = control.closest('.item-card, .item-card-container, .catalog-item-container');
+    const add = card && /^add(?: to cart)?$/i.test(control.textContent.trim()) && card.querySelector('a[href*="/catalog/"], a[href*="/bundles/"]');
+    if (!cart && !add) return false;
+    event.preventDefault(); event.stopImmediatePropagation(); event.stopPropagation();
+    if (cart) void openMarketplaceCart(); else { const pending = addMarketplaceCart(control, card); marketplaceAdds.add(pending); pending.finally(() => marketplaceAdds.delete(pending)); }
+    return true;
+  }
   function showCart() {
     if (!state?.mode || !userId) return;
     closePurchase();
@@ -1856,7 +1923,7 @@
           const current = read(account);
           if (!current.mode) throw new Error('Turn Larp mode on before buying.');
           if (JSON.stringify(current.cart) !== JSON.stringify(state.cart)) throw new Error('Your cart changed. Reopen it to review your purchase.');
-          save(checkoutCart(current)); purchaseComplete(dialog, 'You have successfully bought the items in your cart');
+          save(checkoutCart(current)); clearPurchasedNativeCart(current.cart); purchaseComplete(dialog, 'You have successfully bought the items in your cart');
         } catch (failure) { dialog.removeAttribute('aria-busy'); status.textContent = failure.message; buy.disabled = false; buy.classList.remove('is-loading'); buy.removeAttribute('aria-busy'); buy.textContent = 'Buy'; }
       });
       footer.append(buy);
@@ -2010,6 +2077,7 @@
       });
     });
     window.addEventListener('click',event=>{
+      if (marketplaceCartClick(event)) return;
       if (state?.mode && /^\/(?:catalog|bundles)\/\d+/.test(location.pathname)) {
         const control = event.target?.closest?.('button, [role="button"]');
         if (control?.closest('#item-thumbnail-container-frontend .thumbnail-button-container')) {
