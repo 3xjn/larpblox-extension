@@ -1728,21 +1728,24 @@
         }, true);
       }
     }
-    let count = info?.querySelector('.larpbux-owned-count');
+    let count = page?.querySelector('.larpbux-owned-count');
     if (owned && (limited || singleOwned) && info) {
       for (const label of info.querySelectorAll('span, a')) {
         if (label.closest('.larpbux-owned-count') || !/^(?:Owned Items\s*\(\d+\)|Item Owned)$/i.test(label.textContent.trim())) continue;
         label.classList.add('larpbux-native-owned-count');
       }
-      if (!count) {
-        count = node('span', '', 'larpbux-owned-count');
-        const creator = info.querySelector('.item-details-creator-container, .item-details-creator, .creator-name');
-        if (creator) creator.append(count); else box.before(count);
-      }
+      if (!count) count = node('span', '', 'larpbux-owned-count');
+      const creatorLink = page?.querySelector('a[href*="/communities/"], a[href*="/groups/"], a[href*="/users/"]');
+      const creator = page?.querySelector('#item-details-creator-container, .item-details-creator-container, .item-details-creator, .creator-name, .item-creator') || creatorLink?.parentElement;
+      if (creator) {
+        creator.classList.add('larpbux-owned-creator');
+        if (count.parentElement !== creator) creator.append(count);
+      } else if (!count.isConnected) box.before(count);
       const label = singleOwned ? 'Item Owned' : `Owned Items (${Number.isSafeInteger(owned.quantity) && owned.quantity > 0 ? owned.quantity : 1})`;
       if (count.textContent !== label) count.textContent = label;
     } else {
       count?.remove();
+      page?.querySelectorAll('.larpbux-owned-creator').forEach(element => element.classList.remove('larpbux-owned-creator'));
       for (const label of info?.querySelectorAll('.larpbux-native-owned-count') || []) label.classList.remove('larpbux-native-owned-count');
     }
   }
