@@ -4,39 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Larpblox</title>
-  <link rel="stylesheet" href="popup.css">
-  <script src="popup.js" defer></script>
+  <link rel="stylesheet" href="assets/popup/popup.css">
+  <script src="assets/popup/popup.js" defer></script>
 </head>
-<body>
-  <main>
-    <header>
-      <img src="assets/larpblox-logo.png" alt="">
-      <h1>Larpblox</h1>
-    </header>
-    <p id="status" role="status" aria-live="polite">Connecting to Roblox…</p>
-    <section id="controls" hidden>
-      <label class="mode-toggle" for="larp-mode">
-        <span><strong>Larp mode</strong><small>Use your local pretend balance and cosmetics.</small></span>
-        <input id="larp-mode" type="checkbox">
-      </label>
-      <form id="balance-form">
-        <label for="balance">Pretend Larpbux balance</label>
-        <div class="balance-row">
-          <span aria-hidden="true">R$</span>
-          <input id="balance" type="number" min="0" step="1" inputmode="numeric" aria-describedby="balance-help">
-          <button type="submit">Save</button>
-        </div>
-        <small id="balance-help">Local to this browser. Does not change real Robux.</small>
-      </form>
-      <label class="appearance-setting" for="appearance">
-        <span>Website appearance</span>
-        <select id="appearance">
-          <option value="classic">Classic Roblox (2016)</option>
-          <option value="modern">Current Roblox</option>
-        </select>
-      </label>
-      <small class="appearance-help">Changes only how Roblox looks in this browser.</small>
-    </section>
-  </main>
-</body>
+<body><div id="root"></div></body>
 </html>

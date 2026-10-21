@@ -1,6 +1,6 @@
 # Roblox 2016 Classic for Chrome
 
-Version 1.20.59 adds a Larpblox extension popup for Larp mode, pretend Larpbux balance, and the Classic Roblox (2016) / Current Roblox appearance choice. Open the popup from Chrome's extension toolbar while a signed-in Roblox tab is active. Larp settings are no longer injected into Roblox settings; avatar-specific editing controls remain on the Avatar page.
+Version 1.20.61 moves Larp mode, pretend Larpbux balance, avatar selection, profile counts, Larp username, game connection, and website appearance into the extension popup. Open it from Chrome's extension toolbar while a signed-in Roblox tab is active. No Larpblox settings accordion is injected into Roblox pages.
 
 Version 1.18 adds local Larp character saves in Avatar Editor > Avatars > Creations. With Larp mode on, click the existing Create New Character button, enter a name in the save dialog and save. Larp characters appear beside real outfits in the same grid. Click a character thumbnail to wear its full saved look; its gear menu offers Delete. Saves persist per Roblox account in this browser (up to 12). Native Create New Character / Create New Outfit opens the local save dialog while Larp mode is on. Local saves do not create Roblox account outfits.
 
@@ -234,3 +234,17 @@ Version 1.16.12 uses one **Larp name** in the Robux dropdown. The separate custo
 Version 1.16.13 sends the browser's single Larp name to the paired game through the local helper, including enabled/off state. The in-game Names tab is removed. Run the updated helper and reload the updated game script; then use only the browser Robux dropdown to set names. The local People menu name matcher recognizes the own-player @username row and leaves other players with the same display name unchanged. Live game confirmation remains necessary for protected Roblox menus.
 
 Version 1.16.14 fixes missed sidebar and top-right Larp names: normalizes absolute Roblox profile links and recognizes the current Foundation sidebar's self-avatar link without depending on legacy navigation IDs. The Chrome fixture reproduces the captured header/sidebar link structure, including missing display-name metadata, and checks that other users, external links, and plain navigation remain unchanged.
+
+
+## Editing the extension popup
+
+The popup uses React, TypeScript, Tailwind CSS v4, and Coss UI. Its source is in `src/popup/`.
+
+```sh
+npm ci
+npm run build
+```
+
+The build updates `assets/popup/popup.js` and `popup.css`. Keep these generated files with source changes so the unpacked extension and release ZIP work without a build step. Reload the extension and refresh Roblox after updating.
+
+Larp mode contains a separate **Share appearance** option. Sharing is off unless enabled, is suspended while Larp mode is off, and remembers your choice when Larp mode returns.

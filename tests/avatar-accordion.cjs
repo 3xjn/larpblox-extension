@@ -17,12 +17,10 @@ const {chromium} = require('playwright');
     await page.evaluate(() => localStorage.setItem('larpblox-cosmetics-v1:123', JSON.stringify({version:1,mode:true,balance:100,items:[],equipped:[]})));
     await page.addStyleTag({path:path.join(__dirname,'..','larpbux.css')});
     await page.addScriptTag({path:path.join(__dirname,'..','larpbux.js')});
-    const accordion = page.locator('.left-wrapper > details.larpbux-avatar-settings');
-    await accordion.waitFor();
-    assert.equal(await accordion.locator(':scope > summary').textContent(), 'Larpblox');
-    assert.equal(await accordion.locator('[aria-label="Larp mode"]').isVisible(), false);
-    await accordion.locator(':scope > summary').click();
-    assert.equal(await accordion.locator('[aria-label="Larp mode"]').isVisible(), true);
-    console.log('PASS: Larpblox controls appear as a collapsed, keyboard-native accordion below the avatar preview.');
+    await page.waitForTimeout(100);
+    assert.equal(await page.locator('.larpbux-avatar-settings, .larpbux-avatar-controls').count(), 0);
+    assert.equal(await page.locator('.left-wrapper details').count(), 0);
+    assert.equal(await page.locator('#avatar-web-app [data-larpbux-avatar-view]').count(), 1);
+    console.log('PASS: no Larpblox accordion is injected into the Roblox Avatar page.');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

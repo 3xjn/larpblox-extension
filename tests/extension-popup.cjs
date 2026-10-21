@@ -26,6 +26,7 @@ const {chromium} = require('playwright');
 
     await page.getByRole('checkbox',{name:/Larp mode/}).check();
     await page.waitForFunction(() => window.mockLarpState.mode === true);
+    assert.equal(await page.locator('#status').textContent(), '');
     assert.equal(await page.locator('#balance').isDisabled(),false);
     await page.locator('#balance').fill('2750');
     await page.getByRole('button',{name:'Save'}).click();

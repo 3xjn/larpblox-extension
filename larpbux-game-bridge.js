@@ -23,7 +23,8 @@
   function validateNames(value, userId) {
     if (!value || value.version !== 1 || String(value.userId) !== String(userId) || typeof value.enabled !== 'boolean' || typeof value.name !== 'string') throw new Error('Invalid game name.');
     if (value.name && (!/^[A-Za-z0-9_]{3,20}$/.test(value.name))) throw new Error('Invalid game name.');
-    return {version: 1, userId: String(userId), enabled: value.enabled, name: value.name};
+    if (value.sharing !== undefined && typeof value.sharing !== 'boolean') throw new Error('Invalid sharing preference.');
+    return {version: 1, userId: String(userId), enabled: value.enabled, name: value.name, ...(value.sharing !== undefined ? {sharing:value.sharing} : {})};
   }
   function validateImage(value, userId) {
     if (!value || value.version !== 1 || String(value.userId) !== String(userId) || typeof value.imageUrl !== 'string' || !value.definition) throw new Error('Invalid avatar image.');

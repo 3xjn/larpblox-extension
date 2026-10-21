@@ -4,7 +4,7 @@
   const records = new Map();
   const profileNames = '#profile-header-title-container-name, .stylistic-alts-username, .profile-header-title, .profile-header-username, .profile-header-display-name, [data-testid="profile-header-title"], [data-testid="profile-header-username"], [data-testid="profile-header-display-name"]';
   const accountNames = '#account-username, #account-name, .account-username, .account-name';
-  const skip = 'script, style, input, textarea, select, button, [contenteditable="true"], [data-larpbux], .larpbux-avatar-settings, .larpbux-avatar-controls, .larpbux-panel, .larpbux-buy-dialog, #larpbux-root, #larpblox-root';
+  const skip = 'script, style, input, textarea, select, button, [contenteditable="true"], [data-larpbux], .larpbux-panel, .larpbux-buy-dialog, #larpbux-root, #larpblox-root';
 
   function textNodes(root) {
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);

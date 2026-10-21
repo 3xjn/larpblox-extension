@@ -1,0 +1,5 @@
+Coss UI components were installed from https://coss.com/ui/r/ using the documented shadcn registry commands on 2026-10-20.
+Upstream: https://github.com/cosscom/coss (revision 4c85057e2f6bedc44f366c1025fd67a78b128d56).
+Copyright (c) 2026 Cal.com, Inc. License: AGPL-3.0-only; see LICENSE-COSS.txt.
+The application composition, branding, and integration are in main.tsx and styles.css.
+All popup source and build configuration are included alongside the extension's bundled files.
