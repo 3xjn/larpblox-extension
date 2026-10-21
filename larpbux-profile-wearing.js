@@ -59,13 +59,7 @@
       const badge = document.createElement('span');
       badge.className = item.isLimitedUnique ? 'larpbux-profile-limited-unique' : 'larpbux-profile-limited';
       badge.setAttribute('role','img'); badge.setAttribute('aria-label',item.isLimitedUnique ? 'Limited Unique' : 'Limited');
-      badge.style.cssText = 'position:absolute;bottom:0;left:0;z-index:2;display:inline-flex;align-items:center;width:auto;height:14px;background:#00b06f;color:white;font:700 10px/14px Arial,sans-serif;white-space:nowrap;padding:0 3px;border-radius:0';
-      badge.textContent = 'LIMITED';
-      if (item.isLimitedUnique) {
-        const unique = document.createElement('span'); unique.textContent = 'U';
-        unique.style.cssText = 'display:inline-block;background:#ffdd00;color:#111;padding:0 5px;margin-left:3px;height:14px;line-height:14px';
-        badge.append(unique);
-      }
+      badge.style.cssText = `position:absolute;bottom:0;left:0;z-index:2;display:block;width:123px;height:18px;background-image:url("https://images.rbxcdn.com/3db361bbb7b87ce1.svg");background-repeat:no-repeat;background-size:auto;background-position:0 ${item.isLimitedUnique ? '-126px' : '-54px'};pointer-events:none`;
       thumb.append(badge);
     }
     const caption = document.createElement('div'); caption.className = 'item-card-caption';

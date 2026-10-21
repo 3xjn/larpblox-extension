@@ -5,7 +5,10 @@ await page.route('https://economy.roblox.com/**',r=>{if(r.request().url().includ
 await page.goto('https://www.roblox.com/users/123/profile');await page.addScriptTag({path:path.join(__dirname,'../larpbux-profile-wearing.js')});
 await page.evaluate(()=>LarpbloxProfileWearing.update({userId:123,active:true,signature:'test',items:[{id:1,name:'Known'}],loadDefinition:async()=>({assets:[{id:1},{id:2},{id:3},{id:4},{id:5}]}),thumbnail:()=>{}}));
 assert.equal(await page.locator('.larpbux-currently-wearing .larpbux-profile-limited-unique').count(),1);
-assert.equal(await page.locator('.larpbux-profile-limited-unique').textContent(),'LIMITEDU');
+assert.equal(await page.locator('.larpbux-profile-limited-unique').getAttribute('aria-label'),'Limited Unique');
+assert.equal(await page.locator('.larpbux-profile-limited-unique').evaluate(e=>getComputedStyle(e).backgroundPosition),'0px -126px');
+assert.equal(await page.locator('.larpbux-profile-limited').first().evaluate(e=>getComputedStyle(e).backgroundPosition),'0px -54px');
+assert.match(await page.locator('.larpbux-profile-limited').first().evaluate(e=>getComputedStyle(e).backgroundImage),/3db361bbb7b87ce1\.svg/);
 assert.ok((await page.locator('.larpbux-profile-limited-unique').boundingBox()).height>0,'badge must have a visible height without page sprite CSS');
 assert.equal(await page.locator('.larpbux-profile-limited').count(),2);
 const badgeBox=await page.locator('.larpbux-profile-limited-unique').boundingBox();
