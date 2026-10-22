@@ -45,18 +45,32 @@
   const profileId = () => location.pathname.match(/^\/users\/([1-9]\d*)\/profile\/?$/)?.[1];
   const profileSelector = '#profile-header-title-container-name,.stylistic-alts-username,.profile-header-title,.profile-header-username,.profile-header-display-name,[data-testid="profile-header-title"],[data-testid="profile-header-username"],[data-testid="profile-header-display-name"]';
   let titleState;
+  const resolvedProfiles = new Set();
   function applyProfileTitle() {
     const id = profileId();
     if (titleState?.id !== id) titleState = undefined;
     if (titleState && document.title !== titleState.shown) titleState.real = document.title;
     const name = context.mode && id && (id === String(context.userId) ? context.names : records.get(id)?.name);
     const display = name && name.enabled !== false && (name.displayName || name.username);
+    try {
+      if (context.userId && typeof context.mode === 'boolean') localStorage.setItem('larpblox-profile-titles-enabled', String(context.mode));
+      if (!display && context.mode && id && id !== String(context.userId) && !resolvedProfiles.has(id)) return;
+      if (id) {
+        const key = `larpblox-profile-title:${id}`;
+        if (display) {
+          const cached = JSON.parse(localStorage.getItem(key) || 'null');
+          if (cached?.displayName !== display || cached.expires < Date.now() + 60000)
+            localStorage.setItem(key, JSON.stringify({displayName:display, expires:Date.now() + 300000}));
+        } else localStorage.removeItem(key);
+      }
+    } catch { /* Titles still work when browser storage is unavailable. */ }
     if (!display) {
       if (titleState && document.title === titleState.shown) document.title = titleState.real;
       titleState = undefined;
+      globalThis.LarpbloxIdentityGate?.clearProfileTitle(id);
       return;
     }
-    if (!titleState) titleState = {id, real:document.title};
+    if (!titleState) titleState = {id, real:globalThis.LarpbloxIdentityGate?.profileTitleSource(id) ?? document.title};
     titleState.shown = `${display} - Roblox`;
     if (document.title !== titleState.shown) document.title = titleState.shown;
   }
@@ -274,12 +288,13 @@
         } catch {}
       }
       for (const [id, record] of searchRecords) next.set(id, record);
+      for (const id of ids) resolvedProfiles.add(id);
       records = next; apply();
     } catch { /* Keep the last known profile through transient lookup failures. */ }
     finally { pending = false; }
   }
   function update(next) {
-    if (context.userId !== next.userId || context.mode !== next.mode) { generation++; records.clear(); lastPoll = 0; }
+    if (context.userId !== next.userId || context.mode !== next.mode) { generation++; records.clear(); resolvedProfiles.clear(); lastPoll = 0; }
     context = next;
     if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; scan(); }); }
   }
