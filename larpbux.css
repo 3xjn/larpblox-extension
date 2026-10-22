@@ -453,10 +453,10 @@ html body .shopping-cart-footer [data-larp-cart-disabled="true"]:active {
 #avatar-web-app .larpbux-native-loading { width:75px; margin-left:auto; margin-right:auto; position:relative; }
 #avatar-web-app .larpbux-native-loading:before { content:""; padding-top:32%; display:block; }
 #avatar-web-app .larpbux-native-loading > div { position:absolute; top:0; bottom:0; left:0; right:0; }
-#avatar-web-app .larpbux-native-loading > div > div { background:#656668; float:left; width:16%; height:50%; transition-timing-function:ease-in-out; animation:1.8s infinite larpbux-native-loader; display:block; position:relative; top:50%; transform:translateY(-50%); }
+#avatar-web-app .larpbux-native-loading > div > div { background:#656668; float:left; width:16%; height:50%; animation:1.5s ease-in-out infinite larpbux-native-loader; display:block; position:relative; top:50%; transform:translateY(-50%); }
 #avatar-web-app .larpbux-native-loading > div > div:not(:first-child) { margin-left:26%; }
 #avatar-web-app .larpbux-native-loading > div > div:first-child { animation-delay:0s; }
-#avatar-web-app .larpbux-native-loading > div > div:nth-child(2) { animation-delay:.6s; }
-#avatar-web-app .larpbux-native-loading > div > div:nth-child(3) { animation-delay:1.2s; }
+#avatar-web-app .larpbux-native-loading > div > div:nth-child(2) { animation-delay:.5s; }
+#avatar-web-app .larpbux-native-loading > div > div:nth-child(3) { animation-delay:1s; }
 @keyframes larpbux-native-loader { 0%,33% { background:#656668; height:50%; } 16.5% { background:#fff; height:66.666667%; } }
 @media (prefers-reduced-motion:reduce) { #avatar-web-app .larpbux-native-loading > div > div { animation:none; } }

@@ -59,6 +59,7 @@ const {chromium} = require('playwright');
           squareWidth: Math.round(boxes[0].width), squareHeight: Math.round(boxes[0].height),
           gaps: boxes.slice(1).map((box, index) => box.left - boxes[index].right),
           durations: styles.map(style => style.animationDuration),
+          easing: styles.map(style => style.animationTimingFunction),
           delays: styles.map(style => style.animationDelay),
           backgrounds: styles.map(style => style.backgroundColor)
         };
@@ -66,18 +67,27 @@ const {chromium} = require('playwright');
       assert.deepEqual([metrics.width, metrics.height], [75, 24]);
       assert.deepEqual([metrics.squareWidth, metrics.squareHeight], [12, 12]);
       assert.deepEqual(metrics.gaps, [19.5, 19.5]);
-      assert.deepEqual(metrics.durations, ['1.8s', '1.8s', '1.8s']);
-      assert.deepEqual(metrics.delays, ['0s', '0.6s', '1.2s']);
+      assert.deepEqual(metrics.durations, ['1.5s', '1.5s', '1.5s']);
+      assert.deepEqual(metrics.easing, ['ease-in-out', 'ease-in-out', 'ease-in-out']);
+      assert.deepEqual(metrics.delays, ['0s', '0.5s', '1s']);
       assert.deepEqual(metrics.backgrounds, ['rgb(101, 102, 104)', 'rgb(101, 102, 104)', 'rgb(101, 102, 104)']);
       const pulse = await squares.first().evaluate(element => {
-        element.getAnimations()[0].currentTime = 297;
+        element.getAnimations()[0].currentTime = 247.5;
         return {height:element.getBoundingClientRect().height, color:getComputedStyle(element).backgroundColor};
       });
       assert.deepEqual(pulse, {height:16, color:'rgb(255, 255, 255)'});
+      const growth = await squares.first().evaluate(square => {
+        const animation = square.getAnimations()[0];
+        return [0, 123.75, 247.5, 371.25, 495].map(time => {
+          animation.currentTime = time;
+          return square.getBoundingClientRect().height;
+        });
+      });
+      assert.deepEqual(growth, [12, 14, 16, 14, 12], 'growth and shrink should ease symmetrically without changing the peak size');
       const colors = await native.evaluate(element => {
         const animations = element.getAnimations({subtree:true});
         const colors = new Set();
-        for (let time = 0; time <= 3600; time += 20) {
+        for (let time = 0; time <= 3000; time += 20) {
           for (const animation of animations) animation.currentTime = time;
           for (const square of element.querySelectorAll(':scope > div > div')) colors.add(getComputedStyle(square).backgroundColor);
         }
@@ -92,7 +102,7 @@ const {chromium} = require('playwright');
         const peak = await squares.nth(index).evaluate((square, time) => {
           square.getAnimations()[0].currentTime = time;
           return getComputedStyle(square).backgroundColor;
-        }, index * 600 + 297);
+        }, index * 500 + 247.5);
         assert.equal(peak, 'rgb(255, 255, 255)', 'each enlarged square must reach the sampled pure white');
       }
     };
@@ -102,7 +112,7 @@ const {chromium} = require('playwright');
     if (process.env.LOADER_SCREENSHOT) {
       await page.locator('.avatar-back').evaluate(element => element.style.backgroundColor = '#b9926b');
       await page.locator('.larpbux-native-loading').evaluate(element => {
-        for (const animation of element.getAnimations({subtree:true})) animation.currentTime = 897;
+        for (const animation of element.getAnimations({subtree:true})) animation.currentTime = 747.5;
       });
       await page.locator('.avatar-thumbnail').screenshot({path:process.env.LOADER_SCREENSHOT});
     }
