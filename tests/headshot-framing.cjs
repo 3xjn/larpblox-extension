@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const esbuild = require('esbuild');
-const nodePaths = [path.resolve(__dirname,'../.test-artifacts/renderer-build/node_modules')];
+const nodePaths = [path.resolve(__dirname,'../../renderer-build/node_modules')];
 const built = esbuild.buildSync({stdin:{contents: `
   import * as THREE from 'three';
   import {headshotFrame} from './larpbux-avatar-3d-source.js';
@@ -14,8 +14,8 @@ function mesh(root,name,x,y,z,w,h,d){
   const object=new THREE.Mesh(new THREE.BoxGeometry(w,h,d));object.name=name;object.position.set(x,y,z);root.add(object);return object;
 }
 const root=new THREE.Group();
-mesh(root,'Player1',1.2,5,0.7,1.2,1.2,1.2); // Exported head, offset by the pose.
-mesh(root,'Player2',1.2,6.4,0.7,0.8,1.4,0.2); // Taller ears, never the head.
+mesh(root,'Player9',1.2,5,0.7,1.2,1.2,1.2); // Exported head, offset by the pose.
+mesh(root,'Handle2',1.2,6.4,0.7,0.8,1.4,0.2); // Taller ears, never the head.
 mesh(root,'Player3',-1,2.5,0,3,4,1); // Off-center body must not move the portrait.
 root.updateMatrixWorld(true);
 const box=new THREE.Box3().setFromObject(root);

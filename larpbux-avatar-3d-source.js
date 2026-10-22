@@ -99,19 +99,21 @@ function descriptorView(camera) {
 }
 
 export function headshotFrame(root, avatarBox) {
-  // Roblox's OBJ exporter puts the head in Player1; later numbered meshes
-  // include accessories. Their height does not identify the anatomical head.
-  let namedHead, exportedHead;
+  // Numbered Player meshes are body parts in export order, not anatomy order.
+  // Accessories use Handle names; the highest body-part center is the head.
+  let namedHead, exportedHead, highest = -Infinity;
   root.traverse(part => {
     if (!part.isMesh) return;
     if (/^Head$/i.test(part.name)) namedHead = part;
-    else if (/^Player1$/i.test(part.name)) exportedHead = part;
+    else if (/^Player\d+$/i.test(part.name)) {
+      const y = new THREE.Box3().setFromObject(part).getCenter(new THREE.Vector3()).y;
+      if (y > highest) { highest = y; exportedHead = part; }
+    }
   });
   const size = avatarBox.getSize(new THREE.Vector3());
-  let head = namedHead || exportedHead;
+  const head = namedHead || exportedHead;
   let bounds = head && new THREE.Box3().setFromObject(head);
-  // A headless/unrecognized export still gets an upper-body portrait.
-  if (!bounds || bounds.getCenter(new THREE.Vector3()).y < avatarBox.min.y + size.y * 0.55) {
+  if (!bounds || bounds.isEmpty()) {
     bounds = avatarBox.clone();
     bounds.min.y = avatarBox.min.y + size.y * 0.65;
   }
@@ -352,7 +354,8 @@ export async function create(host, descriptorUrl, options = {}) {
         photoCamera.aspect = 1;
         if (kind === 'headshot') {
           const {target, radius: photoRadius} = headshotFrame(root, box);
-          const direction = camera.position.clone().sub(controls.target).normalize();
+          photoCamera.fov = 35;
+          const direction = new THREE.Vector3(0, 0, -1);
           photoCamera.position.copy(target).addScaledVector(direction, photoRadius / Math.sin(THREE.MathUtils.degToRad(photoCamera.fov / 2)));
           photoCamera.lookAt(target);
         }
@@ -360,7 +363,7 @@ export async function create(host, descriptorUrl, options = {}) {
         const previousSize = renderer.getSize(new THREE.Vector2());
         const previousBackground = scene.background;
         try {
-          if (options.background === false) scene.background = null;
+          if (kind === 'headshot' || options.background === false) scene.background = null;
           renderer.setSize(420, 420, false);
           fitBackground(1);
           renderer.render(scene, photoCamera);

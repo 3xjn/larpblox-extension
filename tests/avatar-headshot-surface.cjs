@@ -17,7 +17,7 @@ const {chromium} = playwright;
       const definition = {assets:[{id:808}]};
       const headshot = 'data:image/png;base64,headshot';
       const fullBody = 'data:image/png;base64,fullbody';
-      localStorage.setItem('larpblox-profile-pictures:123', JSON.stringify({version:2, key:JSON.stringify(definition), expires:Date.now()+60000, result:{headshot,fullBody,transparentBody:fullBody}}));
+      localStorage.setItem('larpblox-profile-pictures:123', JSON.stringify({version:3, key:JSON.stringify(definition), expires:Date.now()+60000, result:{headshot,fullBody,transparentBody:fullBody}}));
       window.LarpbloxAvatarRequests = {definitionKey: JSON.stringify, render: async () => { throw Object.assign(new Error('rate limited'), {retryAfter:120}); }};
     });
     await page.addScriptTag({path:path.join(__dirname,'../larpbux-avatar-surfaces.js')});
