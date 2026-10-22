@@ -2283,18 +2283,23 @@
         if (label.closest('.larpbux-owned-count') || !/^(?:Owned Items\s*\(\d+\)|Item Owned)$/i.test(label.textContent.trim())) continue;
         label.classList.add('larpbux-native-owned-count');
       }
-      if (!count) count = node('span', '', 'larpbux-owned-count');
+      if (!count) {
+        count = node('span', '', 'item-owned larpbux-owned-count');
+        // Use Roblox's item-details badge, including its theme sprite and responsive spacing.
+        const check = node('div', '', 'label-checkmark');
+        check.setAttribute('aria-hidden', 'true');
+        check.append(node('span', '', 'icon-checkmark-white-bold'));
+        count.append(check, node('span'));
+      }
       const creatorLink = page?.querySelector('a[href*="/communities/"], a[href*="/groups/"], a[href*="/users/"]');
       const creator = page?.querySelector('#item-details-creator-container, .item-details-creator-container, .item-details-creator, .creator-name, .item-creator') || creatorLink?.parentElement;
       if (creator) {
-        creator.classList.add('larpbux-owned-creator');
         if (count.parentElement !== creator) creator.append(count);
       } else if (!count.isConnected) box.before(count);
       const label = singleOwned ? 'Item Owned' : `Owned Items (${Number.isSafeInteger(owned.quantity) && owned.quantity > 0 ? owned.quantity : 1})`;
-      if (count.textContent !== label) count.textContent = label;
+      if (count.lastElementChild.textContent !== label) count.lastElementChild.textContent = label;
     } else {
       count?.remove();
-      page?.querySelectorAll('.larpbux-owned-creator').forEach(element => element.classList.remove('larpbux-owned-creator'));
       for (const label of info?.querySelectorAll('.larpbux-native-owned-count') || []) label.classList.remove('larpbux-native-owned-count');
     }
   }

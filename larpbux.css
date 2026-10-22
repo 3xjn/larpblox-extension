@@ -285,8 +285,7 @@ html.larpblox-modern .larpbux-item-buy-dialog :is(.larpbux-purchase-name,.larpbu
 .larpbux-username-dialog input { display:block; box-sizing:border-box; width:100%; margin:8px 0 18px; padding:10px; border:1px solid #aaa; border-radius:8px; font:inherit; background:inherit; color:inherit; }
 .larpbux-owned-count { display:none; }
 html.larpblox-pretend-mode .larpbux-native-owned-count { display:none !important; }
-html.larpblox-pretend-mode .larpbux-owned-count { display:inline-flex; align-items:center; gap:6px; margin-left:16px; color:inherit; font-size:16px; font-weight:600; white-space:nowrap; }
-.larpbux-owned-count::before { content:'✓'; display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:50%; background:#00b870; color:#102c22; font-size:13px; font-weight:700; }
+html.larpblox-pretend-mode .larpbux-owned-count { display:inline; white-space:nowrap; }
 /* Match Roblox's Update Character confirmation. */
 html dialog.larpbux-character-update { box-sizing:border-box; width:480px; max-width:calc(100vw - 32px); padding:24px 20px 20px; border:1px solid #292b32; border-radius:17px; background:#191a1f; color:#f7f7f8; box-shadow:0 12px 40px #0006; font:14px/20px Arial,sans-serif; }
 html dialog.larpbux-character-update::backdrop { background:rgba(0,0,0,.6); }
@@ -417,7 +416,6 @@ html.larpblox-modern .larpbux-single-owned .larpbux-owned-notice { font-size:16p
 html.larpblox-modern .larpbux-single-owned .larpbux-owned-link { display:flex; align-items:center; justify-content:center; flex:0 0 48px; width:48px; height:48px; box-sizing:border-box; margin:0; border:0; border-radius:8px; background:#272930; color:#bfc1c7; text-decoration:none; }
 html.larpblox-modern .larpbux-single-owned .larpbux-owned-link:hover { background:#34363f; }
 
-html.larpblox-modern.larpblox-pretend-mode .larpbux-owned-creator { display:flex !important; align-items:center; flex-wrap:wrap; }
 
 .larpbux-social-counts > label { display:flex; justify-content:space-between; gap:16px; margin:12px 0; }
 .larpbux-social-counts input { max-width:240px; }
