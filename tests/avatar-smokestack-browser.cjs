@@ -11,12 +11,22 @@ const image = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQ
   try {
     const page = await browser.newPage();
     const obj = ['o Handle','v -1 0 0','v 1 0 0','v 0 2 0','vt 0 0','vt 1 0','vt .5 1','usemtl smokestack','f 1/1 2/2 3/3'].join('\n');
-    const mtl = 'newmtl smokestack\nmap_Kd normal-hash\n';
+    const mtl = 'newmtl smokestack\nmap_Kd atlas-hash\n';
+    const mesh = Buffer.alloc(13 + 12 + 3 * 40 + 12);
+    mesh.write('version 2.00\n'); mesh.writeUInt16LE(12,13); mesh[15]=40; mesh[16]=12;
+    mesh.writeUInt32LE(3,17); mesh.writeUInt32LE(1,21);
+    [[-1,0,0,0,0],[1,0,0,1,0],[0,2,0,.5,1]].forEach((v,i) => {
+      v.slice(0,3).forEach((n,j) => mesh.writeFloatLE(n,25+i*40+j*4));
+      v.slice(3).forEach((n,j) => mesh.writeFloatLE(n,25+i*40+24+j*4));
+    });
+    [0,1,2].forEach((n,i)=>mesh.writeUInt32LE(n,145+i*4));
     await page.route('**/*', async route => {
       const url = route.request().url();
       const id = url.match(/assetdelivery\.roblox\.com\/v2\/assetId\/(\d+)/)?.[1];
       if (id) return route.fulfill({json:{locations:[{location:`https://t0.rbxcdn.com/${id === '6991140417' ? 'normal-hash' : id}`}]},headers:{'access-control-allow-origin':'null','access-control-allow-credentials':'true'}});
       if (url.endsWith('/descriptor')) return route.fulfill({contentType:'application/json', body:JSON.stringify({obj:'obj',mtl:'mtl',textures:['normal-hash']})});
+      if (url.endsWith('/2399307491')) return route.fulfill({body:mesh,headers:{'access-control-allow-origin':'*'}});
+      if (url.endsWith('/atlas-hash')) return route.fulfill({contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==','base64'),headers:{'access-control-allow-origin':'*'}});
       if (url.endsWith('/obj')) return route.fulfill({body:obj});
       if (url.endsWith('/mtl')) return route.fulfill({body:mtl});
       const name = url.split('/').pop().split('?')[0];

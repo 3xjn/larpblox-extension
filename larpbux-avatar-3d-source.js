@@ -9,6 +9,88 @@ const backgroundUrls = new Map();
 const SMOKESTACK_TEXTURES = Object.freeze({normal:6991140417, halloween:6991166143, thanksgiving:6991393806, birthday:2399316028, stpatricks:2399447918, valentines:2399448372});
 const SMOKESTACK_STYLES = new Set(['auto', ...Object.keys(SMOKESTACK_TEXTURES), 'christmas', 'aprilfools']);
 const smokestackTextures = new Map();
+let smokestackMesh;
+
+// Read the public SpecialMesh used by this exact catalog hat, not an arbitrary
+// Handle or the highest accessory. OBJ exports can repack its texture into an atlas.
+export function readSmokestackMesh(buffer) {
+  const bytes = new Uint8Array(buffer), view = new DataView(buffer);
+  const prefix = new TextDecoder().decode(bytes.subarray(0, 32));
+  const version = prefix.match(/^version (\d+\.\d+)/)?.[1];
+  const start = bytes.indexOf(10) + 1;
+  if (!start || !version) throw new Error('Invalid hat mesh');
+  if (version === '1.00' || version === '1.01') {
+    const lines = new TextDecoder().decode(bytes).trim().split(/\r?\n/);
+    const vectors = [...lines.slice(2).join('').matchAll(/\[([^\]]+)\]/g)].map(match => match[1].split(',').map(Number));
+    if (vectors.length !== Number(lines[1]) * 9) throw new Error('Invalid hat mesh');
+    const positions = [], uvs = [];
+    for (let i = 0; i < vectors.length; i += 3) {
+      positions.push(...vectors[i].map(n => n * (version === '1.00' ? .5 : 1)));
+      uvs.push(vectors[i + 2][0], 1 - vectors[i + 2][1]);
+    }
+    return {positions, uvs};
+  }
+  const major = Number(version[0]);
+  if (![2,3,4].includes(major) || buffer.byteLength < start + 12) throw new Error('Unsupported hat mesh');
+  const headerSize = view.getUint16(start, true);
+  const vertexSize = major === 4 ? 40 : view.getUint8(start + 2);
+  const faceSize = major === 4 ? 12 : view.getUint8(start + 3);
+  const countOffset = start + (major === 3 ? 8 : 4);
+  const vertexCount = view.getUint32(countOffset, true), faceCount = view.getUint32(countOffset + 4, true);
+  const vertices = start + headerSize;
+  const boneCount = major === 4 ? view.getUint16(start + 14, true) : 0;
+  const faces = vertices + vertexCount * (vertexSize + (boneCount ? 8 : 0));
+  if (vertexSize < 32 || faceSize < 12 || !faceCount || faceCount > 100000 || faces + faceCount * faceSize > buffer.byteLength) throw new Error('Invalid hat mesh');
+  const positions = [], uvs = [];
+  for (let face = 0; face < faceCount; face++) {
+    for (let corner = 0; corner < 3; corner++) {
+      const index = view.getUint32(faces + face * faceSize + corner * 4, true);
+      if (index >= vertexCount) throw new Error('Invalid hat mesh index');
+      const offset = vertices + index * vertexSize;
+      for (let axis = 0; axis < 3; axis++) positions.push(view.getFloat32(offset + axis * 4, true));
+      uvs.push(view.getFloat32(offset + 24, true), 1 - view.getFloat32(offset + 28, true));
+    }
+  }
+  if (![...positions, ...uvs].every(Number.isFinite)) throw new Error('Invalid hat mesh coordinates');
+  return {positions, uvs};
+}
+
+function canonicalSmokestackMesh() {
+  if (!smokestackMesh) {
+    smokestackMesh = deliveryUrl(2399307491).then(url => fetch(url)).then(response => {
+      if (!response.ok) throw new Error('Hat mesh unavailable');
+      return response.arrayBuffer();
+    }).then(readSmokestackMesh);
+    smokestackMesh.catch(() => { smokestackMesh = undefined; });
+  }
+  return smokestackMesh;
+}
+
+export function smokestackMeshUVs(geometry, reference) {
+  const position = geometry.getAttribute('position');
+  const indices = geometry.index;
+  const count = indices?.count || position?.count;
+  if (!position || count * 3 !== reference.positions.length) return null;
+  const point = index => [position.getX(index), position.getY(index), position.getZ(index)];
+  const distance = (a,b) => Math.hypot(...a.map((v,i)=>v-b[i]));
+  const points = Array.from({length:count},(_,i)=>point(indices ? indices.getX(i) : i));
+  const original = Array.from({length:count},(_,i)=>reference.positions.slice(i*3,i*3+3));
+  const edges = values => values.flatMap((_,i) => i % 3 ? [] : [distance(values[i],values[i+1]),distance(values[i+1],values[i+2]),distance(values[i+2],values[i])]);
+  const actualEdges = edges(points), actualScale = actualEdges.reduce((a,b)=>Math.max(a,b),0);
+  if (!actualScale) return null;
+  for (const order of [[0,1,2],[2,1,0],[1,2,0],[0,2,1],[2,0,1],[1,0,2]]) {
+    const permuted = original.map((_,i)=>original[i-i%3+order[i%3]]);
+    const expected = edges(permuted), scale = expected.reduce((a,b)=>Math.max(a,b),0);
+    if (!scale || expected.some((value,i)=>Math.abs(value/scale-actualEdges[i]/actualScale) > .015)) continue;
+    // OBJLoader expands faces; restoring the original UVs undoes atlas packing.
+    if (indices) return null;
+    return new THREE.Float32BufferAttribute(points.flatMap((_,i) => {
+      const offset = (i-i%3+order[i%3])*2;
+      return reference.uvs.slice(offset,offset+2);
+    }), 2);
+  }
+  return null;
+}
 
 export function smokestackSeason(style = 'auto', date = new Date()) {
   style = SMOKESTACK_STYLES.has(style) ? style : 'auto';
@@ -232,19 +314,40 @@ export function avatarMaterials(mtlText, manager) {
 async function findSmokestack(root, signal) {
   // The exported OBJ does not retain the asset id. Its normal texture does,
   // so only touch meshes whose loaded diffuse map is Smokestack's known file.
-  const normalTexture = await raceAbort(seasonalTexture(SMOKESTACK_TEXTURES.normal), signal);
-  const normal = urlKey(normalTexture.image?.currentSrc || normalTexture.image?.src || '');
-  const normalPixels = imageSignature(normalTexture.image);
   const parts = [];
-  root.traverse(node => {
-    if (!node.isMesh) return;
-    const materials = Array.isArray(node.material) ? node.material : [node.material];
-    materials.forEach((material, index) => {
-      const image = material?.map?.image;
-      const source = image?.currentSrc || image?.src || '';
-      if (urlKey(source) === normal || (normalPixels && imageSignature(image) === normalPixels)) parts.push({node, material, index, original:material.map, visible:node.visible, current:null});
+  try {
+    const normalTexture = await raceAbort(seasonalTexture(SMOKESTACK_TEXTURES.normal), signal);
+    const normal = urlKey(normalTexture.image?.currentSrc || normalTexture.image?.src || '');
+    const normalPixels = imageSignature(normalTexture.image);
+    root.traverse(node => {
+      if (!node.isMesh) return;
+      const materials = Array.isArray(node.material) ? node.material : [node.material];
+      materials.forEach((material, index) => {
+        const image = material?.map?.image;
+        const source = image?.currentSrc || image?.src || '';
+        if (urlKey(source) !== normal && (!normalPixels || imageSignature(image) !== normalPixels)) return;
+        const isolated = material.clone();
+        if (Array.isArray(node.material)) { node.material = [...node.material]; node.material[index] = isolated; }
+        else node.material = isolated;
+        parts.push({node, material:isolated, index, original:material.map, visible:node.visible, current:null});
+      });
     });
-  });
+  } catch (error) { if (signal.aborted) throw error; }
+  if (!parts.length) {
+    const reference = await raceAbort(canonicalSmokestackMesh(), signal);
+    const matches = [];
+    root.traverse(node => {
+      if (!node.isMesh || Array.isArray(node.material)) return;
+      const nativeUV = smokestackMeshUVs(node.geometry, reference);
+      if (nativeUV) matches.push({node, nativeUV});
+    });
+    if (matches.length === 1) {
+      const {node, nativeUV} = matches[0];
+      // An exported atlas material can be shared with other items. Isolate it.
+      node.material = node.material.clone();
+      parts.push({node, material:node.material, original:node.material.map, visible:node.visible, current:null, nativeUV, exportedUV:node.geometry.getAttribute('uv')});
+    }
+  }
   return parts;
 }
 
@@ -441,6 +544,7 @@ export async function create(host, descriptorUrl, options = {}) {
         smokestackEffect?.material.dispose();
         smokestackEffect = undefined;
         for (const part of parts) {
+          if (part.nativeUV) part.node.geometry.setAttribute('uv', texture ? part.nativeUV : part.exportedUV);
           part.node.visible = season === 'aprilfools' ? false : part.visible;
           part.current?.dispose();
           part.current = null;
