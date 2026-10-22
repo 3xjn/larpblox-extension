@@ -184,7 +184,7 @@
     const slots = new Set(items.filter(item => [17, 18, 27, 28, 29, 30, 31, 79, 2, 11, 12, 19, 48, 50, 51, 52, 53, 54, 55, 56, 64, 65, 66, 67, 68, 69, 70, 71, 72].includes(item.assetType)).map(item => item.assetType));
     if (slots.has(17) || slots.has(79)) { slots.add(17); slots.add(79); }
     const renderAsset = asset => asset.meta === undefined ? {id: asset.id} : {id: asset.id, meta: asset.meta};
-    const assets = (avatar.assets || []).filter(asset => !slots.has(asset.assetType?.id)).map(renderAsset);
+    const assets = (avatar.assets || []).filter(asset => Number(asset.assetType?.id ?? asset.assetType) !== 92 && !slots.has(asset.assetType?.id)).map(renderAsset);
     for (const item of items) if (!assets.some(asset => asset.id === item.id)) assets.push(renderAsset(item));
     const bodyColors = {};
     for (const [part, color] of Object.entries(avatar.bodyColor3s || avatar.bodyColors || {})) {
@@ -239,8 +239,10 @@
     const managed = new Set(look.items.filter(supportsOutfit).map(item => item.id));
     const replaceSlots = new Set(selected.filter(item => [17, 18, 27, 28, 29, 30, 31, 79, 2, 11, 12, 19, 48, 50, 51, 52, 53, 54, 55, 56, 64, 65, 66, 67, 68, 69, 70, 71, 72].includes(item.assetType)).map(item => item.assetType));
     if (replaceSlots.has(17) || replaceSlots.has(79)) { replaceSlots.add(17); replaceSlots.add(79); }
-    const types = new Map(look.items.map(item => [item.id, item.assetType]));
+    const types = new Map([...state.items, ...look.items].map(item => [item.id, item.assetType]));
+    const backgrounds = new Set([look.definition.backgroundId, look.definition.backgroundRequestModel?.id, ...(look.backgrounds || []).map(item => item.id)].filter(Boolean).map(Number));
     const assets = look.definition.assets.filter(asset =>
+      Number(types.get(asset.id) ?? asset.assetType?.id ?? asset.assetType) !== 92 && !backgrounds.has(Number(asset.id)) &&
       (!managed.has(asset.id) || selectedIds.has(asset.id)) && (!replaceSlots.has(types.get(asset.id)) || selectedIds.has(asset.id)));
     for (const item of selected) if (!assets.some(asset => asset.id === item.id)) assets.push({id: item.id});
     const definition = {...look.definition, assets};

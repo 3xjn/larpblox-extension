@@ -3,6 +3,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {chromium} = require('C:/Users/noahk/.bun/install/cache/playwright-core@1.64.1@@@1');
 
+const {previewDefinition} = require('../larpbux.js');
+const inheritedDefinition = previewDefinition({assets:[{id:75789087422384,assetType:{id:92}},{id:808,assetType:{id:19}}],bodyColor3s:{headColor3:'ffffff'},scales:{height:1.1},playerAvatarType:'R15'}, {}, [], 456);
+
 const root = path.resolve(__dirname, '..');
 const source = fs.readFileSync(path.join(root, 'larpbux.js'), 'utf8').replace(
   /\n\}\)\(\);\s*$/,
@@ -36,9 +39,9 @@ const source = fs.readFileSync(path.join(root, 'larpbux.js'), 'utf8').replace(
     `});
     await page.addScriptTag({content: source});
 
-    const result = await page.evaluate(async () => {
+    const result = await page.evaluate(async inheritedDefinition => {
       const withBackground = {
-        assets: [{id: 808}], bodyColors: {headColor: '#fff'}, scales: {height: 1.1},
+        ...inheritedDefinition, bodyColors: {headColor: '#fff'}, scales: {height: 1.1},
         playerAvatarType: {playerAvatarType: 'R15'}, animation: {run: 123},
         backgroundRequestModel: {id: 456}, backgroundId: 456,
       };
@@ -55,7 +58,7 @@ const source = fs.readFileSync(path.join(root, 'larpbux.js'), 'utf8').replace(
         renderedDefinitions,
         publications,
       };
-    });
+    }, inheritedDefinition);
 
     assert.deepEqual(result.withBackground, result.original, 'background publication must not mutate the browser definition');
     assert.equal(result.renderedDefinitions.length, 1, 'background publication must render a fresh thumbnail');
