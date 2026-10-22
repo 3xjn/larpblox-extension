@@ -122,7 +122,8 @@
     const avatarDefinition = renderDefinition(definition, thumbnailType);
     const body = JSON.stringify({avatarDefinition, thumbnailConfig: {thumbnailId: Number(userId), thumbnailType, size: '420x420'}});
     let token = globalThis.LarpbloxRenderToken || document.querySelector('meta[name="csrf-token"]')?.getAttribute('data-token');
-    for (let attempt = 0; attempt < 32; attempt++) {
+    const deadline = Date.now() + 300000;
+    for (let attempt = 0; Date.now() < deadline; attempt++) {
       const {response, result} = await request(body, token, signal);
       const refreshed = response.headers.get('x-csrf-token');
       if (response.status === 403 && refreshed && refreshed !== token) {
@@ -133,7 +134,9 @@
       }
       if (result.state === 'Completed' && result.imageUrl) return result.imageUrl;
       if (result.state !== 'Pending') throw new Error('Roblox could not preview this outfit.');
-      await sleep(Math.min(10000, 1000 * 2 ** Math.min(attempt, 4)), signal);
+      // A pending render is normal processing, not a rate-limit response.
+      // Check promptly; request() still enforces cross-tab pacing and 429 backoff.
+      await sleep(attempt === 0 ? 1000 : 2000, signal);
     }
     throw new Error('The avatar preview is still processing. Try again shortly.');
   }
