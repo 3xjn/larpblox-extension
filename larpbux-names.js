@@ -69,7 +69,7 @@
     records.clear();
   }
 
-  function update({userId, mode, username} = {}) {
+  function update({userId, mode, username, displayName} = {}) {
     const activeName = mode && userId != null ? String(username || '') : '';
     if (document.documentElement.dataset.larpbloxName !== activeName) document.documentElement.dataset.larpbloxName = activeName;
     syncRecords();
@@ -77,6 +77,7 @@
     const meta = document.querySelector('meta[name="user-data"]');
     const realUsername = meta?.getAttribute('data-name') || '';
     const realDisplayName = meta?.getAttribute('data-displayname') || '';
+    const display = displayName || username || realDisplayName;
     const wanted = new Map();
     for (const root of roots(userId)) {
       if (root.matches?.(skip)) continue;
@@ -94,10 +95,10 @@
         }
         if (ownLink && /^(profile|view profile|my profile)$/i.test(text)) continue;
         if (usernameField) alias = username;
-        else if (displayField) alias = username;
-        else if (accountField && (text === realUsername || text === '@' + realUsername || (realDisplayName && text === realDisplayName))) alias = username;
+        else if (displayField) alias = display;
+        else if (accountField && (text === realUsername || text === '@' + realUsername || (realDisplayName && text === realDisplayName))) alias = root.matches('#account-name,.account-name') ? display : username;
         else if (text === realUsername || text === '@' + realUsername) alias = username;
-        else if (realDisplayName && text === realDisplayName) alias = username;
+        else if (realDisplayName && text === realDisplayName) alias = display;
         else if (ownLink && /[\p{L}\p{N}]/u.test(text)) alias = username;
         if (!alias || !text) continue;
         if (text.startsWith('@') && usernameField) alias = '@' + alias;

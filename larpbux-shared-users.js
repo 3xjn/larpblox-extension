@@ -19,8 +19,9 @@
       let record;
       if (options.active) {
         const snapshot = options.loadSnapshot ? await options.loadSnapshot() : {version:1,userId:String(options.userId),definition:await options.loadDefinition(new AbortController().signal),items:[]};
-        const userId = String(options.userId), username = options.names?.username || '';
-        record = {version:1, userId, verified:options.verified === true, snapshot:LarpbloxGameBridge.validateSnapshot(snapshot,userId), name:{enabled:!!username,username,displayName:username}};
+        const userId = String(options.userId), username = options.names?.username || document.querySelector('meta[name="user-data"]')?.getAttribute('data-name') || '';
+        const displayName = options.names?.displayName || options.names?.username || document.querySelector('meta[name="user-data"]')?.getAttribute('data-displayname') || username;
+        record = {version:1, userId, verified:options.verified === true, snapshot:LarpbloxGameBridge.validateSnapshot(snapshot,userId), name:{enabled:!!username,username,displayName}};
         const socialCounts = validCounts(options.socialCounts);
         if (socialCounts) record.socialCounts = socialCounts;
       }

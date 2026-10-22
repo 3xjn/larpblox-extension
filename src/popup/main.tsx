@@ -221,7 +221,7 @@ function App() {
           <div className="flex items-center justify-between"><Label htmlFor="username">Larp username</Label><span className="help">R$ 1,000</span></div>
           <div className="flex items-center gap-2.5"><Input className="h-10 min-w-0 flex-1" id="username" autoComplete="off" maxLength={20} required disabled={disabled} value={username} onChange={event => setUsername(event.target.value)} aria-describedby="username-help" />
           <Button type="submit" onClick={event => submit(event, () => void act("username", { type: "larpblox-popup-username", username }, ["username", "balance"]))} variant="outline" className="h-10 px-4" disabled={disabled} loading={pending === "username"}>Change</Button></div>
-          <p id="username-help" className="help">Also updates your Larp display name.</p>
+          <p id="username-help" className="help">Your Larp display name stays separate.</p>
         </form>
       </section>
 

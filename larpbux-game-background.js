@@ -244,7 +244,7 @@ async function handle(message, sender) {
   }
   if (message.action === 'publishNames') {
     try { await socketRequest(userId, token, 'names', socketValue); } catch (_) { await accountCall(userId, `/v1/names/${userId}`, socketValue); }
-    return {connected: true};
+    return {connected: true, displayNames: true};
   }
   if (message.action === 'publishImage') {
     try { await socketRequest(userId, token, 'image', socketValue); } catch (_) { await accountCall(userId, `/v1/image/${userId}`, socketValue); }
