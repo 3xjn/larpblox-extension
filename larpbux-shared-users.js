@@ -44,6 +44,22 @@
   };
   const profileId = () => location.pathname.match(/^\/users\/([1-9]\d*)\/profile\/?$/)?.[1];
   const profileSelector = '#profile-header-title-container-name,.stylistic-alts-username,.profile-header-title,.profile-header-username,.profile-header-display-name,[data-testid="profile-header-title"],[data-testid="profile-header-username"],[data-testid="profile-header-display-name"]';
+  let titleState;
+  function applyProfileTitle() {
+    const id = profileId();
+    if (titleState?.id !== id) titleState = undefined;
+    if (titleState && document.title !== titleState.shown) titleState.real = document.title;
+    const name = context.mode && id && (id === String(context.userId) ? context.names : records.get(id)?.name);
+    const display = name && name.enabled !== false && (name.displayName || name.username);
+    if (!display) {
+      if (titleState && document.title === titleState.shown) document.title = titleState.real;
+      titleState = undefined;
+      return;
+    }
+    if (!titleState) titleState = {id, real:document.title};
+    titleState.shown = `${display} - Roblox`;
+    if (document.title !== titleState.shown) document.title = titleState.shown;
+  }
   function collect() {
     const found = new Set();
     const profile = profileId();
@@ -155,6 +171,7 @@
   function apply() {
     globalThis.LarpbloxVerification?.setRecords(records);
     applyNames();
+    applyProfileTitle();
     applyCounts();
     for (const [id, surface] of portraits) if (!records.has(id)) { surface.update({active:false}); portraits.delete(id); }
     for (const [id, surface] of wearing) if (!records.has(id)) { surface.update({active:false}); wearing.delete(id); }
@@ -272,6 +289,7 @@
     searchFrame = true;
     requestAnimationFrame(() => {
       searchFrame = false;
+      applyProfileTitle();
       applyCounts();
       // Navigation can happen before the next relay poll.
       if (searchKey !== (context.mode ? searchKeyword() : '')) { scan(); return; }
