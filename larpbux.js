@@ -1044,10 +1044,8 @@
     }
     const view = previewViewer?.getView();
     surface.hidden = false;
-    // Keep the last committed scene visible while its replacement loads. The
-    // loading class belongs only to the new scene; hiding the whole surface
-    // exposes an empty native spinner when a request is slow or fails.
-    surface.classList.toggle('larpbux-preview-updating', !hasPicture());
+    // Show only the loading indicator until the replacement outfit is ready.
+    surface.classList.add('larpbux-preview-updating');
     surface.setAttribute('aria-busy', 'true');
     surface.querySelector('.larpbux-avatar-status')?.remove();
     surface.querySelector('.larpbux-preview-loader')?.remove();
@@ -1078,7 +1076,6 @@
           if (committed || account !== userId || signature !== previewSignature || signal.aborted) return;
           surface.querySelector('.larpbux-avatar-status')?.remove();
           fallback.append(image); surface.prepend(fallback); surface.hidden = false;
-          surface.classList.remove('larpbux-preview-updating');
           holder.classList.add('larpbux-local-preview');
         };
         image.src = cachedImage;
