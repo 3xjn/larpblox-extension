@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   function createSurfaces(peer = false) {
-  const imageSelector = '.avatar img, .avatar-card-image img, .avatar-headshot img, .profile-avatar-thumb img, .profile-avatar-image img, .profile-avatar-headshot img, .profile-avatar-left img, a[href*="/users/"] img, .rbx2016-welcome-avatar, #nav-profile img, #navbar-avatar img';
+  const imageSelector = '.avatar img, .avatar-card-image img, .avatar-headshot img, .profile-avatar-thumb img, .profile-avatar-image img, .profile-avatar-headshot img, .profile-avatar-left img, .user-profile-header-details-avatar-container img, a[href*="/users/"] img, .rbx2016-welcome-avatar, #nav-profile img, #navbar-avatar img';
   const records = new Map(), previews = new Map(), hiddenCanvases = new Map(), banners = new Map();
   let cache, retryTimer, activeKey = '', activeAccount = '', lastFailure = '';
   let status = {stage: 'not-started'};
@@ -11,14 +11,15 @@
     try {
       const saved = JSON.parse(localStorage.getItem(`larpblox-profile-pictures:${userId}`) || 'null');
       if (saved?.version === 2 && saved.key === pictureKey(definition) && saved.expires > Date.now() &&
-          [saved.result.headshot,saved.result.fullBody,saved.result.transparentBody].every(url=>url?.startsWith('data:image/png'))) return saved.result;
+          [saved.result.headshot,saved.result.fullBody,saved.result.transparentBody].every(url=>url?.startsWith('data:image/png')) &&
+          saved.result.headshot !== saved.result.fullBody) return saved.result;
     } catch (_) {}
   }
   function savePictures(userId, definition, result) {
     if (peer) return;
     try {
       const saved = JSON.stringify({version:2, key:pictureKey(definition), expires:Date.now()+86400000, result});
-      if (saved.length < 1500000) localStorage.setItem(`larpblox-profile-pictures:${userId}`, saved);
+      if (result.headshot?.startsWith('data:image/png') && saved.length < 1500000) localStorage.setItem(`larpblox-profile-pictures:${userId}`, saved);
     } catch (_) {}
   }
   async function flatPictures(url, signal, definition) {
@@ -34,7 +35,7 @@
     const canvas = document.createElement('canvas'); canvas.width=image.naturalWidth; canvas.height=image.naturalHeight;
     canvas.getContext('2d').drawImage(image,0,0);
     const fullBody = canvas.toDataURL('image/png');
-    return {headshot:fullBody,fullBody,transparentBody:fullBody,definition};
+    return {headshot:null,fullBody,transparentBody:fullBody,definition};
   }
   const numericId = value => /^[1-9]\d*$/.test(String(value || ''));
   const idFromHref = href => String(href || '').match(/\/users\/(\d+)(?:\/|$)/i)?.[1] || '';
@@ -51,6 +52,18 @@
   }
   const nonPortraitSelector = '[data-rblx-verified-badge-icon],[data-testid="verified-badge"],.icon-verified,.icon-filled-verified-backplate,.larpblox-verified-badge,.profile-verified-badge-icon';
   const isPortrait = image => !image?.matches?.(nonPortraitSelector) && !image?.closest?.(nonPortraitSelector);
+  function isHeadshotSurface(image) {
+    if (!image || image.closest?.('.currently-wearing-avatar-with-background .profile-avatar-left, .profile-avatar-left')) return false;
+    if (image.closest?.('.avatar-headshot, .avatar-headshot-xs, .avatar-headshot-sm, .avatar-headshot-md, .avatar-headshot-lg, .avatar-headshot-xl, .avatar-card-headshot, .profile-avatar-image, .profile-avatar-headshot, .user-profile-header-details-avatar-container, #nav-profile, #navbar-avatar')) return true;
+    for (const node of [image, image.parentElement]) {
+      if (!node) continue;
+      const style = getComputedStyle(node), rect = node.getBoundingClientRect?.();
+      if (rect?.width > 0 && Math.abs(rect.width - rect.height) < 1 &&
+          [style.borderTopLeftRadius, style.borderTopRightRadius, style.borderBottomLeftRadius, style.borderBottomRightRadius]
+            .every(radius => parseFloat(radius) >= (radius.endsWith('%') ? 50 : rect.width / 2))) return true;
+    }
+    return false;
+  }
   function ownImage(image, userId, doc = document, win = window) {
     if (!image || !numericId(userId) || !isPortrait(image)) return false;
     const action = image.closest?.('a[href]');
@@ -209,13 +222,20 @@
     const images = findOwnImages(userId);
     if (!images.length) status = {stage: 'no-matching-images', userId};
     for (const image of records.keys()) if (!images.includes(image)) restore(image);
-    if (peer && options.imageUrl && !options.backgroundId && !document.querySelector('.profile-avatar-thumb canvas, .profile-avatar-left canvas, .profile-avatar canvas')) {
+    if (peer && options.imageUrl && !options.backgroundId && !images.some(isHeadshotSurface) && !document.querySelector('.profile-avatar-thumb canvas, .profile-avatar-left canvas, .profile-avatar canvas')) {
       for (const image of images) {
         const record = remember(image);
         record.applied = options.imageUrl;
         if (image.getAttribute('src') !== options.imageUrl) image.setAttribute('src', options.imageUrl);
         image.removeAttribute('srcset');
         image.style.visibility = record.visibility;
+      }
+      return;
+    }
+    if (peer && options.imageUrl && !options.backgroundId && images.some(isHeadshotSurface) && typeof loadDefinition !== 'function') {
+      for (const image of images) if (!isHeadshotSurface(image)) {
+        const record = remember(image); record.applied = options.imageUrl;
+        image.setAttribute('src', options.imageUrl); image.removeAttribute('srcset'); image.style.visibility = record.visibility;
       }
       return;
     }
@@ -281,9 +301,10 @@
       for (const image of images) {
         if (!image.isConnected || !ownImage(image, userId)) continue;
         const record = remember(image);
-        const headshot = /^\/users\/profile\/edit\/?$/i.test(location.pathname) || image.classList.contains('rbx2016-welcome-avatar') || selfProfileLink(image) || image.closest('.avatar-headshot, .avatar-headshot-xs, .avatar-headshot-sm, .avatar-headshot-md, .avatar-headshot-lg, .avatar-headshot-xl, .avatar-card-headshot, .profile-avatar-image, .profile-avatar-headshot, #nav-profile, #navbar-avatar');
+        const headshot = /^\/users\/profile\/edit\/?$/i.test(location.pathname) || image.classList.contains('rbx2016-welcome-avatar') || selfProfileLink(image) || isHeadshotSurface(image);
         const banner = image.closest('.currently-wearing-avatar-with-background .profile-avatar-left');
         const value = headshot ? result.headshot : (banners.has(banner) ? result.transparentBody : result.fullBody);
+        if (!value) continue;
         record.applied = value;
         if (image.getAttribute('src') !== value) image.setAttribute('src', value);
         if (image.getAttribute('srcset') !== null) image.removeAttribute('srcset');
