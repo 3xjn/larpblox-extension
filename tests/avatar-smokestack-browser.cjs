@@ -29,8 +29,9 @@ const image = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQ
     await page.setContent('<div id="host" style="width:300px;height:300px"></div>');
     await page.addScriptTag({path:path.resolve(__dirname,'../larpbux-avatar-3d.js')});
     await page.evaluate(async () => {
-      window.viewer = await window.LarpbloxAvatar3D.create(document.querySelector('#host'), 'https://t0.rbxcdn.com/descriptor', {static:true, definition:{assets:[{id:169444515}]}});
+      window.viewer = await window.LarpbloxAvatar3D.create(document.querySelector('#host'), 'https://t0.rbxcdn.com/descriptor', {static:true, definition:{assets:[{id:169444515,meta:{smokestackStyle:'christmas'}}]}});
     });
+    assert.equal(await page.evaluate(() => viewer.getDiagnostics().smokestack.season), 'christmas', 'saved season applies before any thumbnail capture or profile display');
     let state = await page.evaluate(async () => { await viewer.setHatStyle('halloween'); return viewer.getDiagnostics().smokestack; });
     assert.equal(state.season, 'halloween'); assert.match(state.textures[0], /6991166143/);
     state = await page.evaluate(async () => { const older = viewer.setHatStyle('valentines'); await new Promise(resolve => setTimeout(resolve, 20)); await Promise.all([older, viewer.setHatStyle('halloween')]); return viewer.getDiagnostics().smokestack; });

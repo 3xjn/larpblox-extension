@@ -825,7 +825,7 @@
         }));
         items.push(...batch);
       }
-      if (account !== userId || !state.mode || current.backgroundId !== state.backgroundId || JSON.stringify(current.equipped) !== JSON.stringify(state.equipped) || JSON.stringify(current.gameLook) !== JSON.stringify(state.gameLook)) throw new Error('Your outfit changed while saving. Try again.');
+      if (account !== userId || !state.mode || current.backgroundId !== state.backgroundId || JSON.stringify(current.hatStyles) !== JSON.stringify(state.hatStyles) || JSON.stringify(current.equipped) !== JSON.stringify(state.equipped) || JSON.stringify(current.gameLook) !== JSON.stringify(state.gameLook)) throw new Error('Your outfit changed while saving. Try again.');
       const snapshot = {version: 1, userId: String(account), definition, ...(current.backgroundId ? {backgroundId: current.backgroundId} : {}), items};
       return JSON.parse(JSON.stringify(LarpbloxGameBridge.validateSnapshot(snapshot, account)));
     } finally { clearTimeout(timer); }
@@ -1164,7 +1164,7 @@
   function updateOwnAvatarSurfaces() {
     const current = state, account = userId;
     const selected = current?.items.filter(item => current.equipped.includes(keyFor(item)) && supportsOutfit(item)) || [];
-    const signature = JSON.stringify([account, selected.map(item => item.id), current?.backgroundId, current?.gameLook?.definition]);
+    const signature = JSON.stringify([account, selected.map(item => item.id), current?.backgroundId, current?.gameLook?.definition, current?.hatStyles]);
     const loadDefinition = signal => current?.gameLook ? Promise.resolve(gamePreviewDefinition(current)) : loadBrowserPreview(selected, signal);
     if (typeof LarpbloxProfileWearing !== 'undefined') LarpbloxProfileWearing.update({
       userId: account, active: Boolean(current?.mode), signature,

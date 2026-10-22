@@ -55,6 +55,8 @@
   }
   const write = (id, data) => localStorage.setItem(key(id), JSON.stringify(data));
   const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const usableThumbnail = profile => profile.thumbnail &&
+    (!profile.snapshot?.definition?.assets?.some(asset => Number(asset.id) === 169444515) || profile.thumbnailVersion === 2);
   async function drainThumbnails() {
     if (thumbnailBusy) return;
     thumbnailBusy = true;
@@ -75,7 +77,7 @@
       }
       if (url) {
         const latest = read(entry.id), profile = latest.profiles.find(p => p.id === entry.profileId);
-        if (profile && JSON.stringify(profile.snapshot) === JSON.stringify(entry.snapshot)) { profile.thumbnail = url; try { write(entry.id, latest); } catch (_) {} }
+        if (profile && JSON.stringify(profile.snapshot) === JSON.stringify(entry.snapshot)) { profile.thumbnail = url; profile.thumbnailVersion = 2; try { write(entry.id, latest); } catch (_) {} }
       } else thumbnails.delete(entry.cacheKey);
       entry.resolve(url || '');
       if (thumbnailQueue.length) await wait(500);
@@ -83,7 +85,7 @@
     thumbnailBusy = false;
   }
   function thumbnailFor(id, profile, options) {
-    if (profile.thumbnail) return Promise.resolve(profile.thumbnail);
+    if (usableThumbnail(profile)) return Promise.resolve(profile.thumbnail);
     const cacheKey = `${id}:${profile.id}`;
     let entry = thumbnails.get(cacheKey);
     if (!entry) {
@@ -285,7 +287,7 @@
         cancel.onclick(); confirmUpdate(record, profile, true);
       };
       if (options.thumbnail) {
-        if (profile.thumbnail) { image.src = profile.thumbnail; image.style.visibility = 'visible'; }
+        if (usableThumbnail(profile)) { image.src = profile.thumbnail; image.style.visibility = 'visible'; }
         else thumbnailFor(id, profile, options).then(url => {
           if (url && card.isConnected && current === record) { image.src = url; image.style.visibility = 'visible'; }
         });

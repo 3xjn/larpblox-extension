@@ -7,10 +7,11 @@
   let cache, retryTimer, activeKey = '', activeAccount = '', lastFailure = '';
   let status = {stage: 'not-started'};
   const pictureKey = definition => globalThis.LarpbloxAvatarRequests?.definitionKey?.(definition) || JSON.stringify(definition);
+  const seasonalHat = definition => definition?.assets?.some(asset => Number(asset.id) === 169444515);
   function savedPictures(userId, definition) {
     try {
       const saved = JSON.parse(localStorage.getItem(`larpblox-profile-pictures:${userId}`) || 'null');
-      if (saved?.version === 7 && saved.key === pictureKey(definition) && saved.expires > Date.now() &&
+      if (saved?.version === 8 && saved.key === pictureKey(definition) && saved.expires > Date.now() &&
           [saved.result.headshot,saved.result.fullBody,saved.result.transparentBody].every(url=>url?.startsWith('data:image/png')) &&
           saved.result.headshot !== saved.result.fullBody) return saved.result;
     } catch (_) {}
@@ -18,7 +19,7 @@
   function savePictures(userId, definition, result) {
     if (peer) return;
     try {
-      const saved = JSON.stringify({version:7, key:pictureKey(definition), expires:Date.now()+86400000, result});
+      const saved = JSON.stringify({version:8, key:pictureKey(definition), expires:Date.now()+86400000, result});
       if (result.headshot?.startsWith('data:image/png') && saved.length < 1500000) localStorage.setItem(`larpblox-profile-pictures:${userId}`, saved);
     } catch (_) {}
   }
@@ -248,10 +249,11 @@
       entry.promise = (async () => {
         const definition = await loadDefinition(controller.signal);
         const previous = savedPictures(userId, definition);
-        let flat = globalThis.LarpbloxAvatarRequests?.cached?.(definition,userId,'2d') || options.imageUrl;
+        const customHat = seasonalHat(definition);
+        let flat = !customHat && (globalThis.LarpbloxAvatarRequests?.cached?.(definition,userId,'2d') || options.imageUrl);
         // A cold profile must not depend on a 3D render before it can show any
         // avatar. Get a matching still first, then enhance it with the model.
-        if (!previous && !flat && !globalThis.LarpbloxAvatarRequests?.cached?.(definition,userId,'3d')) {
+        if (!customHat && !previous && !flat && !globalThis.LarpbloxAvatarRequests?.cached?.(definition,userId,'3d')) {
           try { flat = await render(definition, userId, controller.signal, '2d'); }
           catch (error) { if (controller.signal.aborted) throw error; }
         }
@@ -328,7 +330,10 @@
       })};
   }
   async function characterThumbnail(definition, userId, signal) {
-    // Saved cards need a still image, not a full 3D model and WebGL capture.
+    if (seasonalHat(definition)) {
+      const descriptor = await render(definition, userId, signal, '3d');
+      return (await pictures(descriptor, signal, definition)).fullBody;
+    }
     return render(definition, userId, signal, '2d');
   }
   const api = {update, ownImage, findOwnImages, idFromHref, getDiagnostics, characterThumbnail, waitForRender};

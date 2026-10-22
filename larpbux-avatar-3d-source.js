@@ -510,6 +510,8 @@ export async function create(host, descriptorUrl, options = {}) {
       animationFrame = requestAnimationFrame(animate);
     };
     if (!options.static) animationFrame = requestAnimationFrame(animate);
+    const savedHat = options.definition?.assets?.find(asset => Number(asset?.id) === 169444515);
+    if (savedHat) await setHatStyle(savedHat.meta?.smokestackStyle || 'auto');
     external?.removeEventListener('abort', abort);
     return {
       capture(kind = 'fullBody', options = {}) {

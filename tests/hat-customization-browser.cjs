@@ -22,6 +22,9 @@ const {chromium} = playwright;
       const request = LarpbloxGameBridge.request;
       LarpbloxGameBridge.request = async (kind, userId, payload) => { if (kind === 'publish') window.published.push(payload.snapshot); return kind === 'read' ? {connected:true,snapshot:null} : {connected:true}; };
       window.previewStyles = []; window.previewRequests = 0; window.viewerCreated = 0;
+      window.surfaceSignatures = [];
+      window.LarpbloxAvatarSurfaces = {update:options => window.surfaceSignatures.push(options.signature)};
+      window.LarpbloxCharacters = {update:options => { window.characterOptions = options; }};
       window.LarpbloxAvatar3D = {create:async(host, descriptor, options) => {
         window.lastViewerDefinition = options.definition; window.viewerCreated++; host.append(document.createElement('canvas'));
         return {getView:() => ({position:[0,0,5],target:[0,0,0]}), dispose() {},
@@ -41,11 +44,20 @@ const {chromium} = playwright;
       const result = await page.evaluate(style => popupMessage({type:'larpblox-popup-hat-style',style}), style);
       assert.equal(result.ok, true);
       assert.equal(result.hatCustomization.style, style);
+      assert.ok((await page.evaluate(() => window.surfaceSignatures.at(-1))).includes(style), 'profile portraits must refresh when the saved season changes');
       await page.waitForFunction(style => window.previewStyles.at(-1) === style, style);
       assert.equal(await page.evaluate(() => window.viewerCreated), 1, 'style changes must update the existing scene');
       assert.equal(await page.evaluate(() => window.previewRequests), 1, 'style changes must not wait for another Roblox render');
       await page.waitForFunction(style => window.published.at(-1)?.definition.assets.find(asset => asset.id === 169444515)?.meta?.smokestackStyle === style, style);
     }
+    const savedSeason = await page.evaluate(async () => {
+      window.savedCharacter = await window.characterOptions.capture();
+      return window.savedCharacter.definition.assets.find(asset => asset.id === 169444515).meta.smokestackStyle;
+    });
+    assert.equal(savedSeason, 'aprilfools', 'saved character captures its own selected season');
+    await page.evaluate(() => popupMessage({type:'larpblox-popup-hat-style',style:'christmas'}));
+    await page.evaluate(() => window.characterOptions.apply(window.savedCharacter));
+    assert.equal((await page.evaluate(() => popupMessage({type:'larpblox-popup-get-state'}))).hatCustomization.style, 'aprilfools', 'wearing a saved character restores its season');
     await page.evaluate(() => {
       const state = JSON.parse(localStorage.getItem('larpblox-cosmetics-v1:123')); delete state.gameLook;
       localStorage.setItem('larpblox-cosmetics-v1:123', JSON.stringify(state));
