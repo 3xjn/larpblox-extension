@@ -351,8 +351,9 @@ export function avatarMaterials(mtlText, manager) {
   for (const [name, material] of Object.entries(materials.materials)) {
     const info = materials.materialsInfo[name];
     const overlay = material.map && info.rbx_alphamode?.trim().toLowerCase() === 'overlay';
-    // Roblox atlases already contain clothing and skin colors. Applying the
-    // exported part's Kd tint again recolors the entire atlas (e.g. white sleeves tan).
+    // Only the exported Player# atlas has baked skin/clothing colors. Accessories
+    // (including red/black hats) still rely on their material Kd tint.
+    const bakedBody = /^Player\d+Mtl$/i.test(name);
     if (overlay) {
       // Dynamic heads use texture alpha to blend a face over the Kd skin color,
       // not to cut holes in the head. Keep material opacity independent of it.
@@ -361,10 +362,22 @@ export function avatarMaterials(mtlText, manager) {
           THREE.ShaderChunk.map_fragment.replace('diffuseColor *= sampledDiffuseColor;',
             'diffuseColor.rgb = mix( diffuseColor.rgb, sampledDiffuseColor.rgb, sampledDiffuseColor.a );'));
       };
-    } else if (material.map) material.color.setHex(0xffffff);
+    } else if (material.map && bakedBody) material.color.setHex(0xffffff);
     // RGBA diffuse maps already supply alpha. Reusing them as map_d instead
     // multiplies opacity by the green color channel and erases dark clothing.
-    if (material.alphaMap && (overlay || info.map_kd && info.map_kd === info.map_d)) {
+    const textureKey = texture => {
+      const image = texture?.image;
+      const source = image?.currentSrc || image?.src || texture?.userData?.url || '';
+      try { const parsed = new URL(source); const host = parsed.hostname.toLowerCase().split('.').slice(-2).join('.'); return `${host}${parsed.pathname.replace(/^\/+/, '')}`; }
+      catch { return String(source).replace(/[?#].*$/, '').replace(/^\/+/, ''); }
+    };
+    const sameTexture = material.alphaMap && material.map && (
+      material.alphaMap === material.map ||
+      (material.alphaMap.image && material.map.image && material.alphaMap.image === material.map.image) ||
+      (textureKey(material.alphaMap) && textureKey(material.alphaMap) === textureKey(material.map))
+    );
+    if (material.alphaMap && (overlay || sameTexture || (info.map_kd && info.map_d &&
+      textureKey({userData: {url: info.map_kd}}) === textureKey({userData: {url: info.map_d}})))) {
       if (material.alphaMap !== material.map) material.alphaMap.dispose();
       material.alphaMap = null;
       material.transparent = material.opacity < 1;
