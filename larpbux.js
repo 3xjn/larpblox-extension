@@ -166,7 +166,9 @@
     if (isBodyBundle(item)) {
       const parts = item.assets.filter(isWearableAsset);
       const removing = parts.every(part => state.equipped.includes(keyFor(part)));
-      let next = state;
+      // Body-part packages are complete Roblox outfits; dynamic-head packages remain additive.
+      let next = item.bundleType === 'BodyParts' && !removing ? {...state, equipped:[], fullOutfitKey:key} : state;
+      if (item.bundleType === 'BodyParts' && removing) next = {...next, fullOutfitKey:undefined};
       for (const part of parts) if (removing || !next.equipped.includes(keyFor(part))) next = equip(next, keyFor(part));
       return next;
     }
@@ -191,12 +193,15 @@
   function outfit(state, userId) {
     return JSON.stringify({version: 1, kind: 'larpblox-cosmetic-outfit', userId, items: outfitAssets(state.items.filter(item => supportsOutfit(item) && state.equipped.includes(keyFor(item)))).map(({id, name, itemType, assetType}) => ({id, name, itemType, assetType}))});
   }
-  function previewDefinition(avatar, rules, items, backgroundId) {
+  function previewDefinition(avatar, rules, items, backgroundId, replaceAll = false) {
     items = outfitAssets(items);
     const slots = new Set(items.filter(item => [17, 18, 27, 28, 29, 30, 31, 79, 2, 11, 12, 19, 48, 50, 51, 52, 53, 54, 55, 56, 64, 65, 66, 67, 68, 69, 70, 71, 72].includes(item.assetType)).map(item => item.assetType));
     if (slots.has(17) || slots.has(79)) { slots.add(17); slots.add(79); }
     const renderAsset = asset => asset.meta === undefined ? {id: asset.id} : {id: asset.id, meta: asset.meta};
-    const assets = (avatar.assets || []).filter(asset => Number(asset.assetType?.id ?? asset.assetType) !== 92 && !slots.has(asset.assetType?.id)).map(renderAsset);
+    const assets = (avatar.assets || []).filter(asset => {
+      const type = Number(asset.assetType?.id ?? asset.assetType);
+      return !replaceAll && type !== 92 && !slots.has(type);
+    }).map(renderAsset);
     for (const item of items) if (!assets.some(asset => asset.id === item.id)) assets.push(renderAsset(item));
     const bodyColors = {};
     for (const [part, color] of Object.entries(avatar.bodyColor3s || avatar.bodyColors || {})) {
@@ -372,7 +377,8 @@
     let socialCounts; try { socialCounts = localSocialCounts(saved?.socialCounts); } catch (_) { socialCounts = null; }
     const backgroundId = Number.isSafeInteger(saved?.backgroundId) && saved.backgroundId > 0 && items.some(item => isBackground(item) && item.id === saved.backgroundId) ? saved.backgroundId : undefined;
     const hatStyles = saved?.hatStyles && typeof saved.hatStyles === 'object' ? {[String(SMOKESTACK_HAT_ID)]:smokestackStyle(saved.hatStyles[String(SMOKESTACK_HAT_ID)])} : {};
-    return {version: 1, cart, names, socialCounts, mode: saved?.mode === true, verified: saved?.verified === true, sharing: typeof saved?.sharing === 'boolean' ? saved.sharing : gameLook?.sharing?.enabled === true, pendingOutfit: saved?.mode === true && saved?.pendingOutfit === true, balance: Number.isSafeInteger(saved?.balance) && saved.balance >= 0 ? saved.balance : 0, items, backgroundId, hatStyles, equipped: Array.isArray(saved?.equipped) ? saved.equipped.filter(value => items.some(item => keyFor(item) === value) && !isBackground(items.find(item => keyFor(item) === value))).slice(0, 100) : [], ...(gameLook ? {gameLook} : {})};
+    const fullOutfitKey = items.some(item => keyFor(item) === saved?.fullOutfitKey && isBodyBundle(item) && item.bundleType === 'BodyParts') ? saved.fullOutfitKey : undefined;
+    return {version: 1, cart, names, socialCounts, mode: saved?.mode === true, verified: saved?.verified === true, sharing: typeof saved?.sharing === 'boolean' ? saved.sharing : gameLook?.sharing?.enabled === true, pendingOutfit: saved?.mode === true && saved?.pendingOutfit === true, balance: Number.isSafeInteger(saved?.balance) && saved.balance >= 0 ? saved.balance : 0, items, backgroundId, hatStyles, fullOutfitKey, equipped: Array.isArray(saved?.equipped) ? saved.equipped.filter(value => items.some(item => keyFor(item) === value) && !isBackground(items.find(item => keyFor(item) === value))).slice(0, 100) : [], ...(gameLook ? {gameLook} : {})};
   }
   const avatarUrl = () => '/my/avatar';
   async function syncNames() {
@@ -746,7 +752,7 @@
     }
   }
   let browserAvatarBase;
-  async function loadBrowserPreview(selected, signal, backgroundId = state?.backgroundId) {
+  async function loadBrowserPreview(selected, signal, backgroundId = state?.backgroundId, replaceAll = false) {
     const account = userId;
     if (!browserAvatarBase || browserAvatarBase.account !== account || Date.now() > browserAvatarBase.expires) {
       const entry = {account, expires: Date.now() + 15000};
@@ -770,7 +776,7 @@
     }
     const {avatar, rules} = await browserAvatarBase.promise;
     if (signal.aborted || account !== userId) throw new Error('Avatar update cancelled.');
-    const definition = previewDefinition(avatar, rules, selected, backgroundId);
+    const definition = previewDefinition(avatar, rules, selected, backgroundId, replaceAll);
     definition.assets = definition.assets.map(asset => Number(asset.id) === SMOKESTACK_HAT_ID
       ? {...asset, meta:{...(asset.meta || {}), smokestackStyle:hatStyleFor(state)}} : asset);
     return definition;
@@ -792,7 +798,7 @@
       let current = read(account);
       if (!current.gameLook) {
         const selected = outfitAssets(current.items.filter(item => current.equipped.includes(keyFor(item)) && supportsOutfit(item)));
-        await loadBrowserPreview(selected, controller.signal);
+        await loadBrowserPreview(selected, controller.signal, current.backgroundId, Boolean(current.fullOutfitKey));
       }
       if (controller.signal.aborted || account !== userId || !editingLarp() || !/^\/my\/avatar\/?$/i.test(location.pathname)) throw new Error('Your avatar changed. Try the color again.');
       current = read(account);
@@ -801,7 +807,7 @@
       if (!look) {
         const {avatar, rules:baseRules} = await browserAvatarBase.promise;
         const selected = outfitAssets(current.items.filter(item => current.equipped.includes(keyFor(item)) && supportsOutfit(item)));
-      const definition = previewDefinition(avatar, baseRules, selected, current.backgroundId);
+        const definition = previewDefinition(avatar, baseRules, selected, current.backgroundId, Boolean(current.fullOutfitKey));
         const known = new Map((avatar.assets || []).map(item => [item.id, {id:item.id, name:item.name || 'Roblox item', assetType:item.assetType?.id, itemType:'Asset'}]));
         for (const item of selected) known.set(item.id, item);
         look = {version:1, userId:String(account), definition, items:definition.assets.map(asset => known.get(asset.id)).filter(item => item && Number.isInteger(item.assetType))};
@@ -817,7 +823,7 @@
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 15000);
     try {
-      const definition = current.gameLook ? gamePreviewDefinition(current) : await loadBrowserPreview(selected, controller.signal);
+      const definition = current.gameLook ? gamePreviewDefinition(current) : await loadBrowserPreview(selected, controller.signal, current.backgroundId, Boolean(current.fullOutfitKey));
       const known = new Map([...(current.gameLook?.items || []), ...selected].map(item => [item.id, item]));
       const items = [];
       for (let start = 0; start < definition.assets.length; start += 4) {
@@ -1007,7 +1013,7 @@
     const threeDimensional = !/^3d$/i.test(toggle?.textContent?.trim() || '');
     const customizableHat = selected.some(item => Number(item.id) === SMOKESTACK_HAT_ID);
     // Texture-only edits keep the existing scene and camera, without another render request.
-    const signature = JSON.stringify([userId, selected.map(item => item.id), backgroundId, threeDimensional, gameLook?.definition, Boolean(state?.mode)], (key, value) => key === 'smokestackStyle' ? undefined : value);
+    const signature = JSON.stringify([userId, selected.map(item => item.id), backgroundId, threeDimensional, gameLook?.definition, state?.fullOutfitKey, Boolean(state?.mode)], (key, value) => key === 'smokestackStyle' ? undefined : value);
     if (previewSignature === signature && (previewElement?.isConnected || (!selected.length && !gameLook))) {
       if (customizableHat && previewViewer?.setHatStyle) {
         try { await previewViewer.setHatStyle(hatStyleFor(state)); previewFailure = undefined; previewElement?.removeAttribute('title'); }
@@ -1058,7 +1064,7 @@
       let definition;
       if (gameLook) definition = gamePreviewDefinition(state);
       else {
-        definition = await loadBrowserPreview(selected, signal);
+        definition = await loadBrowserPreview(selected, signal, state.backgroundId, Boolean(state.fullOutfitKey));
       }
       if (account !== userId || signature !== previewSignature || signal.aborted) return;
       const cachedImage = LarpbloxAvatarRequests.cached?.(definition, account, '2d');
@@ -1162,8 +1168,8 @@
   function updateOwnAvatarSurfaces() {
     const current = state, account = userId;
     const selected = current?.items.filter(item => current.equipped.includes(keyFor(item)) && supportsOutfit(item)) || [];
-    const signature = JSON.stringify([account, selected.map(item => item.id), current?.backgroundId, current?.gameLook?.definition, current?.hatStyles]);
-    const loadDefinition = signal => current?.gameLook ? Promise.resolve(gamePreviewDefinition(current)) : loadBrowserPreview(selected, signal);
+    const signature = JSON.stringify([account, selected.map(item => item.id), current?.backgroundId, current?.gameLook?.definition, current?.hatStyles, current?.fullOutfitKey]);
+    const loadDefinition = signal => current?.gameLook ? Promise.resolve(gamePreviewDefinition(current)) : loadBrowserPreview(selected, signal, current.backgroundId, Boolean(current.fullOutfitKey));
     if (typeof LarpbloxProfileWearing !== 'undefined') LarpbloxProfileWearing.update({
       userId: account, active: Boolean(current?.mode), signature,
       items: [...(current?.gameLook?.items || []), ...(current?.items || [])], backgroundId: current?.backgroundId, loadDefinition, thumbnail,
@@ -1604,13 +1610,17 @@
       const current = read(account);
       let temporary = {...current,items:[...current.items],equipped:[...current.equipped]};
       if (isBackground(item)) temporary.backgroundId = item.id;
-      for (const part of expandOutfitItem(item)) {
-        const index = temporary.items.findIndex(owned => keyFor(owned) === keyFor(part));
-        if (index < 0) temporary.items.push(part);
-        else temporary.items[index] = {...temporary.items[index], ...part};
-        if (!temporary.equipped.includes(keyFor(part))) temporary = equip(temporary, keyFor(part));
+      if (!isBackground(item)) {
+        const additions = [item, ...(item.itemType === 'Bundle' ? item.assets : [])];
+        for (const addition of additions) {
+          const index = temporary.items.findIndex(owned => keyFor(owned) === keyFor(addition));
+          if (index < 0) temporary.items.push(addition);
+          else temporary.items[index] = {...temporary.items[index], ...addition};
+        }
+        const alreadyWorn = isBodyBundle(item) ? item.assets.filter(isWearableAsset).every(part => temporary.equipped.includes(keyFor(part))) : temporary.equipped.includes(keyFor(item));
+        if (!alreadyWorn) temporary = equip(temporary, keyFor(item));
       }
-      const definition = temporary.gameLook ? gamePreviewDefinition(temporary) : await loadBrowserPreview(outfitAssets(temporary.items.filter(owned => temporary.equipped.includes(keyFor(owned)) && supportsOutfit(owned))), controller.signal, temporary.backgroundId);
+      const definition = temporary.gameLook ? gamePreviewDefinition(temporary) : await loadBrowserPreview(outfitAssets(temporary.items.filter(owned => temporary.equipped.includes(keyFor(owned)) && supportsOutfit(owned))), controller.signal, temporary.backgroundId, Boolean(temporary.fullOutfitKey));
       if (!active()) return;
       let renderKind = kind;
       let imageUrl = await LarpbloxAvatarRequests.render(definition, account, controller.signal, renderKind);

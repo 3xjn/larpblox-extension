@@ -6,7 +6,7 @@ const key = item => `${item.itemType}:${item.id}`;
 const accessoryTypes = [8, 41, 42, 43, 44, 45, 46, 47, 64, 65, 66, 67, 68, 69, 70, 71, 72, 76, 77];
 const accessoryGroups = accessoryTypes.map((assetType, group) => Array.from({length:21}, (_, index) => item(group * 100 + index + 1, assetType)));
 const body = item(2001, 17);
-const bodyBundle = {id:3000, itemType:'Bundle', bundleType:'BodyParts', name:'Body bundle', assets:[item(3001, 27)]};
+const bodyBundle = {id:3000, itemType:'Bundle', bundleType:'DynamicHead', name:'Dynamic head bundle', assets:[item(3001, 27)]};
 const items = [...accessoryGroups.flat(), body, bodyBundle, ...bodyBundle.assets];
 const empty = {items, equipped:[]};
 
