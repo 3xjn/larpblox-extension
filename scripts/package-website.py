@@ -43,7 +43,7 @@ print(f"Built website {version}: {len(data):,} bytes")
 loader = output / f"Larpblox-Loader-{version}.zip"
 with zipfile.ZipFile(loader, "w", zipfile.ZIP_DEFLATED) as archive:
     for name in ("manifest.json", "larpbux-game-background.js", "larpbux-game-bridge.js",
-                 "remote-loader.js", "remote-bootstrap.js", "larpbux-body-colors.js", "popup.html",
+                 "remote-loader.js", "remote-bootstrap.js", "larpbux-body-colors.js", "larpblox-real-avatar.js", "popup.html",
                  "popup-host.js", "popup-sandbox.html", "popup-sandbox.js",
                  "website-bundle.json", "README.md", "THEME-LICENSE.txt",
                  "src/popup/LICENSE-COSS.txt", "src/popup/NOTICE.txt"):

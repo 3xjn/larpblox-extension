@@ -1,3 +1,17 @@
+# Real avatar accessory stacking
+
+Accessory stacking is always enabled in Roblox's Avatar Editor, including with
+Larp mode off. Click owned accessories normally to wear several from the same
+category. This uses Roblox's real save flow, so accepted changes are visible to
+other people. Classic clothing and body parts retain their normal single slots.
+
+The editor uses conservative ceilings of 10 rigid and 10 layered accessories
+(hair counts toward both), following BTRoblox's advanced-editor approach. At a
+full limit, remove an item before adding another. Roblox still checks ownership
+and may reject combinations under its current server rules. Larp avatar editing
+keeps its separate local behavior. This bundled editor hook requires a loader
+update and Chrome extension reload; a website-only update is insufficient.
+
 # Remote website updates
 
 Website updates do not need Desktop. Load the extension once, enable **Allow User

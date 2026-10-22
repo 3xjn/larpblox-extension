@@ -28,6 +28,7 @@
         "https://www.roblox.com/*"
       ],
       "js": [
+        "larpblox-real-avatar.js",
         "larpbux-body-colors.js"
       ],
       "run_at": "document_start",
