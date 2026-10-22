@@ -10,7 +10,7 @@
   function savedPictures(userId, definition) {
     try {
       const saved = JSON.parse(localStorage.getItem(`larpblox-profile-pictures:${userId}`) || 'null');
-      if (saved?.version === 5 && saved.key === pictureKey(definition) && saved.expires > Date.now() &&
+      if (saved?.version === 6 && saved.key === pictureKey(definition) && saved.expires > Date.now() &&
           [saved.result.headshot,saved.result.fullBody,saved.result.transparentBody].every(url=>url?.startsWith('data:image/png')) &&
           saved.result.headshot !== saved.result.fullBody) return saved.result;
     } catch (_) {}
@@ -18,7 +18,7 @@
   function savePictures(userId, definition, result) {
     if (peer) return;
     try {
-      const saved = JSON.stringify({version:5, key:pictureKey(definition), expires:Date.now()+86400000, result});
+      const saved = JSON.stringify({version:6, key:pictureKey(definition), expires:Date.now()+86400000, result});
       if (result.headshot?.startsWith('data:image/png') && saved.length < 1500000) localStorage.setItem(`larpblox-profile-pictures:${userId}`, saved);
     } catch (_) {}
   }
@@ -138,7 +138,7 @@
       banners.delete(element);
     }
     for (const element of wanted) {
-      const styles = {'background-image':`url("${result.backgroundUrl}")`, 'background-position':'50% 64%', 'background-size':'auto 250%', 'background-repeat':'no-repeat'};
+      const styles = {'background-image':`url("${result.backgroundUrl}")`, 'background-position':'50% 64%', 'background-size':(result.backgroundAspect < 1.5 ? 'cover' : 'auto 250%'), 'background-repeat':'no-repeat'};
       if (!banners.has(element)) banners.set(element, Object.fromEntries(Object.keys(styles).map(key => [key, {value:element.style.getPropertyValue(key),priority:element.style.getPropertyPriority(key)}])));
       for (const [key, value] of Object.entries(styles)) if (element.style.getPropertyValue(key) !== value || element.style.getPropertyPriority(key) !== 'important') element.style.setProperty(key, value, 'important');
     }

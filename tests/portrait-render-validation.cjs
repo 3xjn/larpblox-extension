@@ -105,6 +105,13 @@ async function main() {
     assert.notEqual(captures.backgroundHeadshot, captures.headshot, 'selected background must change the rendered image');
     assert.ok(captures.headshotPixels.opaque > 1000, 'headshot must contain rendered avatar pixels');
     assert.ok(captures.headshotPixels.topOpaque < 80, 'close-up headwear must reach the upper fifth; the old distant portrait started below pixel 150');
+    await page.route('https://assetdelivery.roblox.com/v2/assetId/999', route => route.fulfill({status:401,json:{errors:[]}}));
+    await page.route('https://thumbnails.roblox.com/v1/assets**', route => route.fulfill({status:503,json:{errors:[]}}));
+    const outage = await page.evaluate(async url => {
+      const viewer = await LarpbloxAvatar3D.create(document.querySelector('#host'), url, {static:true,definition:{backgroundRequestModel:{id:999}}});
+      const result=viewer.capture('headshot');viewer.dispose();return result;
+    }, descriptorUrl);
+    assert.ok(outage.startsWith('data:image/png'), 'background permission/network failure must never prevent avatar portraits');
     const report = {
       fixture: 'artifacts/current-head.obj',
       descriptor,

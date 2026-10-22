@@ -11,7 +11,7 @@ async function backgroundUrl(id, signal) {
   if (!Number.isSafeInteger(id) || id <= 0) throw new Error('Invalid avatar background');
   if (backgroundUrls.has(id)) return backgroundUrls.get(id);
   let url;
-  {
+  try {
     // Match ProfilePlatform: resolve the background's ImageId instead of using
     // the square catalog thumbnail, which loses the original image proportions.
     const delivery = await fetch(`https://assetdelivery.roblox.com/v2/assetId/${id}`, {signal, credentials:'include'});
@@ -38,6 +38,15 @@ async function backgroundUrl(id, signal) {
         reader.readAsDataURL(blob);
       });
     }
+  } catch (error) {
+    if (signal.aborted) throw error;
+  }
+  if (!url) {
+    const response = await fetch(`https://thumbnails.roblox.com/v1/assets?assetIds=${id}&size=768x432&format=Png&isCircular=false`, {signal, credentials:'omit'});
+    if (!response.ok) throw new Error('Background preview unavailable');
+    const item = (await response.json()).data?.find(item => Number(item.targetId) === id);
+    if (item?.state !== 'Completed' || !item.imageUrl) throw new Error('Background preview unavailable');
+    url = checkedUrl(item.imageUrl);
   }
   if (backgroundUrls.size >= 16) {
     const oldest = backgroundUrls.keys().next().value;
@@ -250,6 +259,7 @@ export async function create(host, descriptorUrl, options = {}) {
     scene = new THREE.Scene();
     const backgroundId = options.definition?.backgroundRequestModel?.id;
     if (backgroundId) {
+     try {
       const url = await backgroundUrl(backgroundId, signal);
       const loading = new THREE.TextureLoader().loadAsync(url);
       loading.then(texture => { if (signal.aborted || disposed) texture.dispose(); }, () => {});
@@ -257,6 +267,10 @@ export async function create(host, descriptorUrl, options = {}) {
       ensureAlive();
       backgroundTexture.colorSpace = THREE.SRGBColorSpace;
       if (options.background !== false) scene.background = backgroundTexture;
+     } catch (error) {
+      if (signal.aborted) throw error;
+      // A background outage must never prevent avatar geometry or portraits.
+     }
     }
     camera = new THREE.PerspectiveCamera(descriptor.camera?.fov || 35, 1, 0.01, 10000);
     renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
