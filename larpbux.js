@@ -92,6 +92,8 @@
     return {...next, cart:[]};
   }
   const bodyAssetTypes = [17, 18, 27, 28, 29, 30, 31, 79];
+  const accessoryAssetTypes = [8, 41, 42, 43, 44, 45, 46, 47, 64, 65, 66, 67, 68, 69, 70, 71, 72, 76, 77];
+  const accessoryTypeNames = {8:'hats',41:'hair',42:'face accessories',43:'neck accessories',44:'shoulder accessories',45:'front accessories',46:'back accessories',47:'waist accessories',64:'T-shirts',65:'shirts',66:'pants',67:'jackets',68:'sweaters',69:'shorts',70:'left shoes',71:'right shoes',72:'dress skirts',76:'eyebrows',77:'eyelashes'};
   const backgroundAssetTypes = [92];
   const wearableAssetTypes = [17, 18, 27, 28, 29, 30, 31, 79, 2, 8, 11, 12, 19, 41, 42, 43, 44, 45, 46, 47, 48, 50, 51, 52, 53, 54, 55, 56, 64, 65, 66, 67, 68, 69, 70, 71, 72, 76, 77];
   const animationAssetTypes = [48, 50, 51, 52, 53, 54, 55, 56];
@@ -103,6 +105,7 @@
   const supportsOutfit = item => isWearableAsset(item) || isAnimationBundle(item) || isBodyBundle(item);
   const supportsCosmetic = item => supportsOutfit(item) || isBackground(item);
   const outfitAssets = items => items.flatMap(expandOutfitItem);
+  const accessoryCount = (items, type) => items.filter(item => Number(item.assetType) === type).length;
   function matchesAvatarCategory(item, category, equipped = false) {
     if (!supportsCosmetic(item)) return false;
     let name = String(category).toLowerCase().replace(/[^a-z]/g, '');
@@ -161,11 +164,16 @@
       const other = state.items.find(candidate => keyFor(candidate) === value);
       return !expandOutfitItem(other).some(asset => animationAssetTypes.includes(Number(asset.assetType)));
     });
-    if ([17, 18, 27, 28, 29, 30, 31, 79, 2, 11, 12, 19, 64, 65, 66, 67, 68, 69, 70, 71, 72].includes(item.assetType)) equipped = equipped.filter(value => {
+    if ([17, 18, 27, 28, 29, 30, 31, 79, 2, 11, 12, 19].includes(item.assetType)) equipped = equipped.filter(value => {
       const other = state.items.find(candidate => keyFor(candidate) === value);
       return !expandOutfitItem(other).some(asset => asset.assetType === item.assetType || [17,79].includes(asset.assetType) && [17,79].includes(item.assetType));
     });
-    if (equipped.length >= 20) throw new Error('Equip at most 20 cosmetic items.');
+    const equippedAssets=outfitAssets(state.items.filter(candidate => equipped.includes(keyFor(candidate))));
+    const addedAssets=expandOutfitItem(item);
+    for (const type of accessoryAssetTypes) {
+      const additions=accessoryCount(addedAssets,type);
+      if (additions && accessoryCount(equippedAssets,type)+additions>20) throw new Error(`Equip at most 20 ${accessoryTypeNames[type] || 'accessories of this type'}.`);
+    }
     return {...state, equipped: [...equipped, key]};
   }
   function outfit(state, userId) {

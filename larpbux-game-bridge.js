@@ -5,7 +5,7 @@
   function validateSnapshot(value, userId) {
     if (!value || value.version !== 1 || String(value.userId) !== String(userId)) throw new Error('The game outfit belongs to a different account.');
     const definition = value.definition;
-    if (!definition || !Array.isArray(definition.assets) || definition.assets.length > 100 || !Array.isArray(value.items) || value.items.length > 100) throw new Error('Invalid game outfit.');
+    if (!definition || !Array.isArray(definition.assets) || definition.assets.length > 512 || !Array.isArray(value.items) || value.items.length > 512) throw new Error('Invalid game outfit.');
     for (const asset of definition.assets) if (!id(asset.id)) throw new Error('Invalid game asset.');
     const seen = new Set();
     for (const item of value.items) {
