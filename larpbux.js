@@ -214,7 +214,15 @@
       definition.backgroundId = Number(backgroundId);
       definition.backgroundRequestModel = {id: Number(backgroundId)};
     }
-    return definition;
+    return layeredDefinition(definition, [...(avatar.assets || []), ...items]);
+  }
+  function layeredDefinition(definition, items) {
+    const types = new Map(items.map(item => [item.id, Number(item.assetType?.id ?? item.assetType)]));
+    const order = {64:4,65:5,66:1,67:7,68:6,69:2,70:3,71:3,72:8};
+    const assets = definition.assets.map(asset => order[types.get(asset.id)]
+      ? {...asset,meta:{version:1,order:order[types.get(asset.id)],puffiness:0,...asset.meta}} : asset);
+    const requiresR15 = assets.some(asset => order[types.get(asset.id)] || types.get(asset.id) === 79);
+    return {...definition,assets,...(requiresR15 ? {playerAvatarType:{playerAvatarType:'R15'}} : {})};
   }
   function mergeGameSnapshot(state, snapshot, preserveBodyRemovals = false) {
     const bodySlot = type => Number(type) === 79 ? 17 : Number(type);
@@ -256,13 +264,13 @@
     const assets = look.definition.assets.filter(asset =>
       Number(types.get(asset.id) ?? asset.assetType?.id ?? asset.assetType) !== 92 && !backgrounds.has(Number(asset.id)) &&
       (!managed.has(asset.id) || selectedIds.has(asset.id)) && (!replaceSlots.has(types.get(asset.id)) || selectedIds.has(asset.id)));
-    for (const item of selected) if (!assets.some(asset => asset.id === item.id)) assets.push({id: item.id});
+    for (const item of selected) if (!assets.some(asset => asset.id === item.id)) assets.push({id: item.id,...(item.meta ? {meta:item.meta} : {})});
     const definition = {...look.definition, assets: assets.map(asset => Number(asset.id) === SMOKESTACK_HAT_ID && state.hatStyles?.[String(SMOKESTACK_HAT_ID)] ? {...asset, meta:{...(asset.meta || {}), smokestackStyle:hatStyleFor(state)}} : asset)};
     if (Number.isSafeInteger(Number(state.backgroundId)) && Number(state.backgroundId) > 0) {
       definition.backgroundId = Number(state.backgroundId);
       definition.backgroundRequestModel = {id: Number(state.backgroundId)};
     } else { delete definition.backgroundId; delete definition.backgroundRequestModel; }
-    return definition;
+    return layeredDefinition(definition, [...look.items,...selected]);
   }
   function changedBodyColors(original, value, rules = {}) {
     const source = value?.bodyColor3s || value?.bodyColors || value;
@@ -1045,16 +1053,6 @@
     pending.classList.add('larpbux-avatar-loading');
     surface.append(pending);
     const hasPicture = () => Boolean(surface.querySelector('.larpbux-avatar-scene:not(.larpbux-avatar-loading) img, .larpbux-avatar-scene:not(.larpbux-avatar-loading) canvas'));
-    let statusMessage;
-    const showStatus = text => {
-      statusMessage = text;
-      if (surface.classList.contains('larpbux-preview-updating')) return;
-      if (hasPicture()) return;
-      let status = surface.querySelector('.larpbux-avatar-status');
-      if (!status) { status = node('div', '', 'thumbnail-loader larpbux-avatar-status'); status.setAttribute('role','status'); surface.append(status); }
-      status.textContent = text; surface.hidden = false;
-    };
-    showStatus('Loading avatar…');
     let nextViewer, committed = false;
     try {
       let definition;
@@ -1141,8 +1139,6 @@
       if (account !== userId || signature !== previewSignature || signal.aborted) return;
       const reason = error.message;
       previewFailure = {status:error.status, message:reason};
-      surface.title = reason;
-      showStatus(error.status === 429 ? 'Roblox is limiting avatar requests. Retrying…' : 'Avatar could not load. Use Redraw to retry.');
       if (error.status === 429 || previewRetries < 2) {
         if (error.status !== 429) previewRetries++;
         previewRetryTimer = setTimeout(() => {
@@ -1150,13 +1146,15 @@
           previewSignature = undefined; updateAvatarPreview(editor);
         }, Math.max(1000, 800 * previewRetries, (error.retryAfter || 0) * 1000));
       }
-      for (const button of editor.querySelectorAll('.larpbux-avatar-item button')) button.title = error.message;
     } finally {
       loader.remove();
       if (signature === previewSignature && account === userId) {
         surface.classList.remove('larpbux-preview-updating');
         surface.removeAttribute('aria-busy');
-        if (!committed && !signal.aborted) showStatus(statusMessage || 'Avatar could not load. Use Redraw to retry.');
+        if (!committed && !signal.aborted) {
+          surface.hidden = !hasPicture();
+          holder.classList.toggle('larpbux-local-preview', hasPicture());
+        }
       }
       if (!committed) { nextViewer?.dispose(); pending.remove(); }
     }
@@ -1194,7 +1192,7 @@
         const details = await response.json(); return {...entry, assetType:details.AssetTypeId};
       }));
     }
-    return entries.map(entry => ({id:Number(entry.id), assetType:Number(entry.assetType?.id || entry.assetType), name:String(entry.name || '').slice(0,128), itemType:'Asset'})).filter(isWearableAsset);
+    return entries.map(entry => ({id:Number(entry.id), assetType:Number(entry.assetType?.id || entry.assetType), name:String(entry.name || '').slice(0,128), itemType:'Asset',...(entry.meta ? {meta:entry.meta} : {})})).filter(isWearableAsset);
   }
   // Recover older purchases whose category had not loaded when they were bought.
   const typeRepairs = new Map();
