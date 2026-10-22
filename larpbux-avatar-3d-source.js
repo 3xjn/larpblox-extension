@@ -3,7 +3,7 @@ import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-const CDN = /^https:\/\/[a-z0-9-]+\.rbxcdn\.com\/[A-Za-z0-9._~%/-]+$/;
+const CDN = /^https:\/\/[a-z0-9-]+\.rbxcdn\.com\/[A-Za-z0-9._~%/-]+(?:\?[^#]*)?$/;
 const HASH = /^[A-Za-z0-9._~-]+$/;
 const backgroundUrls = new Map();
 
@@ -25,7 +25,7 @@ async function backgroundUrl(id, signal) {
     if (!Number.isSafeInteger(imageId) || imageId <= 0) throw new Error('Invalid background image');
     // Resolve the original image to its CDN location so WebGL can load it
     // without sending account cookies with the texture request.
-    const imageDelivery = await fetch(`https://assetdelivery.roblox.com/v1/asset/?id=${imageId}`, {signal, credentials:'omit'});
+    const imageDelivery = await fetch(`https://assetdelivery.roblox.com/v1/asset/?id=${imageId}`, {signal, credentials:'include'});
     if (!imageDelivery.ok) throw new Error('Background image unavailable');
     // Native ProfilePlatform uses the original ImageId, never the square catalog
     // thumbnail. Keep the original image bytes and aspect ratio for WebGL/CSS.

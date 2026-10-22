@@ -62,7 +62,7 @@ async function main() {
       if (url === assetUrl(descriptor.mtl)) return route.fulfill({ headers: { 'access-control-allow-origin': '*' }, body: mtlText });
       return route.continue();
     });
-    const bannerUrl = 'https://tr.rbxcdn.com/larpblox-background-model';
+    const bannerUrl = 'https://fts.rbxcdn.com/larpblox-background-model?encoding=gzip&__token__=signed~value';
     await page.route('https://assetdelivery.roblox.com/v2/assetId/123', route => route.fulfill({ json: { locations: [{ location: bannerUrl }] } }));
     await page.route(bannerUrl, route => route.fulfill({ headers: {'access-control-allow-origin':'*'}, contentType:'text/xml', body:fs.readFileSync(fixture('reference-background.rbxmx')) }));
     await page.route('https://assetdelivery.roblox.com/v2/assetId/131116106888557', route => route.fulfill({status:401,json:{errors:[]}}));
