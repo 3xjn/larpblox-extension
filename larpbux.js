@@ -514,15 +514,18 @@
     try { const parsed = new URL(url); return parsed.protocol === 'https:' && /^(tr|t[0-7])\.rbxcdn\.com$/i.test(parsed.hostname) && !parsed.username && !parsed.password && !parsed.port && !parsed.search && !parsed.hash && (/\.png$/i.test(parsed.pathname) || /\/Png\/[^/]*$/i.test(parsed.pathname)); } catch (_) { return false; }
   }
   async function publishPreviewImage(definition, renderedUrl, account, signal, signature, forceThumbnail = false) {
-    let imageUrl = !forceThumbnail && validAvatarImage(renderedUrl) ? renderedUrl : null;
+    const hasBackground = definition?.backgroundRequestModel !== undefined || definition?.backgroundId !== undefined;
+    const publishedDefinition = hasBackground ? {...definition} : definition;
+    if (hasBackground) { delete publishedDefinition.backgroundRequestModel; delete publishedDefinition.backgroundId; }
+    let imageUrl = !hasBackground && !forceThumbnail && validAvatarImage(renderedUrl) ? renderedUrl : null;
     if (!imageUrl && typeof LarpbloxAvatarSurfaces !== 'undefined' && typeof LarpbloxAvatarSurfaces.characterThumbnail === 'function') {
-      try { imageUrl = await LarpbloxAvatarSurfaces.characterThumbnail(definition, account, signal); } catch (_) { return; }
+      try { imageUrl = await LarpbloxAvatarSurfaces.characterThumbnail(publishedDefinition, account, signal); } catch (_) { return; }
     }
     if (!validAvatarImage(imageUrl) || account !== userId || signal?.aborted || signature !== previewSignature) return;
-    const cacheKey = `${account}:${JSON.stringify(definition)}`;
+    const cacheKey = `${account}:${JSON.stringify(publishedDefinition)}`;
     if (imageCache?.key === cacheKey && imageCache.imageUrl === imageUrl) return;
     try {
-      const result = await LarpbloxGameBridge.request('publishImage', account, {image: {version: 1, userId: String(account), definition, imageUrl}});
+      const result = await LarpbloxGameBridge.request('publishImage', account, {image: {version: 1, userId: String(account), definition: publishedDefinition, imageUrl}});
       if (!result?.connected) return;
       imageCache = {key: cacheKey, imageUrl};
     } catch (_) {}
