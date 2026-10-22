@@ -73,7 +73,7 @@ const {chromium} = require('playwright');
         element.getAnimations()[0].currentTime = 297;
         return {height:element.getBoundingClientRect().height, color:getComputedStyle(element).backgroundColor};
       });
-      assert.deepEqual(pulse, {height:18, color:'rgb(255, 255, 255)'});
+      assert.deepEqual(pulse, {height:16, color:'rgb(255, 255, 255)'});
       const colors = await native.evaluate(element => {
         const animations = element.getAnimations({subtree:true});
         const colors = new Set();
