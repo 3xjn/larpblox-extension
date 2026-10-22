@@ -2,8 +2,8 @@
 
 ## Avatar preview loading indicator
 
-- Official [Roblox StyleGuide.css](https://css.rbxcdn.com/221ade875d1e8b815363ae697e20ceef32c90fffec39186f59d1cdc43f9b25c0-StyleGuide.css), retrieved October 22, 2026: `loading-animated` markup and sizing, spacing, `loaderAnimation` keyframes, and staggered delays. The local preview scopes those rules to its own loader and renames the keyframe to avoid changing native controls. It uses Roblox's live color variables with their Foundation values as fallbacks. Reduced-motion users receive stationary squares.
-- The shared loader's blue color pulse does not match the avatar editor, as confirmed by the user's reference and feedback. The local avatar loader keeps its base gray throughout the height pulse. This is an adaptation, not a claim that the authenticated avatar editor source was inspected. Roblox retains rights to its original UI.
+- Official [Roblox StyleGuide.css](https://css.rbxcdn.com/221ade875d1e8b815363ae697e20ceef32c90fffec39186f59d1cdc43f9b25c0-StyleGuide.css), retrieved October 22, 2026: shared `loading-animated` markup, geometry and staggered timing. The local preview scopes the rules to its own loader and renames the keyframe to avoid changing native controls. Reduced-motion users receive stationary squares.
+- Colors come from the user's October 22 reference screenshot, `codex-clipboard-f2493589-c9ec-4bda-b95a-4c28e8807d46.png`: both small-square interiors are RGB (101,102,104), `#656668`; the enlarged-square interior is RGB (255,255,255), `#FFFFFF`. Each square changes from that gray to white as it grows. Tests check the color peaks for all three squares and sample two animation cycles. This is an adaptation to the supplied reference, not a claim that authenticated avatar-editor source was inspected. Roblox retains rights to its original UI.
 
 Target: the blue-header desktop site of 2016. Early and late 2016 layouts differed; these references guide individual pieces rather than proving every current page matches an archived screenshot.
 

@@ -68,12 +68,12 @@ const {chromium} = require('playwright');
       assert.deepEqual(metrics.gaps, [19.5, 19.5]);
       assert.deepEqual(metrics.durations, ['1.8s', '1.8s', '1.8s']);
       assert.deepEqual(metrics.delays, ['0s', '0.6s', '1.2s']);
-      assert.deepEqual(metrics.backgrounds, ['rgb(188, 190, 200)', 'rgb(188, 190, 200)', 'rgb(188, 190, 200)']);
+      assert.deepEqual(metrics.backgrounds, ['rgb(101, 102, 104)', 'rgb(101, 102, 104)', 'rgb(101, 102, 104)']);
       const pulse = await squares.first().evaluate(element => {
         element.getAnimations()[0].currentTime = 297;
         return {height:element.getBoundingClientRect().height, color:getComputedStyle(element).backgroundColor};
       });
-      assert.deepEqual(pulse, {height:18, color:'rgb(188, 190, 200)'});
+      assert.deepEqual(pulse, {height:18, color:'rgb(255, 255, 255)'});
       const colors = await native.evaluate(element => {
         const animations = element.getAnimations({subtree:true});
         const colors = new Set();
@@ -84,12 +84,28 @@ const {chromium} = require('playwright');
         for (const animation of animations) animation.currentTime = 0;
         return [...colors];
       });
-      assert.deepEqual(colors, ['rgb(188, 190, 200)'], 'all three squares must remain gray throughout two full animation cycles');
+      for (const color of colors) {
+        const [red, green, blue] = color.match(/\d+/g).map(Number);
+        assert.ok(red >= 101 && blue - red <= 3 && green >= red && blue >= green, 'two full cycles must contain only the sampled gray-to-white colors');
+      }
+      for (let index = 0; index < 3; index++) {
+        const peak = await squares.nth(index).evaluate((square, time) => {
+          square.getAnimations()[0].currentTime = time;
+          return getComputedStyle(square).backgroundColor;
+        }, index * 600 + 297);
+        assert.equal(peak, 'rgb(255, 255, 255)', 'each enlarged square must reach the sampled pure white');
+      }
     };
 
     await page.waitForFunction(() => window.renderCalls.some(call => call.ids.length === 1));
     await assertNativeLoader();
-    if (process.env.LOADER_SCREENSHOT) await page.locator('.avatar-thumbnail').screenshot({path:process.env.LOADER_SCREENSHOT});
+    if (process.env.LOADER_SCREENSHOT) {
+      await page.locator('.avatar-back').evaluate(element => element.style.backgroundColor = '#b9926b');
+      await page.locator('.larpbux-native-loading').evaluate(element => {
+        for (const animation of element.getAnimations({subtree:true})) animation.currentTime = 897;
+      });
+      await page.locator('.avatar-thumbnail').screenshot({path:process.env.LOADER_SCREENSHOT});
+    }
     assert.equal(await page.locator('.larpbux-avatar-look').getAttribute('aria-busy'), 'true');
 
     await page.evaluate(() => window.resolveRenders.shift()());
