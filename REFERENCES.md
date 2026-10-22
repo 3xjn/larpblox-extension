@@ -3,7 +3,7 @@
 ## Avatar preview loading indicator
 
 - Official [Roblox StyleGuide.css](https://css.rbxcdn.com/221ade875d1e8b815363ae697e20ceef32c90fffec39186f59d1cdc43f9b25c0-StyleGuide.css), retrieved October 22, 2026: `loading-animated` markup and sizing, spacing, `loaderAnimation` keyframes, and staggered delays. The local preview scopes those rules to its own loader and renames the keyframe to avoid changing native controls. It uses Roblox's live color variables with their Foundation values as fallbacks. Reduced-motion users receive stationary squares.
-- This verifies the shared Roblox website loader, not the authenticated avatar editor's full loading flow. The public avatar-editor URL redirects to login. Roblox retains rights to its original UI.
+- The shared loader's blue color pulse does not match the avatar editor, as confirmed by the user's reference and feedback. The local avatar loader keeps its base gray throughout the height pulse. This is an adaptation, not a claim that the authenticated avatar editor source was inspected. Roblox retains rights to its original UI.
 
 Target: the blue-header desktop site of 2016. Early and late 2016 layouts differed; these references guide individual pieces rather than proving every current page matches an archived screenshot.
 

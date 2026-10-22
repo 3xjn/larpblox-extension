@@ -73,11 +73,23 @@ const {chromium} = require('playwright');
         element.getAnimations()[0].currentTime = 297;
         return {height:element.getBoundingClientRect().height, color:getComputedStyle(element).backgroundColor};
       });
-      assert.deepEqual(pulse, {height:18, color:'rgb(112, 160, 255)'});
+      assert.deepEqual(pulse, {height:18, color:'rgb(188, 190, 200)'});
+      const colors = await native.evaluate(element => {
+        const animations = element.getAnimations({subtree:true});
+        const colors = new Set();
+        for (let time = 0; time <= 3600; time += 20) {
+          for (const animation of animations) animation.currentTime = time;
+          for (const square of element.querySelectorAll(':scope > div > div')) colors.add(getComputedStyle(square).backgroundColor);
+        }
+        for (const animation of animations) animation.currentTime = 0;
+        return [...colors];
+      });
+      assert.deepEqual(colors, ['rgb(188, 190, 200)'], 'all three squares must remain gray throughout two full animation cycles');
     };
 
     await page.waitForFunction(() => window.renderCalls.some(call => call.ids.length === 1));
     await assertNativeLoader();
+    if (process.env.LOADER_SCREENSHOT) await page.locator('.avatar-thumbnail').screenshot({path:process.env.LOADER_SCREENSHOT});
     assert.equal(await page.locator('.larpbux-avatar-look').getAttribute('aria-busy'), 'true');
 
     await page.evaluate(() => window.resolveRenders.shift()());
