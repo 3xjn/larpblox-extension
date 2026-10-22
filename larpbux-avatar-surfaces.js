@@ -169,7 +169,8 @@
   async function updateProfilePreviews(userId, key, result) {
     const {descriptor, definition} = result;
     const containers = [...document.querySelectorAll('.profile-avatar-thumb, .profile-avatar-left, .profile-avatar')]
-      .filter(container => !container.closest('#avatar-web-app') && ownImage(container, userId) && container.querySelector('canvas:not(.larpblox-own-avatar-canvas)'));
+      .filter(container => !container.closest('#avatar-web-app') && ownImage(container, userId) &&
+        (container.matches('.profile-avatar-left') || container.querySelector('canvas:not(.larpblox-own-avatar-canvas)')));
     const wide = definition?.backgroundRequestModel?.id ? containers.filter(container => container.matches('.currently-wearing-avatar-with-background .profile-avatar-left')) : [];
     const candidates = containers.filter(container => !wide.some(banner => banner !== container && banner.contains(container)));
     // Background previews use the whole banner; other previews keep the native canvas wrapper.

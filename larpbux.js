@@ -1089,15 +1089,34 @@
         return;
       }
       let renderKind = customizableHat || threeDimensional && previewRetries < 2 ? '3d' : '2d';
+      let retryDelay = 0;
+      const renderPreview = async kind => {
+        const renderController = new AbortController();
+        const cancel = () => renderController.abort();
+        signal.addEventListener('abort', cancel, {once:true});
+        let timer;
+        try {
+          return await Promise.race([
+            LarpbloxAvatarRequests.render(definition, account, renderController.signal, kind),
+            new Promise((_, reject) => { timer = setTimeout(() => {
+              renderController.abort();
+              reject(Object.assign(new Error('Avatar render timed out.'), {status:408}));
+            }, 20000); }),
+          ]);
+        } finally {
+          clearTimeout(timer); signal.removeEventListener('abort', cancel);
+        }
+      };
       for (let attempt = 0; attempt < 2; attempt++) {
         let imageUrl;
-        try { imageUrl = await LarpbloxAvatarRequests.render(definition, account, signal, renderKind); }
+        try { imageUrl = await renderPreview(renderKind); }
         catch (error) {
-          const cachedImage = !customizableHat && renderKind === '3d' && error.status === 429 && !signal.aborted
+          retryDelay = Math.max(retryDelay, (error.retryAfter || 0) * 1000);
+          const cachedImage = renderKind === '3d' && error.status === 429 && !signal.aborted
             ? LarpbloxAvatarRequests.cached?.(definition, account, '2d') : undefined;
           if (cachedImage) { imageUrl = cachedImage; renderKind = '2d'; }
           else {
-            if (!customizableHat && renderKind === '3d' && error.status !== 429 && !signal.aborted) { renderKind = '2d'; continue; }
+            if (renderKind === '3d' && error.status !== 429 && !signal.aborted) { renderKind = '2d'; continue; }
             throw error;
           }
         }
@@ -1112,7 +1131,7 @@
               try { nextViewer = await LarpbloxAvatar3D.create(pending, imageUrl, {signal: modelController.signal, view, definition, static:!threeDimensional}); }
               finally { clearTimeout(modelTimeout); signal.removeEventListener('abort', cancelModel); }
             } catch (error) {
-              if (signal.aborted || customizableHat) throw error;
+              if (signal.aborted) throw error;
               pending.replaceChildren(); renderKind = '2d';
               continue;
             }
@@ -1138,11 +1157,18 @@
           surface.replaceChildren(pending); surface.hidden = false;
           surface.removeAttribute('title');
           holder.classList.add('larpbux-local-preview');
-          committed = true; previewRetries = 0;
+          committed = true;
+          previewRetries = customizableHat && renderKind === '2d' ? previewRetries + 1 : 0;
           previewFailure = undefined;
           for (const button of editor.querySelectorAll('.larpbux-avatar-item button')) button.title = '';
           // Image publication is deliberately detached from preview rendering.
           publishPreviewImage(definition, imageUrl, account, signal, signature, renderKind !== '2d');
+          if (customizableHat && renderKind === '2d') {
+            previewRetryTimer = setTimeout(() => {
+              if (signature !== previewSignature || account !== userId || !editingLarp()) return;
+              previewSignature = undefined; updateAvatarPreview(editor);
+            }, Math.max(retryDelay, Math.min(60000, 2000 * 2 ** Math.min(previewRetries - 1, 5))));
+          }
           return;
       }
       throw new Error('The avatar preview is still processing. Try Wear again.');
