@@ -62,10 +62,13 @@ async function main() {
       if (url === assetUrl(descriptor.mtl)) return route.fulfill({ headers: { 'access-control-allow-origin': '*' }, body: mtlText });
       return route.continue();
     });
-    const bannerUrl = 'https://tr.rbxcdn.com/larpblox-synthetic-banner';
+    const bannerUrl = 'https://tr.rbxcdn.com/larpblox-background-model';
     await page.route('https://assetdelivery.roblox.com/v2/assetId/123', route => route.fulfill({ json: { locations: [{ location: bannerUrl }] } }));
-    await page.route('https://thumbnails.roblox.com/v1/assets**', route => route.fulfill({ json: { data: [{ targetId: 123, state: 'Completed', imageUrl: bannerUrl }] } }));
-    await page.route(bannerUrl, route => route.fulfill({ headers: { 'access-control-allow-origin': '*' }, contentType: 'image/png', body: fs.readFileSync(fixture('captured-avatar-background.png')) }));
+    await page.route(bannerUrl, route => route.fulfill({ headers: {'access-control-allow-origin':'*'}, contentType:'text/xml', body:fs.readFileSync(fixture('reference-background.rbxmx')) }));
+    await page.route('https://assetdelivery.roblox.com/v2/assetId/131116106888557', route => route.fulfill({status:401,json:{errors:[]}}));
+    await page.route('https://assetdelivery.roblox.com/v1/asset/?id=131116106888557', route => route.fulfill({contentType:'image/png',body:fs.readFileSync(fixture('reference-background.png'))}));
+    await page.route('https://thumbnails.roblox.com/v1/assets**', route => route.fulfill({json:{data:[{targetId:123,state:'Completed',imageUrl:'https://tr.rbxcdn.com/square-fallback'}]}}));
+    await page.route('https://tr.rbxcdn.com/square-fallback', route => route.fulfill({contentType:'image/png',body:fs.readFileSync(fixture('captured-avatar-background.png'))}));
     await page.goto('https://www.roblox.com/my/avatar');
     await page.addScriptTag({ path: path.join(root, 'artifacts', 'extension-repo', 'larpbux-avatar-3d.js') });
     const captures = await page.evaluate(async url => {
@@ -88,7 +91,7 @@ async function main() {
         }
         return { cornerAlpha: data[3], opaque, red, topOpaque, bottomOpaque };
       };
-      const result = { headshot, backgroundHeadshot, backgroundPixels: await pixels(backgroundHeadshot), fullBody, headshotPixels: await pixels(headshot), fullBodyPixels: await pixels(fullBody), diagnostics: viewer.getDiagnostics() };
+      const result = { backgroundAspect: viewer.getBackgroundAspect(), headshot, backgroundHeadshot, backgroundPixels: await pixels(backgroundHeadshot), fullBody, headshotPixels: await pixels(headshot), fullBodyPixels: await pixels(fullBody), diagnostics: viewer.getDiagnostics() };
       viewer.dispose();
       return result;
     }, descriptorUrl);
@@ -96,8 +99,9 @@ async function main() {
       assert.match(dataUrl, /^data:image\/png;base64,/i, `${kind} capture must be PNG`);
       fs.writeFileSync(path.join(output, `${kind}.png`), Buffer.from(dataUrl.split(',')[1], 'base64'));
     }
+    assert.ok(Math.abs(captures.backgroundAspect - 2560/1440)<0.0001, 'must retain original wide background rather than square catalog thumbnail');
     assert.equal(captures.headshotPixels.cornerAlpha, 0, 'explicit transparent headshot must omit the profile background');
-    assert.equal(captures.backgroundPixels.cornerAlpha, 255, 'default headshot must retain the selected background');
+    assert.ok(captures.backgroundPixels.opaque > captures.headshotPixels.opaque, 'default headshot must retain visible pixels from the selected background');
     assert.notEqual(captures.backgroundHeadshot, captures.headshot, 'selected background must change the rendered image');
     assert.ok(captures.headshotPixels.opaque > 1000, 'headshot must contain rendered avatar pixels');
     assert.ok(captures.headshotPixels.topOpaque < 80, 'close-up headwear must reach the upper fifth; the old distant portrait started below pixel 150');

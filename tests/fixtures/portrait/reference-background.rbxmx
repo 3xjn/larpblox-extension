@@ -1,0 +1,25 @@
+<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
+  <External>null</External>
+  <External>nil</External>
+  <Item class="Folder" referent="RBX0">
+    <Properties>
+      <string name="Name">AvatarBackground</string>
+    </Properties>
+    <Item class="IntValue" referent="RBX1">
+      <Properties>
+        <string name="Name">ImageId</string>
+        <int name="Value">131116106888557</int>
+      </Properties>
+    </Item>
+    <Item class="Color3Value" referent="RBX2">
+      <Properties>
+        <string name="Name">Color</string>
+        <Color3 name="Value">
+          <R>0.05982176254035751</R>
+          <G>0.05162654293645169</G>
+          <B>0.16162302395857941</B>
+        </Color3>
+      </Properties>
+    </Item>
+  </Item>
+</roblox>
