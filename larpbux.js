@@ -1012,6 +1012,7 @@
     const toggle = editor.querySelector('.toggle-three-dee');
     const threeDimensional = !/^3d$/i.test(toggle?.textContent?.trim() || '');
     const customizableHat = selected.some(item => Number(item.id) === SMOKESTACK_HAT_ID);
+    const localHat = customizableHat || selected.some(item => Number(item.id) === 1055299) || gameLook?.definition?.assets?.some(asset => Number(asset.id) === 1055299);
     // Texture-only edits keep the existing scene and camera, without another render request.
     const signature = JSON.stringify([userId, selected.map(item => item.id), backgroundId, threeDimensional, gameLook?.definition, state?.fullOutfitKey, Boolean(state?.mode)], (key, value) => key === 'smokestackStyle' ? undefined : value);
     if (previewSignature === signature && (previewElement?.isConnected || (!selected.length && !gameLook))) {
@@ -1085,7 +1086,7 @@
         previewViewer = undefined; previewElement = undefined; previewController = undefined;
         return;
       }
-      let renderKind = customizableHat || threeDimensional && previewRetries < 2 ? '3d' : '2d';
+      let renderKind = localHat || threeDimensional && previewRetries < 2 ? '3d' : '2d';
       let retryDelay = 0;
       const renderPreview = async kind => {
         const renderController = new AbortController();
@@ -1155,12 +1156,12 @@
           surface.removeAttribute('title');
           holder.classList.add('larpbux-local-preview');
           committed = true;
-          previewRetries = customizableHat && renderKind === '2d' ? previewRetries + 1 : 0;
+          previewRetries = localHat && renderKind === '2d' ? previewRetries + 1 : 0;
           previewFailure = undefined;
           for (const button of editor.querySelectorAll('.larpbux-avatar-item button')) button.title = '';
           // Image publication is deliberately detached from preview rendering.
           publishPreviewImage(definition, imageUrl, account, signal, signature, renderKind !== '2d');
-          if (customizableHat && renderKind === '2d') {
+          if (localHat && renderKind === '2d') {
             previewRetryTimer = setTimeout(() => {
               if (signature !== previewSignature || account !== userId || !editingLarp()) return;
               previewSignature = undefined; updateAvatarPreview(editor);
@@ -1650,14 +1651,14 @@
       }
       const definition = temporary.gameLook ? gamePreviewDefinition(temporary) : await loadBrowserPreview(outfitAssets(temporary.items.filter(owned => temporary.equipped.includes(keyFor(owned)) && supportsOutfit(owned))), controller.signal, temporary.backgroundId, Boolean(temporary.fullOutfitKey));
       if (!active()) return;
-      let renderKind = kind;
+      let renderKind = definition.assets.some(asset => Number(asset.id) === 1055299) ? '3d' : kind;
       let imageUrl = await LarpbloxAvatarRequests.render(definition, account, controller.signal, renderKind);
       if (!active()) return;
       surface.textContent = '';
       if (renderKind === '3d') {
         try {
           if (typeof LarpbloxAvatar3D === 'undefined') throw new Error('3D unavailable');
-          record.viewer = await LarpbloxAvatar3D.create(surface,imageUrl,{signal:controller.signal,definition});
+          record.viewer = await LarpbloxAvatar3D.create(surface,imageUrl,{signal:controller.signal,definition,static:kind === '2d'});
         } catch (error) {
           if (!active()) return;
           surface.replaceChildren(); renderKind = '2d';

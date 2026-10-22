@@ -6,8 +6,9 @@
   const records = new Map(), previews = new Map(), hiddenCanvases = new Map(), banners = new Map();
   let cache, retryTimer, activeKey = '', activeAccount = '', lastFailure = '';
   let status = {stage: 'not-started'};
-  const pictureKey = definition => globalThis.LarpbloxAvatarRequests?.definitionKey?.(definition) || JSON.stringify(definition);
-  const seasonalHat = definition => definition?.assets?.some(asset => Number(asset.id) === 169444515);
+  const hasTeapot = definition => definition?.assets?.some(asset => Number(asset.id) === 1055299);
+  const pictureKey = definition => (globalThis.LarpbloxAvatarRequests?.definitionKey?.(definition) || JSON.stringify(definition)) + (hasTeapot(definition) ? ':teapot-mesh-v1' : '');
+  const localHat = definition => definition?.assets?.some(asset => [169444515,1055299].includes(Number(asset.id)));
   function savedPictures(userId, definition) {
     try {
       const saved = JSON.parse(localStorage.getItem(`larpblox-profile-pictures:${userId}`) || 'null');
@@ -261,7 +262,7 @@
       entry.promise = (async () => {
         const definition = await loadDefinition(controller.signal);
         const previous = savedPictures(userId, definition);
-        const customHat = seasonalHat(definition);
+        const customHat = localHat(definition);
         let flat = !customHat && (globalThis.LarpbloxAvatarRequests?.cached?.(definition,userId,'2d') || options.imageUrl);
         // A cold profile must not depend on a 3D render before it can show any
         // avatar. Get a matching still first, then enhance it with the model.
@@ -342,7 +343,7 @@
       })};
   }
   async function characterThumbnail(definition, userId, signal) {
-    if (seasonalHat(definition)) {
+    if (localHat(definition)) {
       const descriptor = await render(definition, userId, signal, '3d');
       return (await pictures(descriptor, signal, definition)).fullBody;
     }

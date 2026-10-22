@@ -10,6 +10,10 @@ const SMOKESTACK_TEXTURES = Object.freeze({normal:6991140417, halloween:69911661
 const SMOKESTACK_STYLES = new Set(['auto', ...Object.keys(SMOKESTACK_TEXTURES), 'christmas', 'aprilfools']);
 const smokestackTextures = new Map();
 let smokestackMesh;
+const TEAPOT_TURRET_ID = 1055299;
+const TEAPOT_MESH_ID = 1045320;
+const TEAPOT_TEXTURE_ID = 1055256;
+let teapotMesh;
 
 // Read the public SpecialMesh used by this exact catalog hat, not an arbitrary
 // Handle or the highest accessory. OBJ exports can repack its texture into an atlas.
@@ -64,6 +68,69 @@ function canonicalSmokestackMesh() {
     smokestackMesh.catch(() => { smokestackMesh = undefined; });
   }
   return smokestackMesh;
+}
+
+function canonicalTeapotMesh() {
+  if (!teapotMesh) {
+    teapotMesh = deliveryUrl(TEAPOT_MESH_ID).then(url => fetch(url)).then(response => {
+      if (!response.ok) throw new Error('Teapot mesh unavailable');
+      return response.arrayBuffer();
+    }).then(readSmokestackMesh);
+    teapotMesh.catch(() => { teapotMesh = undefined; });
+  }
+  return teapotMesh;
+}
+
+async function teapotTexture() {
+  const url = await deliveryUrl(TEAPOT_TEXTURE_ID);
+  const texture = await new THREE.TextureLoader().loadAsync(url);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+function exportedHead(root) {
+  let namedHead, numberedHead, highest = -Infinity;
+  root.traverse(part => {
+    if (!part.isMesh) return;
+    if (/^Head$/i.test(part.name)) namedHead = part;
+    else if (/^Player\d+$/i.test(part.name)) {
+      const y = new THREE.Box3().setFromObject(part).getCenter(new THREE.Vector3()).y;
+      if (y > highest) { highest = y; numberedHead = part; }
+    }
+  });
+  return namedHead || numberedHead;
+}
+
+async function addTeapot(root, definition, signal) {
+  if (!(definition?.assets || []).some(asset => Number(asset?.id) === TEAPOT_TURRET_ID)) return null;
+  const reference = await raceAbort(canonicalTeapotMesh(), signal);
+  let present = false;
+  root.traverse(node => {
+    if (!present && node.isMesh && smokestackMeshUVs(node.geometry, reference)) present = true;
+  });
+  if (present) return null;
+  const head = exportedHead(root);
+  if (!head) throw new Error('Teapot preview has no exported head.');
+  const loading = teapotTexture();
+  loading.then(texture => { if (signal.aborted) texture.dispose(); }, () => {});
+  const texture = await raceAbort(loading, signal);
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(reference.positions, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(reference.uvs, 2));
+  geometry.computeVertexNormals();
+  const material = new THREE.MeshStandardMaterial({map:texture, color:0xffffff, side:THREE.DoubleSide});
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.name = 'LarpbloxTeapotTurret';
+  const headScale = Number(definition?.scales?.head) > 0 ? Number(definition.scales.head) : 1;
+  mesh.scale.setScalar(2.4 * headScale);
+  root.updateMatrixWorld(true);
+  const bounds = new THREE.Box3().setFromObject(head);
+  const center = bounds.getCenter(new THREE.Vector3());
+  const worldPosition = new THREE.Vector3(center.x, bounds.max.y - 0.25 * headScale, center.z - 0.1 * headScale);
+  root.worldToLocal(worldPosition);
+  mesh.position.copy(worldPosition);
+  root.add(mesh);
+  return mesh;
 }
 
 export function smokestackMeshUVs(geometry, reference) {
@@ -390,6 +457,7 @@ export async function create(host, descriptorUrl, options = {}) {
   let animationFrame;
   let backgroundTexture;
   let smokestackParts = [];
+  let teapotPart;
   let smokestackEffect;
   let styleGeneration = 0;
   let smokestackPartsReady;
@@ -450,6 +518,8 @@ export async function create(host, descriptorUrl, options = {}) {
     root = new OBJLoader(manager).setMaterials(materials).parse(objText);
     if (!started) resolveReady();
     await raceAbort(ready, signal);
+    ensureAlive();
+    teapotPart = await addTeapot(root, options.definition, signal);
     ensureAlive();
     // Do not request the hat's assets for avatars that do not wear it.
     smokestackPartsReady = (options.definition?.assets || []).some(asset => Number(asset?.id) === 169444515) ? findSmokestack(root, signal) : Promise.resolve([]);
@@ -652,7 +722,7 @@ export async function create(host, descriptorUrl, options = {}) {
       },
       getView: () => viewState(camera, controls),
       setHatStyle,
-      getDiagnostics: () => ({version: 1, descriptorUrl, descriptor, objText, mtlText, avatarDefinition: options.definition, view: viewState(camera, controls), smokestack:{season:appliedHatSeason, matchedParts:smokestackParts.length, visible:smokestackParts.map(part => part.node.visible), textures:smokestackParts.map(part => part.material.map?.image?.currentSrc || part.material.map?.image?.src || '')}}),
+      getDiagnostics: () => ({version: 1, descriptorUrl, descriptor, objText, mtlText, avatarDefinition: options.definition, view: viewState(camera, controls), teapot:{present:Boolean(teapotPart), position:teapotPart?.getWorldPosition(new THREE.Vector3()).toArray(), scale:teapotPart?.scale.toArray()}, smokestack:{season:appliedHatSeason, matchedParts:smokestackParts.length, visible:smokestackParts.map(part => part.node.visible), textures:smokestackParts.map(part => part.material.map?.image?.currentSrc || part.material.map?.image?.src || '')}}),
       dispose() {
         if (disposed) return;
         disposed = true;

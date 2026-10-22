@@ -97,6 +97,15 @@ const {chromium} = playwright;
     await page.locator('.larpbux-avatar-look:not([aria-busy]) img').waitFor({state:'visible'});
     assert.equal(await page.evaluate(() => window.previewTypes.at(-1)),'2d','a 3D model failure also keeps a visible 2D fallback');
     await page.evaluate(() => { window.forceViewerFailure3d = false; });
+    await page.evaluate(() => {
+      const toggle=document.createElement('button');toggle.className='toggle-three-dee';toggle.textContent='3D';document.querySelector('#avatar-web-app').append(toggle);
+      const state=JSON.parse(localStorage.getItem('larpblox-cosmetics-v1:123'));
+      state.items=[{id:1055299,itemType:'Asset',assetType:8,name:'Teapot Turret',assetTypeVerified:true}];state.equipped=['Asset:1055299'];delete state.gameLook;
+      localStorage.setItem('larpblox-cosmetics-v1:123',JSON.stringify(state));
+      window.dispatchEvent(new StorageEvent('storage',{key:'larpblox-cosmetics-v1:123'}));
+    });
+    await page.waitForFunction(() => window.lastViewerDefinition.assets.some(asset=>asset.id===1055299));
+    assert.equal(await page.evaluate(()=>window.previewTypes.at(-1)),'3d','Teapot uses repaired geometry even in static 2D mode');
     await page.evaluate(() => popupMessage({type:'larpblox-popup-update',mode:false}));
     assert.equal((await page.evaluate(() => popupMessage({type:'larpblox-popup-hat-style',style:'normal'}))).ok, false);
     console.log('PASS: popup hat state, saved choices, game sync, invalid values and mode guard.');

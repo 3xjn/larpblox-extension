@@ -55,8 +55,9 @@
   }
   const write = (id, data) => localStorage.setItem(key(id), JSON.stringify(data));
   const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const thumbnailVersion = snapshot => snapshot?.definition?.assets?.some(asset => Number(asset.id) === 1055299) ? 3 : 2;
   const usableThumbnail = profile => profile.thumbnail &&
-    (!profile.snapshot?.definition?.assets?.some(asset => Number(asset.id) === 169444515) || profile.thumbnailVersion === 2);
+    (!profile.snapshot?.definition?.assets?.some(asset => [169444515,1055299].includes(Number(asset.id))) || profile.thumbnailVersion === thumbnailVersion(profile.snapshot));
   async function drainThumbnails() {
     if (thumbnailBusy) return;
     thumbnailBusy = true;
@@ -77,7 +78,7 @@
       }
       if (url) {
         const latest = read(entry.id), profile = latest.profiles.find(p => p.id === entry.profileId);
-        if (profile && JSON.stringify(profile.snapshot) === JSON.stringify(entry.snapshot)) { profile.thumbnail = url; profile.thumbnailVersion = 2; try { write(entry.id, latest); } catch (_) {} }
+        if (profile && JSON.stringify(profile.snapshot) === JSON.stringify(entry.snapshot)) { profile.thumbnail = url; profile.thumbnailVersion = thumbnailVersion(entry.snapshot); try { write(entry.id, latest); } catch (_) {} }
       } else thumbnails.delete(entry.cacheKey);
       entry.resolve(url || '');
       if (thumbnailQueue.length) await wait(500);

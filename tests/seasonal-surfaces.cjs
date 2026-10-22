@@ -28,7 +28,7 @@ const {chromium} = require(playwrightPath);
     };
     window.LarpbloxAvatar3D = {
       create: async (host, descriptor, options) => ({
-        capture: kind => 'data:image/png;base64,' + btoa(options.definition.assets[0].meta.smokestackStyle + ':' + kind),
+        capture: kind => 'data:image/png;base64,' + btoa((options.definition.assets[0].id === 1055299 ? 'teapot' : options.definition.assets[0].meta.smokestackStyle) + ':' + kind),
         getBackgroundUrl: () => undefined,
         getBackgroundAspect: () => 1,
         dispose: () => {},
@@ -56,17 +56,30 @@ const {chromium} = require(playwrightPath);
   assert.notEqual(changedImage, result.image, 'season changes replace the profile portrait');
   assert.equal(Buffer.from(changedImage.split(',')[1], 'base64').toString(), 'halloween:headshot');
 
+  const teapot = await page.evaluate(async () => {
+    window.__renderCalls = [];
+    const definition = {assets:[{id:1055299}]};
+    localStorage.setItem('larpblox-profile-pictures:42', JSON.stringify({version:8,key:JSON.stringify(definition),expires:Date.now()+60000,result:{headshot:'data:image/png;base64,old-head',fullBody:'data:image/png;base64,old-body',transparentBody:'data:image/png;base64,old-body'}}));
+    const thumbnail = await LarpbloxAvatarSurfaces.characterThumbnail(definition,'42',new AbortController().signal);
+    await LarpbloxAvatarSurfaces.update({userId:'42',active:true,signature:'teapot',loadDefinition:async()=>definition});
+    return {thumbnail, image:document.querySelector('.avatar-headshot img').src, calls:window.__renderCalls};
+  });
+  assert.equal(Buffer.from(teapot.thumbnail.split(',')[1],'base64').toString(),'teapot:fullBody');
+  assert.equal(Buffer.from(teapot.image.split(',')[1],'base64').toString(),'teapot:headshot','old captures without the teapot must be regenerated');
+  assert.ok(teapot.calls.every(call=>call.type === '3d'),'Teapot thumbnails and portraits need the repaired 3D model');
+
   await page.evaluate(() => {
     const snapshot = {version: 1, userId: '42', definition: {assets: [{id: 169444515, meta: {smokestackStyle: 'christmas'}}]}, items: []};
-    localStorage.setItem('larpblox-characters-v1:42', JSON.stringify({profiles: [{id: 'season', name: 'Christmas', snapshot, thumbnail: 'data:image/png;base64,old'}]}));
+    localStorage.setItem('larpblox-characters-v1:42', JSON.stringify({profiles: [{id: 'season', name: 'Christmas', snapshot, thumbnail: 'data:image/png;base64,old'}, {id:'teapot',name:'Teapot',snapshot:{...snapshot,definition:{assets:[{id:1055299}]}},thumbnail:'data:image/png;base64,old-teapot',thumbnailVersion:2}]}));
     window.__characterOptions = {editor: document.querySelector('#avatar-web-app'), userId: '42', active: true, thumbnail: async () => 'data:image/png;base64,new'};
   });
   await page.addScriptTag({content: characters});
   await page.evaluate(() => LarpbloxCharacters.update(window.__characterOptions));
-  await page.waitForTimeout(1200);
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('larpblox-characters-v1:42')).profiles.every(profile=>profile.thumbnail === 'data:image/png;base64,new'));
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('larpblox-characters-v1:42')));
   assert.equal(saved.profiles[0].thumbnail, 'data:image/png;base64,new');
   assert.equal(saved.profiles[0].thumbnailVersion, 2);
+  assert.equal(saved.profiles[1].thumbnailVersion, 3, 'old Teapot cards get repaired captures');
   assert.equal(saved.profiles[0].snapshot.definition.assets[0].meta.smokestackStyle, 'christmas');
   console.log('PASS: seasonal character thumbnails use 3D captures, update own portraits, and migrate stale cards while retaining season metadata.');
   } finally {
