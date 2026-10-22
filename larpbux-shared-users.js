@@ -198,9 +198,9 @@
       const image = document.createElement('img'); image.alt = record.name.displayName || record.name.username;
       if (record.imageUrl && /^https:\/\//.test(record.imageUrl)) image.src = record.imageUrl;
       portrait.append(image);
-      const info = document.createElement('div');
-      const name = document.createElement('a'); name.href = portrait.href; name.className = 'display-name'; name.textContent = record.name.displayName || record.name.username;
-      const username = document.createElement('a'); username.href = portrait.href; username.className = 'text-name username'; username.textContent = '@' + record.name.username;
+      const info = document.createElement('div'); info.className = 'player-search-card-caption flex flex-col justify-start gap-xsmall';
+      const name = document.createElement('a'); name.href = portrait.href; name.className = 'display-name player-search-card-name flex items-center gap-xxsmall text-body-large content-emphasis'; name.textContent = record.name.displayName || record.name.username;
+      const username = document.createElement('a'); username.href = portrait.href; username.className = 'username text-body-small content-muted'; username.textContent = '@' + record.name.username;
       const profile = document.createElement('a'); profile.href = portrait.href; profile.className = 'larpblox-person-profile'; profile.textContent = 'View profile';
       info.append(name, username); card.append(portrait, info, profile); root.append(card);
     }
