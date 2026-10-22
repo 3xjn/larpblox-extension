@@ -998,7 +998,10 @@
     const loader = node('div', '', 'larpbux-preview-loader');
     loader.setAttribute('role', 'status');
     loader.setAttribute('aria-label', 'Loading avatar');
-    for (let dot = 0; dot < 3; dot++) loader.append(node('span'));
+    const nativeLoader = node('div', '', 'loading-animated larpbux-native-loading');
+    const squares = node('div');
+    for (let dot = 0; dot < 3; dot++) squares.append(node('div'));
+    nativeLoader.append(squares); loader.append(nativeLoader);
     surface.append(loader);
     const pending = node('div', '', 'larpbux-avatar-scene');
     pending.classList.add('larpbux-avatar-loading');

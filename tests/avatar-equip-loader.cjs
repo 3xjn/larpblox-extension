@@ -38,9 +38,46 @@ const {chromium} = require('playwright');
     await page.addStyleTag({content:'.item-card-thumb{display:block;width:100px;height:100px}'});
     await page.addScriptTag({path:path.join(root,'larpbux.js')});
 
+    const assertNativeLoader = async () => {
+      const loader = page.locator('.larpbux-preview-loader');
+      const native = loader.locator('> .loading-animated.larpbux-native-loading');
+      const squares = native.locator('> div > div');
+      assert.equal(await native.count(), 1);
+      assert.equal(await squares.count(), 3);
+      await native.evaluate(element => {
+        for (const animation of element.getAnimations({subtree:true})) {
+          animation.pause(); animation.currentTime = 0;
+        }
+      });
+      const metrics = await native.evaluate(element => {
+        const rect = element.getBoundingClientRect();
+        const children = [...element.querySelectorAll(':scope > div > div')];
+        const styles = children.map(child => getComputedStyle(child));
+        const boxes = children.map(child => child.getBoundingClientRect());
+        return {
+          width: Math.round(rect.width), height: Math.round(rect.height),
+          squareWidth: Math.round(boxes[0].width), squareHeight: Math.round(boxes[0].height),
+          gaps: boxes.slice(1).map((box, index) => box.left - boxes[index].right),
+          durations: styles.map(style => style.animationDuration),
+          delays: styles.map(style => style.animationDelay),
+          backgrounds: styles.map(style => style.backgroundColor)
+        };
+      });
+      assert.deepEqual([metrics.width, metrics.height], [75, 24]);
+      assert.deepEqual([metrics.squareWidth, metrics.squareHeight], [12, 12]);
+      assert.deepEqual(metrics.gaps, [19.5, 19.5]);
+      assert.deepEqual(metrics.durations, ['1.8s', '1.8s', '1.8s']);
+      assert.deepEqual(metrics.delays, ['0s', '0.6s', '1.2s']);
+      assert.deepEqual(metrics.backgrounds, ['rgb(188, 190, 200)', 'rgb(188, 190, 200)', 'rgb(188, 190, 200)']);
+      const pulse = await squares.first().evaluate(element => {
+        element.getAnimations()[0].currentTime = 297;
+        return {height:element.getBoundingClientRect().height, color:getComputedStyle(element).backgroundColor};
+      });
+      assert.deepEqual(pulse, {height:18, color:'rgb(112, 160, 255)'});
+    };
+
     await page.waitForFunction(() => window.renderCalls.some(call => call.ids.length === 1));
-    assert.equal(await page.locator('.larpbux-preview-loader').count(), 1);
-    assert.equal(await page.locator('.larpbux-preview-loader span').count(), 3);
+    await assertNativeLoader();
     assert.equal(await page.locator('.larpbux-avatar-look').getAttribute('aria-busy'), 'true');
 
     await page.evaluate(() => window.resolveRenders.shift()());
@@ -50,8 +87,7 @@ const {chromium} = require('playwright');
 
     await page.locator('.larpbux-avatar-item').filter({hasText:'Second Hat'}).locator('.item-card-thumb').click();
     await page.waitForFunction(() => window.renderCalls.some(call => call.ids.length === 2));
-    assert.equal(await page.locator('.larpbux-preview-loader').count(), 1);
-    assert.equal(await page.locator('.larpbux-preview-loader span').count(), 3);
+    await assertNativeLoader();
     assert.equal(await page.locator('.larpbux-avatar-look').getAttribute('aria-busy'), 'true');
     assert.deepEqual(await page.locator('.larpbux-avatar-scene').evaluateAll(nodes => nodes.map(node => getComputedStyle(node).visibility)), ['hidden', 'hidden']);
 

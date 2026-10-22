@@ -448,9 +448,15 @@ html body .shopping-cart-footer [data-larp-cart-disabled="true"]:active {
 .larpblox-person-card .username { display:block; font-family:"Builder Sans"; font-size:12px; font-weight:400; line-height:18px; letter-spacing:normal; }
 .larpblox-person-profile { grid-column:1 / -1; text-align:center; padding:8px; border-radius:8px; background:var(--color-surface-300,#30323d); font-weight:600; }
 #avatar-web-app .larpbux-preview-updating > .larpbux-avatar-scene { visibility:hidden; }
-#avatar-web-app .larpbux-preview-loader { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; gap:20px; pointer-events:none; }
-#avatar-web-app .larpbux-preview-loader span { display:block; width:12px; height:12px; background:#71716f; animation:larpbux-preview-dot 1.2s ease-in-out infinite; }
-#avatar-web-app .larpbux-preview-loader span:nth-child(2) { animation-delay:.2s; }
-#avatar-web-app .larpbux-preview-loader span:nth-child(3) { animation-delay:.4s; }
-@keyframes larpbux-preview-dot { 0%, 60%, 100% { opacity:1; } 30% { opacity:.35; } }
-@media (prefers-reduced-motion:reduce) { #avatar-web-app .larpbux-preview-loader span { animation:none; } }
+#avatar-web-app .larpbux-preview-loader { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
+/* Roblox StyleGuide.css loading-animated rules; scoped to our preview only. See REFERENCES.md. */
+#avatar-web-app .larpbux-native-loading { width:75px; margin-left:auto; margin-right:auto; position:relative; }
+#avatar-web-app .larpbux-native-loading:before { content:""; padding-top:32%; display:block; }
+#avatar-web-app .larpbux-native-loading > div { position:absolute; top:0; bottom:0; left:0; right:0; }
+#avatar-web-app .larpbux-native-loading > div > div { background:var(--color-extended-gray-500,#bcbec8); float:left; width:16%; height:50%; transition-timing-function:ease-in-out; animation:1.8s infinite larpbux-native-loader; display:block; position:relative; top:50%; transform:translateY(-50%); }
+#avatar-web-app .larpbux-native-loading > div > div:not(:first-child) { margin-left:26%; }
+#avatar-web-app .larpbux-native-loading > div > div:first-child { animation-delay:0s; }
+#avatar-web-app .larpbux-native-loading > div > div:nth-child(2) { animation-delay:.6s; }
+#avatar-web-app .larpbux-native-loading > div > div:nth-child(3) { animation-delay:1.2s; }
+@keyframes larpbux-native-loader { 0%,33% { background:var(--color-extended-gray-500,#bcbec8); height:50%; } 16.5% { background:var(--color-extended-blue-500,#70a0ff); height:75%; } }
+@media (prefers-reduced-motion:reduce) { #avatar-web-app .larpbux-native-loading > div > div { animation:none; } }
