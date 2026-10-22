@@ -990,11 +990,24 @@
       holder.style.setProperty('--larpbux-preview-image', backdrop?.backgroundImage || 'none');
     }
     const view = previewViewer?.getView();
+    surface.hidden = false;
+    surface.classList.add('larpbux-preview-updating');
+    surface.setAttribute('aria-busy', 'true');
+    surface.querySelector('.larpbux-avatar-status')?.remove();
+    surface.querySelector('.larpbux-preview-loader')?.remove();
+    const loader = node('div', '', 'larpbux-preview-loader');
+    loader.setAttribute('role', 'status');
+    loader.setAttribute('aria-label', 'Loading avatar');
+    for (let dot = 0; dot < 3; dot++) loader.append(node('span'));
+    surface.append(loader);
     const pending = node('div', '', 'larpbux-avatar-scene');
     pending.classList.add('larpbux-avatar-loading');
     surface.append(pending);
     const hasPicture = () => Boolean(surface.querySelector('.larpbux-avatar-scene:not(.larpbux-avatar-loading) img, .larpbux-avatar-scene:not(.larpbux-avatar-loading) canvas'));
+    let statusMessage;
     const showStatus = text => {
+      statusMessage = text;
+      if (surface.classList.contains('larpbux-preview-updating')) return;
       if (hasPicture()) return;
       let status = surface.querySelector('.larpbux-avatar-status');
       if (!status) { status = node('div', '', 'thumbnail-loader larpbux-avatar-status'); status.setAttribute('role','status'); surface.append(status); }
@@ -1096,6 +1109,12 @@
       }
       for (const button of editor.querySelectorAll('.larpbux-avatar-item button')) button.title = error.message;
     } finally {
+      loader.remove();
+      if (signature === previewSignature && account === userId) {
+        surface.classList.remove('larpbux-preview-updating');
+        surface.removeAttribute('aria-busy');
+        if (!committed && !signal.aborted) showStatus(statusMessage || 'Avatar could not load. Use Redraw to retry.');
+      }
       if (!committed) { nextViewer?.dispose(); pending.remove(); }
     }
   }
