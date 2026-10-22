@@ -11,7 +11,7 @@
   function savedPictures(userId, definition) {
     try {
       const saved = JSON.parse(localStorage.getItem(`larpblox-profile-pictures:${userId}`) || 'null');
-      if (saved?.version === 8 && saved.key === pictureKey(definition) && saved.expires > Date.now() &&
+      if (saved?.version === 8 && (definition === undefined || saved.key === pictureKey(definition)) && saved.expires > Date.now() &&
           [saved.result.headshot,saved.result.fullBody,saved.result.transparentBody].every(url=>url?.startsWith('data:image/png')) &&
           saved.result.headshot !== saved.result.fullBody) return saved.result;
     } catch (_) {}
@@ -222,6 +222,17 @@
     const images = findOwnImages(userId);
     if (!images.length) status = {stage: 'no-matching-images', userId};
     for (const image of records.keys()) if (!images.includes(image)) restore(image);
+    // Show this account's last good portrait before even the outfit request
+    // finishes. It is only a placeholder; never cache it as the new outfit.
+    const pendingPictures = !peer && !cache?.result && savedPictures(userId);
+    if (pendingPictures) for (const image of images) {
+      if (!isHeadshotSurface(image) && !selfProfileLink(image) && !image.classList.contains('rbx2016-welcome-avatar')) continue;
+      const record = remember(image);
+      record.applied = pendingPictures.headshot;
+      if (image.getAttribute('src') !== record.applied) image.setAttribute('src', record.applied);
+      image.removeAttribute('srcset');
+      image.style.visibility = record.visibility;
+    }
     if (peer && options.imageUrl && !options.backgroundId && !images.some(isHeadshotSurface) && !document.querySelector('.profile-avatar-thumb canvas, .profile-avatar-left canvas, .profile-avatar canvas')) {
       for (const image of images) {
         const record = remember(image);

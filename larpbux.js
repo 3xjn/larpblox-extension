@@ -1032,6 +1032,7 @@
       previewElement = node('div', '', 'larpbux-avatar-look'); previewElement.hidden = true; holder.append(previewElement);
     }
     const surface = previewElement;
+    const hasPicture = () => Boolean(surface.querySelector('.larpbux-avatar-scene:not(.larpbux-avatar-loading) img, .larpbux-avatar-scene:not(.larpbux-avatar-loading) canvas'));
     // Use the native viewer's backdrop rather than a separate white panel.
     if (typeof getComputedStyle === 'function') {
       const candidates = [...holder.querySelectorAll('canvas'), holder, editor.querySelector('.avatar-back')].filter(element => element && !surface.contains(element));
@@ -1043,7 +1044,10 @@
     }
     const view = previewViewer?.getView();
     surface.hidden = false;
-    surface.classList.add('larpbux-preview-updating');
+    // Keep the last committed scene visible while its replacement loads. The
+    // loading class belongs only to the new scene; hiding the whole surface
+    // exposes an empty native spinner when a request is slow or fails.
+    surface.classList.toggle('larpbux-preview-updating', !hasPicture());
     surface.setAttribute('aria-busy', 'true');
     surface.querySelector('.larpbux-avatar-status')?.remove();
     surface.querySelector('.larpbux-preview-loader')?.remove();
@@ -1058,7 +1062,6 @@
     const pending = node('div', '', 'larpbux-avatar-scene');
     pending.classList.add('larpbux-avatar-loading');
     surface.append(pending);
-    const hasPicture = () => Boolean(surface.querySelector('.larpbux-avatar-scene:not(.larpbux-avatar-loading) img, .larpbux-avatar-scene:not(.larpbux-avatar-loading) canvas'));
     let nextViewer, committed = false;
     try {
       let definition;
@@ -1075,6 +1078,8 @@
           if (committed || account !== userId || signature !== previewSignature || signal.aborted) return;
           surface.querySelector('.larpbux-avatar-status')?.remove();
           fallback.append(image); surface.prepend(fallback); surface.hidden = false;
+          surface.classList.remove('larpbux-preview-updating');
+          holder.classList.add('larpbux-local-preview');
         };
         image.src = cachedImage;
       }
