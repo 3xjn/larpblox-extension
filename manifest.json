@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Roblox 2016 Classic",
-  "version": "1.20.111",
+  "version": "1.20.112",
   "permissions": [
     "storage",
     "activeTab",
