@@ -7,11 +7,12 @@ const context={...require('./helpers/render-locks.cjs')(),AbortController,setTim
 vm.createContext(context);
 vm.runInContext(fs.readFileSync(path.join(__dirname,'../larpblox-avatar-requests.js'),'utf8'),context);
 (async()=>{
- const definition={assets:[{id:123}],bodyColors:{headColor:'ffffff'},backgroundId:92,backgroundRequestModel:{id:92}};
+ const definition={assets:[{id:123,meta:{smokestackStyle:'halloween'}}],bodyColors:{headColor:'ffffff'},backgroundId:92,backgroundRequestModel:{id:92}};
  await context.LarpbloxAvatarRequests.render(definition,'123',new AbortController().signal,'3d');
  assert.equal(sent[0].avatarDefinition.backgroundRequestModel,undefined,'3D geometry must request the avatar alone; its backdrop is loaded separately');
  assert.equal(sent[0].avatarDefinition.backgroundId,undefined);
  assert.deepEqual(sent[0].avatarDefinition.assets,[{id:123}]);
+ assert.equal(definition.assets[0].meta.smokestackStyle,'halloween','rendering keeps local style in saved data while removing it from Roblox requests');
  assert.equal(definition.backgroundRequestModel.id,92,'rendering must preserve saved background selection');
  await context.LarpbloxAvatarRequests.render(definition,'123',new AbortController().signal,'2d');
  assert.deepEqual(sent[1].avatarDefinition.backgroundRequestModel,{id:92},'flat previews still use the native background renderer');

@@ -94,6 +94,18 @@
   const bodyAssetTypes = [17, 18, 27, 28, 29, 30, 31, 79];
   const accessoryAssetTypes = [8, 41, 42, 43, 44, 45, 46, 47, 64, 65, 66, 67, 68, 69, 70, 71, 72, 76, 77];
   const accessoryTypeNames = {8:'hats',41:'hair',42:'face accessories',43:'neck accessories',44:'shoulder accessories',45:'front accessories',46:'back accessories',47:'waist accessories',64:'T-shirts',65:'shirts',66:'pants',67:'jackets',68:'sweaters',69:'shorts',70:'left shoes',71:'right shoes',72:'dress skirts',76:'eyebrows',77:'eyelashes'};
+  const SMOKESTACK_HAT_ID = 169444515;
+  const SMOKESTACK_STYLES = ['auto','normal','halloween','thanksgiving','christmas','birthday','stpatricks','valentines','aprilfools'];
+  const smokestackStyle = value => SMOKESTACK_STYLES.includes(value) ? value : 'auto';
+  function hatStyleFor(state, id = SMOKESTACK_HAT_ID) {
+    const saved = state?.hatStyles?.[String(id)];
+    if (saved) return smokestackStyle(saved);
+    const asset = state?.gameLook?.definition?.assets?.find(value => Number(value.id) === Number(id));
+    return smokestackStyle(asset?.meta?.smokestackStyle);
+  }
+  function hatStyleState(state, style, id = SMOKESTACK_HAT_ID) {
+    return {...state, hatStyles:{...(state.hatStyles || {}), [String(id)]:smokestackStyle(style)}};
+  }
   const backgroundAssetTypes = [92];
   const wearableAssetTypes = [17, 18, 27, 28, 29, 30, 31, 79, 2, 8, 11, 12, 19, 41, 42, 43, 44, 45, 46, 47, 48, 50, 51, 52, 53, 54, 55, 56, 64, 65, 66, 67, 68, 69, 70, 71, 72, 76, 77];
   const animationAssetTypes = [48, 50, 51, 52, 53, 54, 55, 56];
@@ -245,7 +257,7 @@
       Number(types.get(asset.id) ?? asset.assetType?.id ?? asset.assetType) !== 92 && !backgrounds.has(Number(asset.id)) &&
       (!managed.has(asset.id) || selectedIds.has(asset.id)) && (!replaceSlots.has(types.get(asset.id)) || selectedIds.has(asset.id)));
     for (const item of selected) if (!assets.some(asset => asset.id === item.id)) assets.push({id: item.id});
-    const definition = {...look.definition, assets};
+    const definition = {...look.definition, assets: assets.map(asset => Number(asset.id) === SMOKESTACK_HAT_ID && state.hatStyles?.[String(SMOKESTACK_HAT_ID)] ? {...asset, meta:{...(asset.meta || {}), smokestackStyle:hatStyleFor(state)}} : asset)};
     if (Number.isSafeInteger(Number(state.backgroundId)) && Number(state.backgroundId) > 0) {
       definition.backgroundId = Number(state.backgroundId);
       definition.backgroundRequestModel = {id: Number(state.backgroundId)};
@@ -285,8 +297,10 @@
         return close(asset.meta?.[field]?.[axis] ?? fallback, actual.meta?.[field]?.[axis] ?? fallback);
       }));
     });
-    return String(snapshot.userId) === String(command.userId) && keys(snapshot) === keys(command) && bodyColorsMatch && adjustmentsMatch && background(snapshot) === background(command);
+    const styleMatches = command.definition.assets.filter(asset => Number(asset.id) === SMOKESTACK_HAT_ID).every(asset => smokestackStyle(actualAssets.get(asset.id)?.meta?.smokestackStyle) === smokestackStyle(asset.meta?.smokestackStyle));
+    return String(snapshot.userId) === String(command.userId) && keys(snapshot) === keys(command) && bodyColorsMatch && adjustmentsMatch && styleMatches && background(snapshot) === background(command);
   }
+  const snapshotMatchesPending = gameOutfitMatches;
   function gameCommand(state, userId) {
     const definition = gamePreviewDefinition(state);
     const items = new Map(state.gameLook.items.map(item => [item.id, item]));
@@ -294,7 +308,7 @@
     const backgrounds = state.items.filter(isBackground).map(({id, name}) => ({id, name}));
     return {version: 1, userId: String(userId), definition, backgroundId: definition.backgroundId || 0, backgrounds, items: definition.assets.map(asset => items.get(asset.id)).filter(Boolean).map(({id, name, assetType}) => ({id, name, assetType, itemType: 'Asset'}))};
   }
-  if (typeof module !== 'undefined' && module.exports) { module.exports = {changedBodyColors, addToCart, checkoutCart, changeUsername, localNames, localSocialCounts, amount, formatBalance, collect, equip, outfit, supportsOutfit, supportsCosmetic, isBackground, previewDefinition, matchesAvatarCategory, mergeGameSnapshot, gamePreviewDefinition, gameCommand, gameOutfitMatches}; return; }
+  if (typeof module !== 'undefined' && module.exports) { module.exports = {changedBodyColors, addToCart, checkoutCart, changeUsername, localNames, localSocialCounts, amount, formatBalance, collect, equip, outfit, supportsOutfit, supportsCosmetic, isBackground, previewDefinition, matchesAvatarCategory, mergeGameSnapshot, gamePreviewDefinition, gameCommand, gameOutfitMatches, snapshotMatchesPending, smokestackStyle, hatStyleFor, hatStyleState, SMOKESTACK_HAT_ID, SMOKESTACK_STYLES}; return; }
   let state, userId, panel, list, message, exportBox, purchaseDialog, previewElement, previewViewer, previewSignature, previewController;
   // Catalog Try On is deliberately separate from the saved Larp outfit.  It is
   // a disposable render only: no save(), bridge message, purchase, or equip is
@@ -324,7 +338,7 @@
   const node = (tag, text, className) => { const element = document.createElement(tag); if (text) element.textContent = text; if (className) element.className = className; return element; };
   const key = () => `larpblox-cosmetics-v1:${userId}`;
   function popupState() {
-    return {mode:state?.mode === true, sharing:state?.sharing === true, verified:state?.verified === true, balance:state?.balance || 0, appearance:LarpbloxAppearance.get(), socialCounts:state?.socialCounts || null, username:state?.names?.username || '', displayName:state?.names?.displayName || state?.names?.username || '', avatarPage:/^\/my\/avatar\/?$/i.test(location.pathname), avatarView:avatarEditorView, previewStatus:previewFailure?.message || '', gameStatus:bridgeStatus?.textContent || 'Checking connection…'};
+    return {hatCustomization:{style:hatStyleFor(state), name:'Rbadam Smokestack', equipped:Boolean(state?.items?.some(item => item.id === SMOKESTACK_HAT_ID && Number(item.assetType) === 8 && state.equipped.includes(keyFor(item))))}, mode:state?.mode === true, sharing:state?.sharing === true, verified:state?.verified === true, balance:state?.balance || 0, appearance:LarpbloxAppearance.get(), socialCounts:state?.socialCounts || null, username:state?.names?.username || '', displayName:state?.names?.displayName || state?.names?.username || '', avatarPage:/^\/my\/avatar\/?$/i.test(location.pathname), avatarView:avatarEditorView, previewStatus:previewFailure?.message || '', gameStatus:bridgeStatus?.textContent || 'Checking connection…'};
   }
   function save(next, syncOutfit = false) {
     next = {...next, pendingOutfit: Boolean(next.mode && (syncOutfit || next.pendingOutfit))};
@@ -349,7 +363,8 @@
     const cart = Array.isArray(saved?.cart) ? saved.cart.filter(item => Number.isSafeInteger(item.id) && item.id > 0 && ['Asset', 'Bundle'].includes(item.itemType) && typeof item.name === 'string' && Number.isSafeInteger(item.price) && item.price >= 0 && Number.isSafeInteger(item.quantity) && item.quantity > 0).slice(0, 2000) : [];
     let socialCounts; try { socialCounts = localSocialCounts(saved?.socialCounts); } catch (_) { socialCounts = null; }
     const backgroundId = Number.isSafeInteger(saved?.backgroundId) && saved.backgroundId > 0 && items.some(item => isBackground(item) && item.id === saved.backgroundId) ? saved.backgroundId : undefined;
-    return {version: 1, cart, names, socialCounts, mode: saved?.mode === true, verified: saved?.verified === true, sharing: typeof saved?.sharing === 'boolean' ? saved.sharing : gameLook?.sharing?.enabled === true, pendingOutfit: saved?.mode === true && saved?.pendingOutfit === true, balance: Number.isSafeInteger(saved?.balance) && saved.balance >= 0 ? saved.balance : 0, items, backgroundId, equipped: Array.isArray(saved?.equipped) ? saved.equipped.filter(value => items.some(item => keyFor(item) === value) && !isBackground(items.find(item => keyFor(item) === value))).slice(0, 100) : [], ...(gameLook ? {gameLook} : {})};
+    const hatStyles = saved?.hatStyles && typeof saved.hatStyles === 'object' ? {[String(SMOKESTACK_HAT_ID)]:smokestackStyle(saved.hatStyles[String(SMOKESTACK_HAT_ID)])} : {};
+    return {version: 1, cart, names, socialCounts, mode: saved?.mode === true, verified: saved?.verified === true, sharing: typeof saved?.sharing === 'boolean' ? saved.sharing : gameLook?.sharing?.enabled === true, pendingOutfit: saved?.mode === true && saved?.pendingOutfit === true, balance: Number.isSafeInteger(saved?.balance) && saved.balance >= 0 ? saved.balance : 0, items, backgroundId, hatStyles, equipped: Array.isArray(saved?.equipped) ? saved.equipped.filter(value => items.some(item => keyFor(item) === value) && !isBackground(items.find(item => keyFor(item) === value))).slice(0, 100) : [], ...(gameLook ? {gameLook} : {})};
   }
   const avatarUrl = () => '/my/avatar';
   async function syncNames() {
@@ -392,7 +407,7 @@
       }
       if (state.pendingOutfit && !awaitingGameOutfit && state.gameLook) awaitingGameOutfit = {command: gameCommand(state, account)};
       if (awaitingGameOutfit) {
-        if (!gameOutfitMatches(snapshot, awaitingGameOutfit.command)) {
+        if (!snapshotMatchesPending(snapshot, awaitingGameOutfit.command)) {
           if (!awaitingGameOutfit.sent && !queuedGameCommand && account === userId && state?.mode) queuedGameCommand = awaitingGameOutfit.command;
           if (bridgeStatus) bridgeStatus.textContent = 'Waiting for the game to apply your outfit...';
           return;
@@ -440,6 +455,16 @@
           setTimeout(() => location.reload(), 100);
           return;
         }
+        respond({ok:true, ...popupState()});
+      } catch (error) { respond({ok:false, error:error.message}); }
+      return;
+    }
+    if (message.type === 'larpblox-popup-hat-style') {
+      try {
+        if (!state.mode) throw new Error('Turn Larp mode on first.');
+        if (!SMOKESTACK_STYLES.includes(message.style)) throw new Error('Choose a valid hat style.');
+        if (!popupState().hatCustomization.equipped) throw new Error('Equip Rbadam Smokestack first.');
+        save(hatStyleState(state, message.style), true);
         respond({ok:true, ...popupState()});
       } catch (error) { respond({ok:false, error:error.message}); }
       return;
@@ -807,7 +832,9 @@
     LarpbloxGameBridge.validateSnapshot(snapshot, userId);
     // Native saved outfits are complete replacements; local backgrounds are
     // not part of that payload and should not survive selecting one.
-    save(mergeGameSnapshot({...state, backgroundId: undefined}, JSON.parse(JSON.stringify(snapshot))), true);
+    const selectedStyle = snapshot.definition.assets.find(asset => Number(asset.id) === SMOKESTACK_HAT_ID)?.meta?.smokestackStyle;
+    const next = mergeGameSnapshot({...state, backgroundId: undefined}, JSON.parse(JSON.stringify(snapshot)));
+    save(hatStyleState(next, selectedStyle || 'auto'), true);
   }
   async function applyNativeCharacter(card) {
     const account = userId;

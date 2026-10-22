@@ -6,7 +6,10 @@
     if (!value || value.version !== 1 || String(value.userId) !== String(userId)) throw new Error('The game outfit belongs to a different account.');
     const definition = value.definition;
     if (!definition || !Array.isArray(definition.assets) || definition.assets.length > 512 || !Array.isArray(value.items) || value.items.length > 512) throw new Error('Invalid game outfit.');
-    for (const asset of definition.assets) if (!id(asset.id)) throw new Error('Invalid game asset.');
+    for (const asset of definition.assets) {
+      if (!id(asset.id)) throw new Error('Invalid game asset.');
+      if (asset.meta?.smokestackStyle !== undefined && (asset.id !== 169444515 || !['auto', 'normal', 'halloween', 'thanksgiving', 'christmas', 'birthday', 'stpatricks', 'valentines', 'aprilfools'].includes(asset.meta.smokestackStyle))) throw new Error('Invalid game asset.');
+    }
     const seen = new Set();
     for (const item of value.items) {
       if (!id(item.id) || seen.has(item.id) || item.itemType !== 'Asset' || !Number.isInteger(item.assetType) || item.assetType < 1 || item.assetType > 1000 || typeof item.name !== 'string' || item.name.length > 128) throw new Error('Invalid game item.');

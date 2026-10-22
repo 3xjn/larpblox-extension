@@ -25,11 +25,24 @@ type PopupState = {
   avatarView: "real" | "larp";
   previewStatus: string;
   gameStatus: string;
+  hatCustomization: { equipped: boolean; style: string; name: string };
   message?: string;
 };
 type Reply = PopupState & { ok: boolean; error?: string };
 type Message = { type: string; [key: string]: unknown };
 type Notice = { text: string; error?: boolean };
+
+const HAT_STYLES = [
+  { value: "auto", label: "Automatic (seasonal)" },
+  { value: "normal", label: "Normal" },
+  { value: "halloween", label: "Halloween" },
+  { value: "thanksgiving", label: "Thanksgiving" },
+  { value: "christmas", label: "Christmas" },
+  { value: "birthday", label: "Roblox Birthday" },
+  { value: "stpatricks", label: "St. Patrick’s Day" },
+  { value: "valentines", label: "Valentine’s Day" },
+  { value: "aprilfools", label: "April Fools’" },
+];
 
 function UpdateSettings() {
   const [result, setResult] = useState<{version?: string; loaderVersion?:string; enabled?: boolean; pendingReload?: boolean}>({});
@@ -231,6 +244,28 @@ function App() {
       </section>}
 
       <Disclosure title="More settings">
+        <div className="secondary-group">
+        <h2>Hat customization</h2>
+        <p className="help">Choose a saved style for your supported hat.</p>
+        <Choice
+          id="hat"
+          label="Hat"
+          value="smokestack"
+          items={[{ value: "smokestack", label: state.hatCustomization?.name || "Rbadam Smokestack" }]}
+          disabled={busy}
+          onChange={() => undefined}
+        />
+        <Choice
+          id="hat-style"
+          label="Hat style"
+          value={state.hatCustomization?.style || "auto"}
+          items={HAT_STYLES}
+          disabled={disabled || !state.hatCustomization?.equipped}
+          onChange={style => void act("hat-style", { type: "larpblox-popup-hat-style", style }, [], "Hat style saved.")}
+        />
+        {!state.hatCustomization?.equipped && <p className="help">Wear Rbadam Smokestack to choose its saved style.</p>}
+        </div>
+
         <div className="secondary-group">
         <h2>Profile counts</h2>
         <p className="help">Choose the counts other Larpblox users see while Larp mode is on.</p>

@@ -13,6 +13,12 @@
   }
   function renderDefinition(definition, thumbnailType) {
     const result = {...definition};
+    // Local hat styles belong to the game connection, not Roblox's render API.
+    result.assets = (definition.assets || []).map(asset => {
+      if (!asset.meta || !Object.hasOwn(asset.meta, 'smokestackStyle')) return asset;
+      const meta = {...asset.meta}; delete meta.smokestackStyle;
+      return Object.keys(meta).length ? {...asset, meta} : {id:asset.id};
+    });
     // Backgrounds are loaded by the 3D viewer, not the geometry endpoint.
     if (thumbnailType === '3d') { delete result.backgroundRequestModel; delete result.backgroundId; }
     return JSON.parse(definitionKey(result));
