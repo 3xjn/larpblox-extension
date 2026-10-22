@@ -22,7 +22,7 @@ const box=new THREE.Box3().setFromObject(root);
 const frame=headshotFrame(root,box);
 assert.equal(frame.target.x,1.2);
 assert.equal(frame.target.z,0.7);
-assert.ok(frame.target.y<5.1 && frame.target.y>4.5,'frame stays centered on the face, not the ears');
+assert.ok(frame.target.y>5.4 && frame.target.y<5.8,'head-and-hat crop moves upward to exclude the lower torso');
 assert.ok(frame.radius>=box.max.y-frame.target.y,'headwear remains in the round frame');
 mesh(root,'Head',-0.6,5.3,0.3,1.1,1.1,1.1);root.updateMatrixWorld(true);
 const named=headshotFrame(root,new THREE.Box3().setFromObject(root));

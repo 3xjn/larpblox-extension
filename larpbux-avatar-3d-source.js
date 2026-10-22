@@ -132,10 +132,11 @@ export function headshotFrame(root, avatarBox) {
   }
   const headSize = bounds.getSize(new THREE.Vector3());
   const target = bounds.getCenter(new THREE.Vector3());
-  target.y -= headSize.y * 0.1;
   const bottom = bounds.min.y - headSize.y * 0.25;
   const top = Math.max(bounds.max.y, avatarBox.max.y);
-  // Keep the face centered while leaving room for headwear and the round mask.
+  // Center the head-and-headwear region; centering only the face leaves
+  // an equally tall empty region below it and pulls the torso into the portrait.
+  target.y = (bottom + top) / 2;
   const radius = Math.max(Math.hypot(headSize.x / 2, Math.max(top - target.y, target.y - bottom)), headSize.z / 2, 0.25) * 1.1;
   return {target, radius};
 }
