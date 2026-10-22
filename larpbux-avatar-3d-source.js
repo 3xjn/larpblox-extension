@@ -6,6 +6,61 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 const CDN = /^https:\/\/[a-z0-9-]+\.rbxcdn\.com\/[A-Za-z0-9._~%/-]+(?:\?[^#]*)?$/;
 const HASH = /^[A-Za-z0-9._~-]+$/;
 const backgroundUrls = new Map();
+const SMOKESTACK_TEXTURES = Object.freeze({normal:6991140417, halloween:6991166143, thanksgiving:6991393806, birthday:2399316028, stpatricks:2399447918, valentines:2399448372});
+const SMOKESTACK_STYLES = new Set(['auto', ...Object.keys(SMOKESTACK_TEXTURES), 'christmas', 'aprilfools']);
+const smokestackTextures = new Map();
+
+export function smokestackSeason(style = 'auto', date = new Date()) {
+  style = SMOKESTACK_STYLES.has(style) ? style : 'auto';
+  if (style !== 'auto') return style;
+  const month = date.getMonth() + 1, day = date.getDate();
+  if (month === 2 && day >= 9 && day <= 16) return 'valentines';
+  if (month === 3 && day >= 12 && day <= 19) return 'stpatricks';
+  if (month === 4 && day === 1) return 'aprilfools';
+  if (month === 8 && day === 27) return 'birthday';
+  if (month === 10 && day >= 22 && day <= 31) return 'halloween';
+  if (month === 11 && day >= 20 && day <= 30) return 'thanksgiving';
+  if (month === 12 && day >= 18 && day <= 27) return 'christmas';
+  return 'normal';
+}
+
+function urlKey(value) {
+  try { const url = new URL(value); return url.pathname.replace(/^\//, ''); } catch { return ''; }
+}
+
+export function smokestackTextureMatches(textureUrl, normalTextureUrl) {
+  return Boolean(urlKey(textureUrl) && urlKey(textureUrl) === urlKey(normalTextureUrl));
+}
+
+async function deliveryUrl(id, signal) {
+  const response = await fetch(`https://assetdelivery.roblox.com/v2/assetId/${id}`, {signal, credentials:'include'});
+  if (!response.ok) throw new Error('Smokestack texture unavailable');
+  return checkedUrl((await response.json()).locations?.[0]?.location);
+}
+
+function seasonalTexture(id) {
+  if (!smokestackTextures.has(id)) {
+    const request = deliveryUrl(id).then(url => new THREE.TextureLoader().loadAsync(url)).then(texture => {
+      texture.colorSpace = THREE.SRGBColorSpace;
+      return texture;
+    });
+    smokestackTextures.set(id, request);
+    request.catch(() => smokestackTextures.delete(id));
+  }
+  return smokestackTextures.get(id);
+}
+
+function imageSignature(image) {
+  const width = image?.naturalWidth || image?.videoWidth || image?.width, height = image?.naturalHeight || image?.videoHeight || image?.height;
+  if (!width || !height || typeof document === 'undefined') return null;
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 16;
+    const context = canvas.getContext('2d', {willReadFrequently:true});
+    context.drawImage(image, 0, 0, 16, 16);
+    return `${width}x${height}:${Array.from(context.getImageData(0, 0, 16, 16).data).join(',')}`;
+  } catch { return null; } // A CDN without readable CORS stays hash-only.
+}
 
 async function backgroundUrl(id, signal) {
   if (!Number.isSafeInteger(id) || id <= 0) throw new Error('Invalid avatar background');
@@ -174,6 +229,45 @@ export function avatarMaterials(mtlText, manager) {
   return materials;
 }
 
+async function findSmokestack(root, signal) {
+  // The exported OBJ does not retain the asset id. Its normal texture does,
+  // so only touch meshes whose loaded diffuse map is Smokestack's known file.
+  const normalTexture = await raceAbort(seasonalTexture(SMOKESTACK_TEXTURES.normal), signal);
+  const normal = urlKey(normalTexture.image?.currentSrc || normalTexture.image?.src || '');
+  const normalPixels = imageSignature(normalTexture.image);
+  const parts = [];
+  root.traverse(node => {
+    if (!node.isMesh) return;
+    const materials = Array.isArray(node.material) ? node.material : [node.material];
+    materials.forEach((material, index) => {
+      const image = material?.map?.image;
+      const source = image?.currentSrc || image?.src || '';
+      if (urlKey(source) === normal || (normalPixels && imageSignature(image) === normalPixels)) parts.push({node, material, index, original:material.map, visible:node.visible, current:null});
+    });
+  });
+  return parts;
+}
+
+function seasonalHatEffect(scene, parts, style) {
+  if (!parts.length || !['halloween', 'thanksgiving', 'christmas', 'birthday', 'stpatricks', 'valentines'].includes(style)) return null;
+  const box = new THREE.Box3();
+  parts.forEach(part => box.expandByObject(part.node));
+  if (box.isEmpty()) return null;
+  const center = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3());
+  const color = {halloween:0xff742e, thanksgiving:0xe7a738, christmas:0xf6fbff, birthday:0xf24c79, stpatricks:0x41b764, valentines:0xf06292}[style];
+  const positions = [];
+  for (let i = 0; i < 16; i++) {
+    const angle = i * 2.399963229728653;
+    positions.push(center.x + Math.cos(angle) * (size.x * .6 + (i % 3) * .025), center.y + size.y * .25 + (i % 5) * size.y * .16, center.z + Math.sin(angle) * (size.z * .6 + (i % 3) * .025));
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  const points = new THREE.Points(geometry, new THREE.PointsMaterial({color, size:Math.max(size.length() * .07, .035), sizeAttenuation:true, transparent:true, opacity:.9}));
+  points.name = 'LarpbloxSmokestackEffect';
+  scene.add(points);
+  return points;
+}
+
 export async function create(host, descriptorUrl, options = {}) {
   if (!host || typeof host.append !== 'function') throw new TypeError('A host element is required');
   const internal = new AbortController();
@@ -192,6 +286,11 @@ export async function create(host, descriptorUrl, options = {}) {
   let root;
   let animationFrame;
   let backgroundTexture;
+  let smokestackParts = [];
+  let smokestackEffect;
+  let styleGeneration = 0;
+  let smokestackPartsReady;
+  let appliedHatSeason;
 
   const fitBackground = aspect => {
     if (!backgroundTexture) return;
@@ -249,6 +348,8 @@ export async function create(host, descriptorUrl, options = {}) {
     if (!started) resolveReady();
     await raceAbort(ready, signal);
     ensureAlive();
+    // Do not request the hat's assets for avatars that do not wear it.
+    smokestackPartsReady = (options.definition?.assets || []).some(asset => Number(asset?.id) === 169444515) ? findSmokestack(root, signal) : Promise.resolve([]);
 
     canvas = document.createElement('canvas');
     canvas.setAttribute('aria-label', '3D avatar preview');
@@ -319,6 +420,50 @@ export async function create(host, descriptorUrl, options = {}) {
     camera.updateProjectionMatrix();
     controls.update();
     const render = () => { if (!disposed) renderer.render(scene, camera); };
+    const setHatStyle = async style => {
+      const generation = ++styleGeneration;
+      const season = smokestackSeason(style);
+      const wearingSmokestack = (options.definition?.assets || []).some(asset => Number(asset?.id) === 169444515);
+      try {
+        const parts = await raceAbort(smokestackPartsReady, signal);
+        if (generation !== styleGeneration || disposed) return false;
+        smokestackParts = parts;
+        if (!parts.length) {
+          if (wearingSmokestack) throw new Error('Smokestack hat texture was not found in this avatar export.');
+          return false;
+        }
+        if (season === appliedHatSeason) return true;
+        const textureId = SMOKESTACK_TEXTURES[season];
+        const texture = textureId ? await raceAbort(seasonalTexture(textureId), signal) : null;
+        if (generation !== styleGeneration || disposed) return false;
+        smokestackEffect?.removeFromParent();
+        smokestackEffect?.geometry.dispose();
+        smokestackEffect?.material.dispose();
+        smokestackEffect = undefined;
+        for (const part of parts) {
+          part.node.visible = season === 'aprilfools' ? false : part.visible;
+          part.current?.dispose();
+          part.current = null;
+          part.material.map = part.original;
+          part.material.needsUpdate = true;
+        }
+        if (texture) {
+          for (const part of parts) {
+            part.current = texture.clone();
+            part.material.map = part.current;
+            part.material.needsUpdate = true;
+          }
+        }
+        if (generation !== styleGeneration || disposed) return false;
+        smokestackEffect = seasonalHatEffect(scene, parts, season);
+        appliedHatSeason = season;
+        render();
+        return true;
+      } catch (error) {
+        if (signal.aborted || error?.name === 'AbortError') throw error;
+        throw new Error(`Smokestack style could not load: ${error?.message || 'texture unavailable'}`);
+      }
+    };
     controls.addEventListener('change', render);
     controls.addEventListener('start', () => { autoFrame = false; });
     const keydown = event => {
@@ -400,7 +545,8 @@ export async function create(host, descriptorUrl, options = {}) {
         return image?.width > 0 && image?.height > 0 ? image.width / image.height : 1;
       },
       getView: () => viewState(camera, controls),
-      getDiagnostics: () => ({version: 1, descriptorUrl, descriptor, objText, mtlText, avatarDefinition: options.definition, view: viewState(camera, controls)}),
+      setHatStyle,
+      getDiagnostics: () => ({version: 1, descriptorUrl, descriptor, objText, mtlText, avatarDefinition: options.definition, view: viewState(camera, controls), smokestack:{season:appliedHatSeason, matchedParts:smokestackParts.length, visible:smokestackParts.map(part => part.node.visible), textures:smokestackParts.map(part => part.material.map?.image?.currentSrc || part.material.map?.image?.src || '')}}),
       dispose() {
         if (disposed) return;
         disposed = true;
@@ -411,6 +557,9 @@ export async function create(host, descriptorUrl, options = {}) {
         controls?.dispose();
         canvas?.removeEventListener('keydown', keydown);
         cleanupObject(root);
+        for (const texture of new Set(smokestackParts.map(part => part.original))) texture.dispose();
+        smokestackEffect?.geometry.dispose();
+        smokestackEffect?.material.dispose();
         backgroundTexture?.dispose();
         renderer?.dispose();
         renderer?.forceContextLoss();
@@ -426,6 +575,8 @@ export async function create(host, descriptorUrl, options = {}) {
     resizeObserver?.disconnect();
     controls?.dispose();
     cleanupObject(root);
+    smokestackEffect?.geometry.dispose();
+    smokestackEffect?.material.dispose();
     backgroundTexture?.dispose();
     renderer?.dispose();
     renderer?.forceContextLoss();

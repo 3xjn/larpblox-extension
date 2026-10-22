@@ -762,7 +762,10 @@
     }
     const {avatar, rules} = await browserAvatarBase.promise;
     if (signal.aborted || account !== userId) throw new Error('Avatar update cancelled.');
-    return previewDefinition(avatar, rules, selected, backgroundId);
+    const definition = previewDefinition(avatar, rules, selected, backgroundId);
+    definition.assets = definition.assets.map(asset => Number(asset.id) === SMOKESTACK_HAT_ID
+      ? {...asset, meta:{...(asset.meta || {}), smokestackStyle:hatStyleFor(state)}} : asset);
+    return definition;
   }
   async function applyBodyColorChange(request) {
     const account = userId;
@@ -994,8 +997,16 @@
     // Roblox's existing toggle names the mode it will switch to, not the current mode.
     const toggle = editor.querySelector('.toggle-three-dee');
     const threeDimensional = !/^3d$/i.test(toggle?.textContent?.trim() || '');
-    const signature = JSON.stringify([userId, selected.map(item => item.id), backgroundId, threeDimensional, gameLook?.definition, Boolean(state?.mode)]);
-    if (previewSignature === signature && (previewElement?.isConnected || (!selected.length && !gameLook))) return;
+    const customizableHat = selected.some(item => Number(item.id) === SMOKESTACK_HAT_ID);
+    // Texture-only edits keep the existing scene and camera, without another render request.
+    const signature = JSON.stringify([userId, selected.map(item => item.id), backgroundId, threeDimensional, gameLook?.definition, Boolean(state?.mode)], (key, value) => key === 'smokestackStyle' ? undefined : value);
+    if (previewSignature === signature && (previewElement?.isConnected || (!selected.length && !gameLook))) {
+      if (customizableHat && previewViewer?.setHatStyle) {
+        try { await previewViewer.setHatStyle(hatStyleFor(state)); previewFailure = undefined; previewElement?.removeAttribute('title'); }
+        catch (error) { previewFailure = {message:error.message}; previewElement?.setAttribute('title', error.message); }
+      }
+      return;
+    }
     clearTimeout(previewRetryTimer);
     if (previewRetryKey !== signature) { previewRetryKey = signature; previewRetries = 0; }
     previewController?.abort(); previewController = new AbortController();
@@ -1068,16 +1079,16 @@
         previewViewer = undefined; previewElement = undefined; previewController = undefined;
         return;
       }
-      let renderKind = threeDimensional && previewRetries < 2 ? '3d' : '2d';
+      let renderKind = customizableHat || threeDimensional && previewRetries < 2 ? '3d' : '2d';
       for (let attempt = 0; attempt < 2; attempt++) {
         let imageUrl;
         try { imageUrl = await LarpbloxAvatarRequests.render(definition, account, signal, renderKind); }
         catch (error) {
-          const cachedImage = renderKind === '3d' && error.status === 429 && !signal.aborted
+          const cachedImage = !customizableHat && renderKind === '3d' && error.status === 429 && !signal.aborted
             ? LarpbloxAvatarRequests.cached?.(definition, account, '2d') : undefined;
           if (cachedImage) { imageUrl = cachedImage; renderKind = '2d'; }
           else {
-            if (renderKind === '3d' && error.status !== 429 && !signal.aborted) { renderKind = '2d'; continue; }
+            if (!customizableHat && renderKind === '3d' && error.status !== 429 && !signal.aborted) { renderKind = '2d'; continue; }
             throw error;
           }
         }
@@ -1089,10 +1100,10 @@
               const cancelModel = () => modelController.abort();
               signal.addEventListener('abort', cancelModel, {once: true});
               const modelTimeout = setTimeout(cancelModel, 8000);
-              try { nextViewer = await LarpbloxAvatar3D.create(pending, imageUrl, {signal: modelController.signal, view, definition}); }
+              try { nextViewer = await LarpbloxAvatar3D.create(pending, imageUrl, {signal: modelController.signal, view, definition, static:!threeDimensional}); }
               finally { clearTimeout(modelTimeout); signal.removeEventListener('abort', cancelModel); }
             } catch (error) {
-              if (signal.aborted) throw error;
+              if (signal.aborted || customizableHat) throw error;
               pending.replaceChildren(); renderKind = '2d';
               continue;
             }
@@ -1110,6 +1121,8 @@
             });
             pending.append(image);
           }
+          if (account !== userId || signature !== previewSignature || signal.aborted) return;
+          if (customizableHat && nextViewer?.setHatStyle) await nextViewer.setHatStyle(hatStyleFor(state));
           if (account !== userId || signature !== previewSignature || signal.aborted) return;
           previewViewer?.dispose(); previewViewer = nextViewer;
           pending.classList.remove('larpbux-avatar-loading');
