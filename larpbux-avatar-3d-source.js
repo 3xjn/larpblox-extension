@@ -363,7 +363,7 @@ export async function create(host, descriptorUrl, options = {}) {
         const previousSize = renderer.getSize(new THREE.Vector2());
         const previousBackground = scene.background;
         try {
-          if (kind === 'headshot' || options.background === false) scene.background = null;
+          if (options.background === false) scene.background = null;
           renderer.setSize(420, 420, false);
           fitBackground(1);
           renderer.render(scene, photoCamera);

@@ -70,7 +70,8 @@ async function main() {
     await page.addScriptTag({ path: path.join(root, 'artifacts', 'extension-repo', 'larpbux-avatar-3d.js') });
     const captures = await page.evaluate(async url => {
       const viewer = await LarpbloxAvatar3D.create(document.querySelector('#host'), url, { static: true, definition: { backgroundRequestModel: { id: 123 } } });
-      const headshot = viewer.capture('headshot');
+      const backgroundHeadshot = viewer.capture('headshot');
+      const headshot = viewer.capture('headshot', {background:false});
       const fullBody = viewer.capture('fullBody');
       const pixels = async dataUrl => {
         const image = new Image();
@@ -87,15 +88,17 @@ async function main() {
         }
         return { cornerAlpha: data[3], opaque, red, topOpaque, bottomOpaque };
       };
-      const result = { headshot, fullBody, headshotPixels: await pixels(headshot), fullBodyPixels: await pixels(fullBody), diagnostics: viewer.getDiagnostics() };
+      const result = { headshot, backgroundHeadshot, backgroundPixels: await pixels(backgroundHeadshot), fullBody, headshotPixels: await pixels(headshot), fullBodyPixels: await pixels(fullBody), diagnostics: viewer.getDiagnostics() };
       viewer.dispose();
       return result;
     }, descriptorUrl);
-    for (const [kind, dataUrl] of Object.entries({ headshot: captures.headshot, fullBody: captures.fullBody })) {
+    for (const [kind, dataUrl] of Object.entries({ headshot: captures.headshot, backgroundHeadshot: captures.backgroundHeadshot, fullBody: captures.fullBody })) {
       assert.match(dataUrl, /^data:image\/png;base64,/i, `${kind} capture must be PNG`);
       fs.writeFileSync(path.join(output, `${kind}.png`), Buffer.from(dataUrl.split(',')[1], 'base64'));
     }
-    assert.equal(captures.headshotPixels.cornerAlpha, 0, 'default headshot must omit the profile background');
+    assert.equal(captures.headshotPixels.cornerAlpha, 0, 'explicit transparent headshot must omit the profile background');
+    assert.equal(captures.backgroundPixels.cornerAlpha, 255, 'default headshot must retain the selected background');
+    assert.notEqual(captures.backgroundHeadshot, captures.headshot, 'selected background must change the rendered image');
     assert.ok(captures.headshotPixels.opaque > 1000, 'headshot must contain rendered avatar pixels');
     assert.ok(captures.headshotPixels.topOpaque < 80, 'close-up headwear must reach the upper fifth; the old distant portrait started below pixel 150');
     const report = {
