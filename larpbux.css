@@ -236,7 +236,8 @@ html #avatar-web-app .avatar-thumbnail:has(> .larpbux-avatar-look) { isolation:i
 html #avatar-web-app .larpbux-avatar-look { position:absolute !important; inset:0 !important; margin:0 !important; padding:0 !important; transform:none !important; box-sizing:border-box; max-width:100%; overflow:hidden; border-radius:inherit; background-color:var(--larpbux-preview-background,transparent) !important; background-image:var(--larpbux-preview-image,none) !important; background-size:cover !important; background-repeat:no-repeat !important; background-position:center !important; }
 html #avatar-web-app .larpbux-avatar-look .larpbux-avatar-scene { position:absolute !important; inset:0 !important; width:auto !important; height:auto !important; min-width:0; margin:0 !important; padding:0 !important; transform:none !important; overflow:hidden; }
 html #avatar-web-app .larpbux-avatar-look .larpbux-avatar-scene > :is(canvas,img) { position:absolute !important; inset:0 !important; width:100% !important; height:100% !important; max-width:none !important; margin:0 !important; padding:0 !important; transform:none !important; }
-html #avatar-web-app .larpbux-avatar-hats { background:transparent !important; max-height:calc(100% - 24px); overflow-y:auto; overflow-x:hidden; }
+html #avatar-web-app .larpbux-avatar-hats { background:transparent !important; max-height:calc(100% - 24px); overflow-y:auto; overflow-x:hidden; scrollbar-width:none; }
+html #avatar-web-app .larpbux-avatar-hats::-webkit-scrollbar { display:none; }
 
 #avatar-web-app .larpbux-avatar-scene.larpbux-avatar-loading { visibility:hidden; }
 #avatar-web-app .larpbux-avatar-status { align-items:center; justify-content:center; text-align:center; padding:24px; box-sizing:border-box; }
