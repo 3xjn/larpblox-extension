@@ -30,9 +30,10 @@ const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCA
         onMessage: {addListener: listener => { listeners.push(listener); window.__popupListener = listener; }}
       };
       window.LarpbloxAppearance = {get: () => 'modern', set() {}};
-      window.LarpbloxAvatarRequests = {cached: () => null, render: async () => png};
+      window.LarpbloxAvatarRequests = {cached: () => null, render: async () => png, gearPose: async () => 'pose-descriptor'};
       window.__allow3d = false;
       window.LarpbloxAvatar3D = {create: async (host, descriptor, options) => {
+        window.__poseDescriptor=options.poseDescriptorUrl;
         await new Promise(resolve => { window.__release3d = resolve; if (window.__allow3d) resolve(); });
         host.append(document.createElement('canvas'));
         return {getDiagnostics: () => ({
@@ -51,6 +52,7 @@ const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCA
 
     await page.evaluate(() => { window.__allow3d = true; window.__release3d?.(); });
     await page.waitForFunction(() => document.querySelector('.larpbux-avatar-look canvas'));
+    assert.equal(await page.evaluate(()=>window.__poseDescriptor),'pose-descriptor','avatar editor passes restored R15 gear pose to viewer');
     const downloadPromise = page.waitForEvent('download');
     const result = await page.evaluate(() => new Promise(resolve => window.__popupListener({type:'larpblox-popup-avatar-details'}, {}, resolve)));
     assert.equal(result.ok, true);

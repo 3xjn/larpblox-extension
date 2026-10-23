@@ -106,6 +106,12 @@ function exportedHead(root) {
   // A gear pose can raise a hand above the face. Favor the upper body axis,
   // rather than letting that small, off-center hand become the portrait's head.
   const score = position => position.y - Math.hypot(position.x - center.x, position.z - center.z);
+  if (parts.length >= 10) {
+    const median = axis => parts.map(part=>part.center[axis]).sort((a,b)=>a-b)[Math.floor(parts.length/2)];
+    const x=median('x'),z=median('z');
+    const central=parts.filter(({center:p,size})=>Math.hypot(p.x-x,p.z-z)<=bodyHeight*.12 && size.y>=Math.max(size.x,size.z)*.5);
+    if (central.length) return namedHead || headless?.part || central.sort((a,b)=>b.center.y-a.center.y)[0].part;
+  }
   parts.sort((a,b) => score(b.center) - score(a.center));
   return namedHead || headless?.part || parts[0]?.part;
 }
@@ -515,6 +521,92 @@ function seasonalHatEffect(scene, parts, style) {
   return points;
 }
 
+const cleanupObject = object => object?.traverse?.(node => {
+    node.geometry?.dispose();
+    const materials = Array.isArray(node.material) ? node.material : [node.material];
+    for (const material of materials) {
+      if (!material) continue;
+      for (const key of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'alphaMap']) material[key]?.dispose?.();
+      material.dispose?.();
+    }
+  });
+
+async function loadAvatarModel(descriptorUrl, signal) {
+    const descriptorResponse = await fetch(checkedUrl(descriptorUrl), { signal });
+    if (!descriptorResponse.ok) throw new Error(`Avatar descriptor failed (${descriptorResponse.status})`);
+    const descriptor = await descriptorResponse.json();
+    if (signal.aborted) throw abortError();
+    const objUrl = assetUrl(descriptor.obj);
+    const mtlUrl = assetUrl(descriptor.mtl);
+    const textureUrls = new Map((descriptor.textures || []).map(hash => [String(hash), assetUrl(hash)]));
+    const [objText, mtlText] = await Promise.all([
+      fetch(objUrl, { signal }).then(response => { if (!response.ok) throw new Error('Avatar OBJ failed'); return response.text(); }),
+      fetch(mtlUrl, { signal }).then(response => { if (!response.ok) throw new Error('Avatar MTL failed'); return response.text(); }),
+    ]);
+    if (signal.aborted) throw abortError();
+
+    const manager = new THREE.LoadingManager();
+    manager.setURLModifier(raw => {
+      if (String(raw).startsWith('https://')) return checkedUrl(raw);
+      const name = decodeURIComponent(String(raw)).split(/[\\/]/).pop();
+      const hash = name.replace(/\.[^/.]+$/, '');
+      const url = textureUrls.get(name) || textureUrls.get(hash) || (HASH.test(name) ? assetUrl(name) : null);
+      return checkedUrl(url || raw);
+    });
+    let started = false;
+    let resolveReady;
+    const ready = new Promise((resolve, reject) => {
+      resolveReady = resolve;
+      manager.onStart = () => { started = true; };
+      manager.onLoad = resolve;
+      manager.onError = () => reject(new Error('Roblox could not load an avatar texture.'));
+    });
+    const materials = avatarMaterials(mtlText, manager);
+    const root = new OBJLoader(manager).setMaterials(materials).parse(objText);
+    repairCoincidentFaces(root);
+    if (!started) resolveReady();
+    try {
+      await raceAbort(ready, signal);
+      if (signal.aborted) throw abortError();
+      return {root, descriptor, objText, mtlText};
+    } catch(error) { cleanupObject(root);throw error; }
+}
+
+export function restoreGearPose(original, posed) {
+  const head = exportedHead(original), placeholder = exportedHead(posed);
+  const body = root => { const parts=[];root.traverse(node=>{if(node.isMesh && /^Player\d+$/i.test(node.name))parts.push(node);});return parts; };
+  const sourceParts=body(original).filter(node=>node!==head), posedParts=body(posed).filter(node=>node!==placeholder);
+  if (!head || !placeholder || sourceParts.length!==14 || posedParts.length!==14) return false;
+  const center=node=>new THREE.Box3().setFromObject(node).getCenter(new THREE.Vector3());
+  // Keep a working native export untouched. Only replace a body whose pose differs.
+  if (!sourceParts.some(node=>posedParts.every(target=>center(node).distanceTo(center(target))>.02))) return false;
+  const torso=(parts,head)=>{
+    const h=center(head), candidates=parts.map(node=>({node,p:center(node)}));
+    const distance=p=>Math.hypot(p.x-h.x,p.z-h.z);
+    const axis=Math.min(...candidates.map(({p})=>distance(p)));
+    return candidates.filter(({p})=>distance(p)<=axis+.05).sort((a,b)=>b.p.y-a.p.y)[0].node;
+  };
+  const offset=center(torso(posedParts,placeholder)).sub(center(torso(sourceParts,head)));
+  // Gear thumbnail poses articulate the body; keep the chosen head's mesh,
+  // scale, texture and fit at the neck instead of using the default placeholder.
+  const headBounds=new THREE.Box3().setFromObject(head), headHeight=headBounds.getSize(new THREE.Vector3()).y;
+  const headwear=[];
+  original.traverse(node=>{
+    if (!node.isMesh || /^Player\d+$/i.test(node.name)) return;
+    const bounds=new THREE.Box3().setFromObject(node);
+    if (bounds.min.y<headBounds.min.y-headHeight*.5 || bounds.getCenter(new THREE.Vector3()).y<headBounds.min.y) return;
+    const positions=node.geometry.getAttribute('position'),index=node.geometry.index;
+    const reference={uvs:[],positions:Array.from({length:index?.count || positions.count},(_,i)=>new THREE.Vector3().fromBufferAttribute(positions,index?index.getX(i):i).toArray()).flat()};
+    const match=matchEffectMesh(posed,reference,{scale:{x:1,y:1,z:1},offset:{x:0,y:0,z:0}});
+    if (match && !/^Player\d+$/i.test(match.node.name))headwear.push({node,placeholder:match.node});
+  });
+  for(const item of headwear){item.node.position.add(offset);original.attach(item.placeholder);posed.attach(item.node);}
+  head.position.add(offset);
+  original.attach(placeholder);
+  posed.attach(head);
+  return true;
+}
+
 export async function create(host, descriptorUrl, options = {}) {
   if (!host || typeof host.append !== 'function') throw new TypeError('A host element is required');
   const internal = new AbortController();
@@ -539,6 +631,8 @@ export async function create(host, descriptorUrl, options = {}) {
   let styleGeneration = 0;
   let smokestackPartsReady;
   let gearEffects;
+  let poseResources;
+  let gearPose={applied:false};
   let appliedHatSeason;
 
   const fitBackground = aspect => {
@@ -552,52 +646,24 @@ export async function create(host, descriptorUrl, options = {}) {
   };
 
   const ensureAlive = () => { if (disposed || signal.aborted) throw abortError(); };
-  const cleanupObject = object => object?.traverse?.(node => {
-    node.geometry?.dispose();
-    const materials = Array.isArray(node.material) ? node.material : [node.material];
-    for (const material of materials) {
-      if (!material) continue;
-      for (const key of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'alphaMap']) material[key]?.dispose?.();
-      material.dispose?.();
-    }
-  });
+
 
   try {
-    const descriptorResponse = await fetch(checkedUrl(descriptorUrl), { signal });
-    if (!descriptorResponse.ok) throw new Error(`Avatar descriptor failed (${descriptorResponse.status})`);
-    const descriptor = await descriptorResponse.json();
+    const model = await loadAvatarModel(descriptorUrl, signal);
+    const {descriptor, objText, mtlText} = model;
+    root = model.root;
     ensureAlive();
-    const objUrl = assetUrl(descriptor.obj);
-    const mtlUrl = assetUrl(descriptor.mtl);
-    const textureUrls = new Map((descriptor.textures || []).map(hash => [String(hash), assetUrl(hash)]));
-    const [objText, mtlText] = await Promise.all([
-      fetch(objUrl, { signal }).then(response => { if (!response.ok) throw new Error('Avatar OBJ failed'); return response.text(); }),
-      fetch(mtlUrl, { signal }).then(response => { if (!response.ok) throw new Error('Avatar MTL failed'); return response.text(); }),
-    ]);
-    ensureAlive();
-
-    const manager = new THREE.LoadingManager();
-    manager.setURLModifier(raw => {
-      if (String(raw).startsWith('https://')) return checkedUrl(raw);
-      const name = decodeURIComponent(String(raw)).split(/[\\/]/).pop();
-      const hash = name.replace(/\.[^/.]+$/, '');
-      const url = textureUrls.get(name) || textureUrls.get(hash) || (HASH.test(name) ? assetUrl(name) : null);
-      return checkedUrl(url || raw);
-    });
-    let started = false;
-    let resolveReady;
-    const ready = new Promise((resolve, reject) => {
-      resolveReady = resolve;
-      manager.onStart = () => { started = true; };
-      manager.onLoad = resolve;
-      manager.onError = () => reject(new Error('Roblox could not load an avatar texture.'));
-    });
-    const materials = avatarMaterials(mtlText, manager);
-    root = new OBJLoader(manager).setMaterials(materials).parse(objText);
-    repairCoincidentFaces(root);
-    if (!started) resolveReady();
-    await raceAbort(ready, signal);
-    ensureAlive();
+    if (options.poseDescriptorUrl && options.poseDescriptorUrl!==descriptorUrl) {
+      let posed;
+      try {
+        posed=await loadAvatarModel(options.poseDescriptorUrl,signal);
+        ensureAlive();
+        if (restoreGearPose(root,posed.root)) {
+          poseResources=root;root=posed.root;gearPose={applied:true,descriptorUrl:options.poseDescriptorUrl};posed=undefined;
+        }
+      } catch(error) { if(signal.aborted) throw error; }
+      finally { if(posed)cleanupObject(posed.root); }
+    }
     teapotPart = await addTeapot(root, options.definition, signal);
     ensureAlive();
     // Do not request the hat's assets for avatars that do not wear it.
@@ -815,7 +881,7 @@ export async function create(host, descriptorUrl, options = {}) {
       },
       getView: () => viewState(camera, controls),
       setHatStyle,
-      getDiagnostics: () => ({version: 1, descriptorUrl, descriptor, objText, mtlText, avatarDefinition: options.definition, view: viewState(camera, controls), gearEffects:gearEffects?.diagnostics || [], teapot:{present:Boolean(teapotPart), position:teapotPart?.getWorldPosition(new THREE.Vector3()).toArray(), scale:teapotPart?.scale.toArray()}, smokestack:{season:appliedHatSeason, matchedParts:smokestackParts.length, visible:smokestackParts.map(part => part.node.visible), textures:smokestackParts.map(part => part.material.map?.image?.currentSrc || part.material.map?.image?.src || '')}}),
+      getDiagnostics: () => ({version: 1, descriptorUrl, descriptor, objText, mtlText, avatarDefinition: options.definition, view: viewState(camera, controls), gearEffects:gearEffects?.diagnostics || [], gearPose, teapot:{present:Boolean(teapotPart), position:teapotPart?.getWorldPosition(new THREE.Vector3()).toArray(), scale:teapotPart?.scale.toArray()}, smokestack:{season:appliedHatSeason, matchedParts:smokestackParts.length, visible:smokestackParts.map(part => part.node.visible), textures:smokestackParts.map(part => part.material.map?.image?.currentSrc || part.material.map?.image?.src || '')}}),
       dispose() {
         if (disposed) return;
         disposed = true;
@@ -827,6 +893,7 @@ export async function create(host, descriptorUrl, options = {}) {
         canvas?.removeEventListener('keydown', keydown);
         gearEffects?.dispose();
         cleanupObject(root);
+        cleanupObject(poseResources);
         for (const texture of new Set(smokestackParts.map(part => part.original))) texture.dispose();
         smokestackEffect?.geometry.dispose();
         smokestackEffect?.material.dispose();
@@ -845,6 +912,7 @@ export async function create(host, descriptorUrl, options = {}) {
     resizeObserver?.disconnect();
     controls?.dispose();
     cleanupObject(root);
+    cleanupObject(poseResources);
     smokestackEffect?.geometry.dispose();
     smokestackEffect?.material.dispose();
     backgroundTexture?.dispose();

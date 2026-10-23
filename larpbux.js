@@ -1201,11 +1201,13 @@
           if (renderKind === '3d') {
             try {
               if (typeof LarpbloxAvatar3D === 'undefined') throw new Error('3D preview is unavailable.');
+              const items=[...(state.gameLook?.items || []),...outfitAssets(state.items)];
+              const poseDescriptorUrl=await LarpbloxAvatarRequests.gearPose?.(definition,account,signal,items);
               const modelController = new AbortController();
               const cancelModel = () => modelController.abort();
               signal.addEventListener('abort', cancelModel, {once: true});
               const modelTimeout = setTimeout(cancelModel, 8000);
-              try { nextViewer = await LarpbloxAvatar3D.create(pending, imageUrl, {signal: modelController.signal, view, definition, items:[...(state.gameLook?.items || []),...outfitAssets(state.items)], static:!threeDimensional}); }
+              try { nextViewer = await LarpbloxAvatar3D.create(pending, imageUrl, {signal: modelController.signal, poseDescriptorUrl, view, definition, items, static:!threeDimensional}); }
               finally { clearTimeout(modelTimeout); signal.removeEventListener('abort', cancelModel); }
             } catch (error) {
               if (signal.aborted) throw error;

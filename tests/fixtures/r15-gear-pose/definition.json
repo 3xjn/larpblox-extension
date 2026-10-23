@@ -1,0 +1,50 @@
+{
+  "assets": [
+    {
+      "id": 2910028689
+    },
+    {
+      "id": 5313450948
+    },
+    {
+      "id": 90735396631834
+    },
+    {
+      "id": 88878670
+    },
+    {
+      "id": 14862915330
+    },
+    {
+      "id": 14862914889
+    },
+    {
+      "id": 14618207727
+    },
+    {
+      "id": 25740034
+    },
+    {
+      "id": 15058381150
+    }
+  ],
+  "bodyColors": {
+    "headColor": "eab892",
+    "leftArmColor": "eab892",
+    "leftLegColor": "eab892",
+    "rightArmColor": "eab892",
+    "rightLegColor": "eab892",
+    "torsoColor": "eab892"
+  },
+  "playerAvatarType": {
+    "playerAvatarType": "R15"
+  },
+  "scales": {
+    "bodyType": 0,
+    "depth": 1,
+    "head": 1,
+    "height": 1,
+    "proportion": 0,
+    "width": 0.85
+  }
+}

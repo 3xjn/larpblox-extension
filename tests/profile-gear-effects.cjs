@@ -7,7 +7,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE || 'playwright');
   await page.goto('https://www.roblox.com/users/123/profile');
   await page.evaluate(()=>{
    window.calls=[];window.captures=[];
-   window.LarpbloxAvatarRequests={cached:(d,u,kind)=>kind==='3d'?'descriptor':undefined,render:async()=> 'descriptor'};
+   window.LarpbloxAvatarRequests={cached:(d,u,kind)=>kind==='3d'?'descriptor':undefined,render:async()=> 'descriptor',gearPose:async()=> 'pose-descriptor'};
    window.LarpbloxAvatar3D={create:async(host,url,options)=>{calls.push(options);const canvas=document.createElement('canvas');host.append(canvas);return {capture:kind=>{captures.push(kind);return `data:image/png;base64,${kind}`;},dispose(){canvas.remove();}};}};
   });
   await page.addScriptTag({path:path.resolve(__dirname,'../larpbux-avatar-surfaces.js')});
@@ -17,8 +17,9 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE || 'playwright');
   },peer);
   assert.equal(await page.locator('#head').getAttribute('src'),'data:image/png;base64,headshot');
   assert.equal(await page.locator('#body').getAttribute('src'),'data:image/png;base64,fullBody');
-  const calls=await page.evaluate(()=>calls.map(c=>({static:c.static,items:c.items})));
+  const calls=await page.evaluate(()=>calls.map(c=>({static:c.static,items:c.items,poseDescriptorUrl:c.poseDescriptorUrl})));
   assert.equal(calls.length,2,'both static portrait capture and live full-profile viewer are enhanced');
+  for(const call of calls)assert.equal(call.poseDescriptorUrl,'pose-descriptor','static and interactive profiles use the same restored pose');
   for(const call of calls)assert.deepEqual(call.items,[{id:99119240,assetType:19}],'only equipped effect items reach each viewer');
   await page.close();
  }

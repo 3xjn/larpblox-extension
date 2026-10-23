@@ -192,5 +192,27 @@
       job.promise.then(value => finish(resolve, value), error => finish(reject, error));
     });
   }
-  globalThis.LarpbloxAvatarRequests = {render, cached, definitionKey, waitForRender, retryAfter};
+  async function gearPose(definition, userId, signal, items = []) {
+    if (definition?.playerAvatarType?.playerAvatarType !== 'R15') return undefined;
+    const typeOf = item => Number(item?.assetType?.id ?? item?.assetType);
+    const equipped = new Set((definition.assets || []).map(asset => Number(asset.id)));
+    const gear = items.filter(item => typeOf(item) === 19 && equipped.has(Number(item.id)));
+    const heads = new Set(items.filter(item => typeOf(item) === 79 && equipped.has(Number(item.id))).map(item => Number(item.id)));
+    if (!gear.length || !heads.size) return undefined;
+    const alternate = {
+      ...definition,
+      assets: (definition.assets || []).filter(asset => !heads.has(Number(asset.id))),
+    };
+    const child = new AbortController();
+    const abort = () => child.abort();
+    signal?.addEventListener('abort', abort, {once: true});
+    if (signal?.aborted) child.abort();
+    const timeout = setTimeout(abort, 20000);
+    try { return await render(alternate, userId, child.signal, '3d'); }
+    catch (error) {
+      if (signal?.aborted) throw error;
+      return undefined;
+    } finally { clearTimeout(timeout); signal?.removeEventListener('abort', abort); }
+  }
+  globalThis.LarpbloxAvatarRequests = {render, gearPose, cached, definitionKey, waitForRender, retryAfter};
 })();

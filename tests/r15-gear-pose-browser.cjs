@@ -1,0 +1,33 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),zlib=require('node:zlib'),esbuild=require('esbuild');
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const built=esbuild.buildSync({stdin:{contents:`import * as THREE from 'three';import {OBJLoader} from 'three/addons/loaders/OBJLoader.js';import {OBJExporter} from 'three/addons/exporters/OBJExporter.js';export {THREE,OBJLoader,OBJExporter};`,resolveDir:path.resolve(__dirname,'..')},bundle:true,platform:'node',format:'cjs',nodePaths:[path.resolve(__dirname,'../../renderer-build/node_modules')],write:false});
+const m={exports:{}};new Function('module','exports','require',built.outputFiles[0].text)(m,m.exports,require);
+const {THREE,OBJLoader,OBJExporter}=m.exports;
+const original=zlib.gunzipSync(fs.readFileSync(path.join(__dirname,'fixtures/r15-gear-pose/sword-cane-neutral.obj.gz'))).toString();
+const root=new OBJLoader().parse(original);
+const move=new THREE.Matrix4().makeTranslation(0,103.8,0).multiply(new THREE.Matrix4().makeRotationX(-80*Math.PI/180)).multiply(new THREE.Matrix4().makeTranslation(0,-103.8,0));
+for(const name of ['Player10','Player12','Player14','Handle1'])root.getObjectByName(name).geometry.applyMatrix4(move);
+const head=root.getObjectByName('Player1'),p=new THREE.Box3().setFromObject(head).getCenter(new THREE.Vector3());head.geometry.translate(-p.x,-p.y,-p.z).scale(.7,.8,.7).translate(p.x,p.y,p.z);
+const posed=new OBJExporter().parse(root);
+const materials=[...new Set([...original.matchAll(/^usemtl (.+)$/gm)].map(x=>x[1]))].map(name=>`newmtl ${name}\nKd .7 .55 .3\n`).join('');
+(async()=>{const browser=await chromium.launch({channel:'chrome',headless:true});try{
+const page=await browser.newPage({viewport:{width:840,height:460}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
+await page.route('**/*',r=>{const u=r.request().url(),headers={'access-control-allow-origin':'*'};
+if(u.endsWith('/original') || u.endsWith('/posed'))return r.fulfill({headers,json:{obj:u.endsWith('/posed')?'pose-mesh':'original-mesh',mtl:'materials',textures:[],camera:{fov:35}}});
+if(u.endsWith('/original-mesh'))return r.fulfill({headers,body:original});
+if(u.endsWith('/pose-mesh'))return r.fulfill({headers,body:posed});
+if(u.endsWith('/materials'))return r.fulfill({headers,body:materials});
+return r.abort();});
+await page.setContent('<body style="margin:0;background:#25262b;color:white;font:16px Arial"><div style="display:flex"><div>Captured lowered pose<div id="before" style="width:420px;height:420px"></div></div><div>Restored pose, original head<div id="after" style="width:420px;height:420px"></div></div></div>');
+await page.addScriptTag({path:process.env.TEST_AVATAR_RENDERER || path.resolve(__dirname,'../larpbux-avatar-3d.js')});
+const result=await page.evaluate(async()=>{
+ const a=await LarpbloxAvatar3D.create(document.querySelector('#before'),'https://t0.rbxcdn.com/original',{static:true});
+ const b=await LarpbloxAvatar3D.create(document.querySelector('#after'),'https://t0.rbxcdn.com/original',{static:true,poseDescriptorUrl:'https://t0.rbxcdn.com/posed'});
+ const out={applied:b.getDiagnostics().gearPose?.applied,changed:a.capture('fullBody')!==b.capture('fullBody'),head:b.capture('headshot')};
+ window.viewers=[a,b];return out;
+});
+assert.equal(result.changed,true,'the lowered gear pose must be replaced before capture');assert.equal(result.applied,true);assert.match(result.head,/^data:image\/png/);assert.deepEqual(errors,[]);
+await page.screenshot({path:path.resolve(__dirname,'../.test-artifacts/r15-gear-pose.png')});
+await page.evaluate(()=>viewers.forEach(v=>v.dispose()));
+console.log('PASS: browser loads captured R15 outfit plus pose descriptor and captures restored gear pose with original dynamic head.');
+}finally{await browser.close();}})().catch(e=>{console.error(e);process.exitCode=1});
