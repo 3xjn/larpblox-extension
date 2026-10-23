@@ -391,6 +391,39 @@ export function avatarMaterials(mtlText, manager) {
   return materials;
 }
 
+export function repairCoincidentFaces(root) {
+  let repaired = 0;
+  root.traverse(node => {
+    if (!node.isMesh) return;
+    const positions = node.geometry.getAttribute('position'), indices = node.geometry.index;
+    if (!positions) return;
+    const count = indices?.count || positions.count, seen = new Set();
+    for (let face = 0; face + 2 < count; face += 3) {
+      const vertices = [0,1,2].map(corner => {
+        const index = indices ? indices.getX(face + corner) : face + corner;
+        return [positions.getX(index),positions.getY(index),positions.getZ(index)].map(value => Math.round(value * 100000)).join(',');
+      });
+      if (new Set(vertices).size !== 3) continue;
+      const first = vertices.indexOf([...vertices].sort()[0]);
+      const a=vertices[first], b=vertices[(first+1)%3], c=vertices[(first+2)%3];
+      if (seen.has(`${a}|${c}|${b}`)) {
+        // Old accessories model their inside explicitly with reversed faces.
+        // Drawing both sides makes those coincident faces fight for depth.
+        const front = material => {
+          const copy=material.clone(); copy.side=THREE.FrontSide;
+          copy.onBeforeCompile=material.onBeforeCompile;
+          copy.customProgramCacheKey=material.customProgramCacheKey;
+          return copy;
+        };
+        node.material=Array.isArray(node.material) ? node.material.map(front) : front(node.material);
+        repaired++; break;
+      }
+      seen.add(`${a}|${b}|${c}`);
+    }
+  });
+  return repaired;
+}
+
 async function findSmokestack(root, signal) {
   // The exported OBJ does not retain the asset id. Its normal texture does,
   // so only touch meshes whose loaded diffuse map is Smokestack's known file.
@@ -529,6 +562,7 @@ export async function create(host, descriptorUrl, options = {}) {
     });
     const materials = avatarMaterials(mtlText, manager);
     root = new OBJLoader(manager).setMaterials(materials).parse(objText);
+    repairCoincidentFaces(root);
     if (!started) resolveReady();
     await raceAbort(ready, signal);
     ensureAlive();
