@@ -225,7 +225,7 @@ html #avatar-web-app .larpbux-character-card .item-card-thumb .thumbnail-2d-cont
 html #avatar-web-app .larpbux-character-card .item-card-thumb img { display:block; width:100%; height:100%; object-fit:contain; }
 
 /* The temporary avatar replaces only the viewer, keeping native controls usable. */
-#item-thumbnail-container-frontend .thumbnail-holder.larpbux-catalog-preview { position:relative; }
+#item-thumbnail-container-frontend .thumbnail-holder.larpbux-catalog-preview { position:relative; z-index:0; }
 #item-thumbnail-container-frontend .larpbux-catalog-preview > :not(.larpbux-catalog-try-on),
 #item-thumbnail-container-frontend .larpbux-catalog-preview > :not(.larpbux-catalog-try-on) * { visibility:hidden !important; }
 #item-thumbnail-container-frontend .larpbux-catalog-try-on { position:absolute; inset:0; z-index:2; display:flex; align-items:center; justify-content:center; overflow:hidden; }
