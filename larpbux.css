@@ -508,3 +508,6 @@ html:is(.rbx2016,.larpblox-modern) .larpbux-panel :is(input,textarea,select) {
 /* Game friend portraits stay concealed until their explicit player identity resolves. */
 html[data-larpblox-peer-cards-enabled="true"][data-larpblox-peer-identities-ready="true"] :is(.game-card-friend-info .info-avatar .avatar-card,[data-testid^="game-tile-stats-"] .info-avatar .avatar-card,[data-testid="game-players-player-interaction-modal"] .interaction-item):not([data-larpblox-peer-avatar-ready="true"]) img.avatar-card-image { visibility:hidden !important; }
 html[data-larpblox-peer-cards-enabled="true"][data-larpblox-peer-identities-ready="true"] [data-testid="game-players-player-interaction-modal"] .interaction-item:not([data-larpblox-peer-name-ready="true"]) .player-name { visibility:hidden !important; }
+
+/* Keep Larp follower labels readable without enabling their native links. */
+[data-larpblox-static-social-count="true"] { opacity:1 !important; pointer-events:none !important; cursor:default !important; }

@@ -35,7 +35,7 @@
     finally { publishing = false; if (mine !== publicationGeneration) flushProfile(); }
   }
   let context = {}, initialized = false, records = new Map(), pending = false, lastPoll = 0, lastLookupKey = '', queued = false, generation = 0;
-  const counts = new Map();
+  const counts = new Map(), staticSocialCounts = new Map();
   const userIdFrom = value => {
     try {
       const url = new URL(value || '', location.origin);
@@ -208,10 +208,12 @@
     }
   }
   function applyCounts() {
-    const wanted = new Map();
+    const wanted = new Map(), staticWanted = new Set();
     for (const anchor of document.querySelectorAll('a,.user-profile-header button,.profile-header button,.profile-header-overlay button')) {
       const target = countTarget(anchor);
       if (!target) continue;
+      const larp = target.id === String(context.userId) ? context.mode : records.has(target.id);
+      if (larp && target.kind !== 'friends' && anchor.closest('.user-profile-header,.profile-header,.profile-header-overlay')) staticWanted.add(anchor);
       const source = target.id === String(context.userId) ? context.mode && context.socialCounts : records.get(target.id)?.socialCounts;
       const value = validCounts(source)?.[target.kind];
       if (value === undefined) continue;
@@ -228,6 +230,16 @@
         const titleTarget = node.parentElement?.closest('a') === anchor && /^\s*\d[\d,.]*(?:[KMB])?\s*$/i.test(current) ? node.parentElement : anchor;
         wanted.set(node, {value:next, titleTarget, title});
       }
+    }
+    for (const [anchor, original] of staticSocialCounts) if (!staticWanted.has(anchor)) {
+      delete anchor.dataset.larpbloxStaticSocialCount;
+      for (const [key,value] of Object.entries(original)) value === null ? anchor.removeAttribute(key) : anchor.setAttribute(key,value);
+      staticSocialCounts.delete(anchor);
+    }
+    for (const anchor of staticWanted) {
+      if (!staticSocialCounts.has(anchor)) staticSocialCounts.set(anchor, {tabindex:anchor.getAttribute('tabindex'), 'aria-disabled':anchor.getAttribute('aria-disabled')});
+      anchor.dataset.larpbloxStaticSocialCount = 'true';
+      anchor.setAttribute('aria-disabled','true'); anchor.setAttribute('tabindex','-1');
     }
     restoreCounts(wanted);
     for (const [node, entry] of wanted) {
@@ -383,6 +395,12 @@
     });
   }
   new MutationObserver(refreshSearchPlacement).observe(document, {childList:true, characterData:true, subtree:true, attributes:true, attributeFilter:['aria-busy','href','src','srcset','data-user-id','data-userid','data-target-user-id','data-target-userid','data-larpblox-peer-user-id']});
+  const blockSocialNavigation = event => {
+    if (event.type === 'keydown' && !['Enter',' '].includes(event.key)) return;
+    if (!event.target.closest?.('[data-larpblox-static-social-count="true"]')) return;
+    event.preventDefault(); event.stopImmediatePropagation();
+  };
+  for (const type of ['click','auxclick','keydown']) document.addEventListener(type, blockSocialNavigation, true);
   document.addEventListener('load', refreshSearchPlacement, true);
   window.addEventListener('popstate', refreshSearchPlacement);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { lastPoll = 0; scan(); } });

@@ -43,6 +43,7 @@ async function main() {
       }, {definition, userId});
       await page.route('https://www.roblox.com/**', route => route.fulfill({contentType:'text/html',body:'<main></main>'}));
       await page.goto('https://www.roblox.com/users/123/profile');
+      await page.addStyleTag({content:fs.readFileSync(path.join(__dirname,'../larpbux.css'),'utf8')});
       await page.addScriptTag({content: sharedSource});
       await page.evaluate(() => window.LarpbloxSharedUsers.update({userId: window.__userId, mode: true, socialCounts: null}));
     }
@@ -69,15 +70,15 @@ async function main() {
 
     await own.evaluate(() => {
       document.body.innerHTML = '<header class="user-profile-header">' +
-        '<button id="followers">12K Followers</button>' +
+        '<button id="followers" style="opacity:0.5" aria-disabled="true">12K Followers</button>' +
         '<button id="following"><span>34</span> Following</button>' +
         '<button id="friends">56 Friends</button></header>';
       window.LarpbloxSharedUsers.update({userId: '123', mode: true, socialCounts: null});
     });
     await peer.evaluate(() => {
-      document.body.innerHTML = '<a id="peerFollowers" href="/users/123/friends#!/followers">12K Followers</a>' +
-        '<a id="peerFollowing" href="/users/123/friends#!/following">34 Following</a>' +
-        '<a id="peerFriends" href="/users/123/friends#!/friends">56 Friends</a>';
+      document.body.innerHTML = '<header class="user-profile-header"><a style="opacity:0.5" aria-disabled="true" id="peerFollowers" href="/users/123/friends#!/followers">12K Followers</a>' +
+        '<a style="opacity:0.5" aria-disabled="true" id="peerFollowing" href="/users/123/friends#!/following">34 Following</a>' +
+        '<a id="peerFriends" href="/users/123/friends#!/friends">56 Friends</a></header>';
       window.LarpbloxSharedUsers.update({userId: '456', mode: true, socialCounts: null});
     });
 
@@ -95,6 +96,17 @@ async function main() {
     await peer.waitForFunction(() => document.querySelector('#peerFollowers')?.textContent === '156K Followers' &&
       document.querySelector('#peerFollowing')?.textContent === '0 Following' &&
       document.querySelector('#peerFriends')?.textContent === '1K Friends', null, {timeout: 3000});
+
+    for(const [page,ids] of [[own,['followers','following']],[peer,['peerFollowers','peerFollowing']]]) {
+      for(const id of ids) {
+        assert.equal(await page.locator('#'+id).evaluate(e=>getComputedStyle(e).opacity),'1','Larp social labels must not look faded');
+        assert.equal(await page.locator('#'+id).getAttribute('aria-disabled'),'true');
+        assert.equal(await page.locator('#'+id).getAttribute('tabindex'),'-1');
+        const reached=await page.evaluate(id=>{let reached=false;const listener=()=>{reached=true;};document.addEventListener('click',listener);document.getElementById(id).dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true}));document.removeEventListener('click',listener);return reached;},id);
+        assert.equal(reached,false,'follower clicks must not reach native handlers');
+      }
+    }
+    assert.equal(await peer.locator('#peerFriends').getAttribute('href'),'/users/123/friends#!/friends','Friends remains unchanged');
 
     await own.evaluate(() => {
       document.querySelector('#followers').textContent = '12K Followers';
@@ -118,9 +130,13 @@ async function main() {
       document.querySelector('#following')?.textContent === '34 Following' &&
       document.querySelector('#friends')?.textContent === '56 Friends');
 
+    assert.equal(await own.locator('#followers').evaluate(e=>getComputedStyle(e).opacity),'0.5','mode off restores native styling');
+    assert.equal(await own.locator('#following').getAttribute('tabindex'),null,'mode off restores keyboard behavior');
+    assert.equal(await own.locator('#following').getAttribute('aria-disabled'),null);
+
     assert.deepEqual(localSocialCounts({followers: '1', following: '2', friends: '1000'}), {followers: 1, following: 2, friends: 1000});
     assert.throws(() => localSocialCounts({followers: '1', following: '2', friends: '1001'}), /Friends/);
-    console.log('PASS: saved counts publish to a peer, survive redraws, reset and mode-off restore native values, and friends are capped at 1,000.');
+    console.log('PASS: own/peer follower labels stay readable but unclickable, Friends stays native, counts survive redraws, and mode-off restores native state.');
   } finally {
     await browser.close();
   }
