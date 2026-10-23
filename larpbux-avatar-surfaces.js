@@ -253,13 +253,14 @@
     if (!key) return;
     for (const [container, record] of previews) if (!container.isConnected) removePreview(container, record);
     const images = findOwnImages(userId);
+    const editProfile = /^\/users\/profile\/edit\/?$/i.test(location.pathname);
     if (!images.length) status = {stage: 'no-matching-images', userId};
     for (const image of records.keys()) if (!images.includes(image)) restore(image);
     // Show this account's last good portrait before even the outfit request
     // finishes. It is only a placeholder; never cache it as the new outfit.
     const pendingPictures = !peer && !cache?.result && savedPictures(userId);
     if (pendingPictures) for (const image of images) {
-      if (!isHeadshotSurface(image) && !selfProfileLink(image) && !image.classList.contains('rbx2016-welcome-avatar')) continue;
+      if (!editProfile && !isHeadshotSurface(image) && !selfProfileLink(image) && !image.classList.contains('rbx2016-welcome-avatar')) continue;
       const record = remember(image);
       record.applied = pendingPictures.headshot;
       if (image.getAttribute('src') !== record.applied) image.setAttribute('src', record.applied);
@@ -346,7 +347,7 @@
       for (const image of images) {
         if (!image.isConnected || !ownImage(image, userId)) continue;
         const record = remember(image);
-        const headshot = /^\/users\/profile\/edit\/?$/i.test(location.pathname) || image.classList.contains('rbx2016-welcome-avatar') || selfProfileLink(image) || isHeadshotSurface(image);
+        const headshot = editProfile || image.classList.contains('rbx2016-welcome-avatar') || selfProfileLink(image) || isHeadshotSurface(image);
         const banner = image.closest('.currently-wearing-avatar-with-background .profile-avatar-left');
         const value = headshot ? result.headshot : (banners.has(banner) ? result.transparentBody : result.fullBody);
         if (!value) continue;

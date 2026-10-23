@@ -72,8 +72,13 @@
     if (document.title !== shown) document.title = shown;
   }
   function editProfileImage(doc = document) {
-    const eligible = image => !image.closest('header,nav,#header,#navigation,.avatar-status,.presence-icon,[data-presence],[data-rblx-verified-badge-icon],[data-testid="verified-badge"]');
+    const eligible = image => !image.closest('nav,#header,#navigation,.rbx-header,[data-testid="user-menu"],[data-testid="account-menu"],.avatar-status,.presence-icon,[data-presence],[data-rblx-verified-badge-icon],[data-testid="verified-badge"]');
     const choose = images => images.find(image => image.dataset.larpbloxEditAvatar === 'true' || /AvatarHeadshot/i.test(image.getAttribute('src') || '')) || images[0];
+    // The standalone editor does not always have Roblox's legacy content
+    // wrappers. Identify its portrait directly, including after we replace src.
+    const portrait = choose([...doc.querySelectorAll('img')].filter(image => eligible(image) &&
+      (image.dataset.larpbloxEditAvatar === 'true' || /AvatarHeadshot/i.test((image.getAttribute('src') || '') + (image.getAttribute('srcset') || '')))));
+    if (portrait) return portrait;
     const back = [...doc.querySelectorAll('a,button')].find(element => /^back to profile$/i.test(element.textContent.trim()));
     for (let root = back?.parentElement; root && root !== doc.body; root = root.parentElement) {
       const image = choose([...root.querySelectorAll('img')].filter(eligible));

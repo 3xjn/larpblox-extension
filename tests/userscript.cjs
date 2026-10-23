@@ -102,6 +102,17 @@ const source = fs.readFileSync(path.join(__dirname,'../website-release/larpblox.
   await page.waitForFunction(()=>window.__menu.length===1);
   const restored=await page.evaluate(()=>LarpbloxExtension.dispatchPopup({type:'larpblox-popup-get-state'}));
   assert.equal(restored.mode,true,'saved extension settings survive reload');
+  const editHeadshot=await page.evaluate(()=>{
+   const canvas=document.createElement('canvas');canvas.width=canvas.height=20;canvas.getContext('2d').fillRect(5,2,10,18);const url=canvas.toDataURL();
+   const state=JSON.parse(localStorage.getItem('larpblox-cosmetics-v1:999'));state.mode=true;state.items=[{id:123,itemType:'Asset',assetType:8,name:'Test hat',assetTypeVerified:true,limitedVerified:true}];state.equipped=['Asset:123'];
+   localStorage.setItem('larpblox-cosmetics-v1:999',JSON.stringify(state));
+   localStorage.setItem('larpblox-profile-pictures:999',JSON.stringify({version:12,expires:Date.now()+60000,result:{headshot:url,fullBody:url,transparentBody:url}}));return url;
+  });
+  await page.route('https://avatar.roblox.com/**',r=>r.fulfill({status:503,json:{}}));
+  await page.route('https://www.roblox.com/users/profile/edit',r=>r.fulfill({contentType:'text/html',body:'<meta name="user-data" data-userid="999" data-name="NativeUser" data-displayname="Native Name"><div id="header"><a id="nav-profile" href="/users/999/profile"><img id="nav-picture" src="native.png"></a></div><section><header><img id="edit-picture" src="https://tr.rbxcdn.com/30DAY-AvatarHeadshot-native-Png/150/150/AvatarHeadshot/Png/noFilter"></header><span>Name</span></section>'}));
+  await page.goto('https://www.roblox.com/users/profile/edit');
+  await page.waitForFunction(url=>document.querySelector('#edit-picture')?.getAttribute('src')===url,editHeadshot,{timeout:4000});
+  assert.equal(await page.locator('#nav-picture').getAttribute('src'),editHeadshot,'packaged userscript must use the same cached portrait in navigation and standalone Edit Profile');
   assert.deepEqual(errors,[]);
   console.log('PASS: standalone userscript starts under CSP, opens settings, saves/restores mode, looks up peers, and pairs/reads Desktop through manager transport.');
  } finally {await browser.close();}
