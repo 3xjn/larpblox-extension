@@ -4,6 +4,7 @@
   globalThis.__larpbloxBodyColorsHooked = true;
 
   const PATHS = new Set(['/v1/avatar/set-body-colors', '/v2/avatar/set-body-colors', '/v1/avatar/set-scales', '/v2/avatar/set-scales', '/v1/avatar/set-player-avatar-type', '/v2/avatar/set-player-avatar-type', '/v4/avatar']);
+  const READ_PATHS = new Set(['/v1/avatar', '/v2/avatar/avatar']);
   const WAIT_MS = 15000;
   let sequence = 0;
 
@@ -13,7 +14,7 @@
   const target = value => {
     try {
       const url = new URL(value, location.href);
-      return url.origin === 'https://avatar.roblox.com' && PATHS.has(url.pathname) ? url.href : null;
+      return url.origin === 'https://avatar.roblox.com' && (PATHS.has(url.pathname) || READ_PATHS.has(url.pathname)) ? url.href : null;
     } catch (_) { return null; }
   };
   const userId = () => {
@@ -23,6 +24,18 @@
       ?? document.querySelector('[data-userid]')?.dataset?.userid;
     return value == null ? '' : String(value);
   };
+  // The native editor reads its rig before our preview/view attributes mount.
+  // Restore the saved Larp rig in that read, rather than painting over its toggle.
+  const savedRig = () => {
+    if (!/^\/my\/avatar\/?$/i.test(location.pathname) || document.querySelector('#avatar-web-app')?.getAttribute('data-larpbux-avatar-view') === 'real') return;
+    try {
+      const saved = JSON.parse(localStorage.getItem(`larpblox-cosmetics-v1:${userId()}`));
+      const rig = saved?.gameLook?.definition?.playerAvatarType?.playerAvatarType;
+      if (saved?.mode === true && (rig === 'R6' || rig === 'R15')) return rig;
+    } catch (_) {}
+  };
+  const rigRead = (method, url) => method === 'GET' && url && READ_PATHS.has(new URL(url).pathname);
+  const restoreRig = (value, rig) => value && typeof value === 'object' && (value.playerAvatarType === 'R6' || value.playerAvatarType === 'R15') ? {...value, playerAvatarType:rig} : value;
   const parseBody = body => {
     if (typeof body !== 'string') {
       if (body && typeof body === 'object' && !(body instanceof FormData) && !(body instanceof Blob)) return body;
@@ -118,11 +131,23 @@
 
   const nativeFetch = globalThis.fetch;
   globalThis.fetch = async function(input, init) {
-    if (!active()) return nativeFetch.apply(this, arguments);
     let url = input instanceof Request ? input.url : input;
     url = target(url);
     if (!url) return nativeFetch.apply(this, arguments);
     const method = String(init?.method || (input instanceof Request ? input.method : 'GET')).toUpperCase();
+    if (rigRead(method, url)) {
+      const response = await nativeFetch.apply(this, arguments), rig = savedRig();
+      if (!rig || !response.ok) return response;
+      try {
+        const value = await response.clone().json();
+        const restored = restoreRig(value, rig);
+        if (restored === value) return response;
+        const headers = new Headers(response.headers);
+        headers.delete('content-length'); headers.delete('content-encoding');
+        return new Response(JSON.stringify(restored), {status:response.status, statusText:response.statusText, headers});
+      } catch (_) { return response; }
+    }
+    if (!active()) return nativeFetch.apply(this, arguments);
     let body = init?.body;
     if (body === undefined && input instanceof Request) body = await input.clone().text();
     const path = new URL(url).pathname, modern = path === '/v4/avatar', legacyScales = /\/avatar\/set-scales$/.test(path), legacyColors = /\/avatar\/set-body-colors$/.test(path), legacyRig = /\/avatar\/set-player-avatar-type$/.test(path);
@@ -136,6 +161,24 @@
   const xhrOpen = XMLHttpRequest.prototype.open;
   const xhrSend = XMLHttpRequest.prototype.send;
   const xhrAbort = XMLHttpRequest.prototype.abort;
+  for (const name of ['responseText', 'response']) {
+    const descriptor = Object.getOwnPropertyDescriptor(XMLHttpRequest.prototype, name);
+    if (!descriptor?.get || !descriptor.configurable) continue;
+    Object.defineProperty(XMLHttpRequest.prototype, name, {...descriptor, get() {
+      const value = descriptor.get.call(this), request = this.__larpbloxBodyColorRequest;
+      if (!request || !rigRead(request.method, request.url) || this.readyState !== 4 || this.status < 200 || this.status >= 300) return value;
+      const rig = savedRig();
+      if (!rig) return value;
+      try {
+        if (name === 'response' && this.responseType === 'json') return restoreRig(value, rig);
+        if (typeof value === 'string' && (!this.responseType || this.responseType === 'text')) {
+          const parsed = JSON.parse(value), restored = restoreRig(parsed, rig);
+          return restored === parsed ? value : JSON.stringify(restored);
+        }
+      } catch (_) {}
+      return value;
+    }});
+  }
   XMLHttpRequest.prototype.open = function(method, url) {
     this.__larpbloxBodyColorAbort?.();
     this.__larpbloxBodyColorAbort = null;

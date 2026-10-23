@@ -49,8 +49,8 @@ assert.ok(extension && chromePath,'Set USERSCRIPT_MANAGER_DIR and TEST_CHROME_PA
   const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.route('https://www.roblox.com/**',r=>{
    const url=new URL(r.request().url());
-   if(url.pathname==='/users/123/profile') return r.fulfill({contentType:'text/html',headers:{'Content-Security-Policy':"script-src 'self' 'unsafe-inline'; connect-src 'self'; style-src 'self' 'unsafe-inline'; upgrade-insecure-requests;"},body:'<!doctype html><html><head><title>Roblox</title><meta name="user-data" data-userid="999" data-name="NativeUser" data-displayname="Native Name"><script>window.__startupGuardType=typeof window.__larpbloxTitleGuard; document.title=\'Real Native Profile - Roblox\'; window.__startupTitleSample=document.title;</script></head><body><main></main></body></html>'});
-   return r.fulfill({contentType:'text/html',headers:{'Content-Security-Policy':"script-src 'self' 'unsafe-inline'; connect-src 'self'; style-src 'self' 'unsafe-inline'; upgrade-insecure-requests;"},body:'<!doctype html><html class="dark-theme"><head><meta name="user-data" data-userid="999" data-name="NativeUser" data-displayname="Native Name"></head><body><main id="avatar-web-app"></main></body></html>'});
+   if(url.pathname==='/users/123/profile') return r.fulfill({contentType:'text/html',headers:{'Content-Security-Policy':"script-src 'self' 'unsafe-inline'; connect-src 'self' https://avatar.roblox.com; style-src 'self' 'unsafe-inline'; upgrade-insecure-requests;"},body:'<!doctype html><html><head><title>Roblox</title><meta name="user-data" data-userid="999" data-name="NativeUser" data-displayname="Native Name"><script>window.__startupGuardType=typeof window.__larpbloxTitleGuard; document.title=\'Real Native Profile - Roblox\'; window.__startupTitleSample=document.title;</script></head><body><main></main></body></html>'});
+   return r.fulfill({contentType:'text/html',headers:{'Content-Security-Policy':"script-src 'self' 'unsafe-inline'; connect-src 'self' https://avatar.roblox.com; style-src 'self' 'unsafe-inline'; upgrade-insecure-requests;"},body:'<!doctype html><html class="dark-theme"><head><meta name="user-data" data-userid="999" data-name="NativeUser" data-displayname="Native Name"></head><body><main id="avatar-web-app"></main></body></html>'});
   });
   await page.goto('https://www.roblox.com/users/123/profile');
   await page.waitForFunction(()=>document.documentElement.dataset.larpbloxIdentityChecked==='true');
@@ -89,10 +89,11 @@ assert.ok(extension && chromePath,'Set USERSCRIPT_MANAGER_DIR and TEST_CHROME_PA
   let realRigWrites=0;
   await page.route('https://avatar.roblox.com/**',r=>{
    if(['POST','PATCH'].includes(r.request().method()))realRigWrites++;
-   return r.fulfill({json:{success:true}});
+   return r.fulfill({json:r.request().method()==='GET'?{playerAvatarType:'R15',assets:[],scales:{}}:{success:true}});
   });
   await page.goto('https://www.roblox.com/my/avatar');
   await page.waitForFunction(()=>document.querySelector('#avatar-web-app')?.getAttribute('data-larpbux-avatar-view')==='larp');
+  assert.equal(await page.evaluate(async()=>(await(await fetch('https://avatar.roblox.com/v2/avatar/avatar')).json()).playerAvatarType),'R6','installed manager restores the saved rig for native editor reads');
   const rigStatus=await page.evaluate(async()=>{
    const response=await fetch('https://avatar.roblox.com/v4/avatar',{method:'PATCH',body:JSON.stringify({updateTypes:['UpdateAvatarType'],avatarDefinition:{updateAvatarModel:{playerAvatarType:'R15'}}})});
    return response.status;
@@ -105,6 +106,10 @@ assert.ok(extension && chromePath,'Set USERSCRIPT_MANAGER_DIR and TEST_CHROME_PA
    xhr.onload=()=>resolve(xhr.status);xhr.send(JSON.stringify({playerAvatarType:'R6'}));
   })),200);
   await page.waitForFunction(()=>JSON.parse(localStorage.getItem('larpblox-cosmetics-v1:999')).gameLook.definition.playerAvatarType.playerAvatarType==='R6');
+  await page.goto('https://www.roblox.com/home');
+  await page.goto('https://www.roblox.com/my/avatar');
+  await page.waitForFunction(()=>document.querySelector('#avatar-web-app')?.getAttribute('data-larpbux-avatar-view')==='larp');
+  assert.equal(await page.evaluate(()=>new Promise(resolve=>{const xhr=new XMLHttpRequest();xhr.open('GET','https://avatar.roblox.com/v2/avatar/avatar');xhr.responseType='json';xhr.onload=()=>resolve(xhr.response.playerAvatarType);xhr.send();})),'R6','returning to editor reads R6 through the installed manager');
   assert.equal(await page.evaluate(async()=>{
    const response=await fetch('https://avatar.roblox.com/v4/avatar',{method:'PATCH',body:JSON.stringify({updateTypes:['UpdateAvatarType'],avatarDefinition:{updateAvatarModel:{playerAvatarType:'R15'}}})});
    return response.status;
