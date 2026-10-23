@@ -75,6 +75,8 @@
     const meta = document.querySelector('meta[name="user-data"]');
     const id = meta?.getAttribute('data-userid') || meta?.getAttribute('data-user-id');
     if (!id && document.readyState === 'loading') return;
+    const peerCardsEnabled = Boolean(id);
+    if (root.dataset.larpbloxPeerCardsEnabled !== String(peerCardsEnabled)) root.dataset.larpbloxPeerCardsEnabled = String(peerCardsEnabled);
     let state;
     try { state = JSON.parse(localStorage.getItem(`larpblox-cosmetics-v1:${id}`) || 'null'); } catch {}
     const name = state?.mode ? state.names?.username || meta?.getAttribute('data-name') || '' : '';
@@ -109,7 +111,7 @@
       const ready = !name && !display || aliases.includes(label) || /^(profile|view profile|my profile)$/i.test(label);
       if (link.dataset.larpbloxAliasReady !== String(ready)) link.dataset.larpbloxAliasReady = String(ready);
     }
-    if (!profile || ownProfile || !state?.mode) clearPeerPending();
+    if (!profile || ownProfile || !id) clearPeerPending();
     else { setPeerPending(profile); checkPeerReady(profile); }
   }
   globalThis.LarpbloxIdentityGate = {update, editProfileImage, resolvePeerProfile: (id, record) => {
@@ -121,7 +123,7 @@
     checkPeerReady(String(id));
   }, profileTitleSource: id => earlyTitle?.id === id ? earlyTitle.real : undefined,
     clearProfileTitle: id => {
-      if (earlyTitle?.id === id) {
+      if (earlyTitle && earlyTitle.id === id) {
         if (document.title === earlyTitle.shown) document.title = earlyTitle.real;
         earlyTitle = undefined;
       }

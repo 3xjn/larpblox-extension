@@ -34,7 +34,7 @@
     }
     finally { publishing = false; if (mine !== publicationGeneration) flushProfile(); }
   }
-  let context = {}, records = new Map(), pending = false, lastPoll = 0, lastLookupKey = '', queued = false, generation = 0;
+  let context = {}, initialized = false, records = new Map(), pending = false, lastPoll = 0, lastLookupKey = '', queued = false, generation = 0;
   const counts = new Map();
   const userIdFrom = value => {
     try {
@@ -44,7 +44,7 @@
   };
   const profileId = () => location.pathname.match(/^\/users\/([1-9]\d*)\/profile\/?$/)?.[1];
   const identitySelector = 'a[href],[data-user-id],[data-userid],[data-target-user-id],[data-target-userid]';
-  const cardNameSelector = '.friend-name,.friends-carousel-display-name,.friend-display-name,.avatar-name,.display-name,.user-name,.username,[data-testid="friend-name"]';
+  const cardNameSelector = '.friend-name,.friends-carousel-display-name,.friend-display-name,.avatar-name,.avatar-card-label,.display-name,.user-name,.username,[data-testid="friend-name"]';
   function identityId(element) {
     for (const key of ['data-user-id','data-userid','data-target-user-id','data-target-userid']) {
       const id = element.getAttribute(key);
@@ -55,15 +55,36 @@
   const profileSelector = '#profile-header-title-container-name,.stylistic-alts-username,.profile-header-title,.profile-header-username,.profile-header-display-name,[data-testid="profile-header-title"],[data-testid="profile-header-username"],[data-testid="profile-header-display-name"]';
   let titleState;
   const resolvedProfiles = new Set();
+  const cardSelector = '.friends-carousel-tile,.avatar-card-container';
+  const statusSelector = 'button,.avatar-status,.presence-icon,[data-presence],[data-rblx-verified-badge-icon],[data-testid="verified-badge"],.larpblox-verified-badge';
+  function cardIdentityId(card) {
+    const link = [...card.querySelectorAll('a[href]')].find(element => userIdFrom(element.getAttribute('href')));
+    return identityId(card) || (link && userIdFrom(link.getAttribute('href')));
+  }
+  function updateCardVisibility() {
+    for (const card of document.querySelectorAll(cardSelector)) {
+      const id = cardIdentityId(card);
+      const record = records.get(id);
+      const native = initialized && !context.userId || id === String(context.userId) || id && resolvedProfiles.has(id) && !record;
+      const labels = [...card.querySelectorAll(cardNameSelector)].filter(label => !label.closest(statusSelector));
+      const aliases = record?.name?.enabled ? [record.name.displayName,record.name.username,'@' + record.name.username] : [];
+      const nameReady = native || record && (!aliases.length || labels.every(label => aliases.includes(label.textContent.trim())));
+      const images = [...card.querySelectorAll('.avatar img,.avatar-card-image img,img.avatar-card-image,.avatar-headshot img')].filter(image => !image.closest(statusSelector));
+      const avatarReady = native || record && images.every(image => image.getAttribute('src') && image.dataset.larpbloxPeerAvatar === image.getAttribute('src'));
+      for (const [key,value] of [['larpbloxPeerNameReady',Boolean(nameReady)],['larpbloxPeerAvatarReady',Boolean(avatarReady)]]) {
+        if (card.dataset[key] !== String(value)) card.dataset[key] = String(value);
+      }
+    }
+  }
   function applyProfileTitle() {
     const id = profileId();
     if (titleState?.id !== id) titleState = undefined;
     if (titleState && document.title !== titleState.shown) titleState.real = document.title;
-    const name = context.mode && id && (id === String(context.userId) ? context.names : records.get(id)?.name);
+    const name = id && (id === String(context.userId) ? context.mode && context.names : records.get(id)?.name);
     const display = name && name.enabled !== false && (name.displayName || name.username);
     try {
-      if (context.userId && typeof context.mode === 'boolean') localStorage.setItem('larpblox-profile-titles-enabled', String(context.mode));
-      if (!display && context.mode && id && id !== String(context.userId) && !resolvedProfiles.has(id)) return;
+      if (context.userId) localStorage.setItem('larpblox-profile-titles-enabled', 'true');
+      if (!display && context.userId && id && id !== String(context.userId) && !resolvedProfiles.has(id)) return;
       if (id) {
         const key = `larpblox-profile-title:${id}`;
         if (display) {
@@ -112,6 +133,8 @@
         const labels = [...element.querySelectorAll(cardNameSelector)];
         return labels.length ? labels : [element];
       });
+      for (const card of document.querySelectorAll(cardSelector)) if (cardIdentityId(card) === id)
+        roots.push(...card.querySelectorAll('.avatar-name,.avatar-card-label'));
       if (profileId() === id) roots.push(...document.querySelectorAll(profileSelector));
       for (const root of roots) {
         const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
@@ -168,7 +191,7 @@
     for (const anchor of document.querySelectorAll('a,.user-profile-header button,.profile-header button,.profile-header-overlay button')) {
       const target = countTarget(anchor);
       if (!target) continue;
-      const source = context.mode && (target.id === String(context.userId) ? context.socialCounts : records.get(target.id)?.socialCounts);
+      const source = target.id === String(context.userId) ? context.mode && context.socialCounts : records.get(target.id)?.socialCounts;
       const value = validCounts(source)?.[target.kind];
       if (value === undefined) continue;
       const shown = compactCount(value), title = String(value);
@@ -209,6 +232,7 @@
         wearing.get(id).update({userId:id, active:true, signature:JSON.stringify(record.snapshot), items:record.snapshot.items, loadDefinition:async()=>record.snapshot.definition, thumbnail:context.thumbnail});
       }
     }
+    updateCardVisibility();
   }
   let searchKey = '', searchTime = 0, searchPending = false, searchRecords = new Map(), searchRoot, searchReady = false;
   function searchKeyword() {
@@ -216,7 +240,7 @@
   }
   function renderSearch() {
     let root = searchRoot;
-    if (!context.mode || !searchKeyword() || !searchRecords.size) { root?.remove(); searchRoot = undefined; return; }
+    if (!context.userId || !searchKeyword() || !searchRecords.size) { root?.remove(); searchRoot = undefined; return; }
     const native = document.querySelector('[data-testid="player-search-results"], .player-search-results-grid, .people-list, .users-list, .people-search-results, #people-search-container .section-content');
     if (!native) return;
     const nativeResults = [...native.children].filter(element => element !== root);
@@ -251,14 +275,14 @@
     return true;
   }
   async function search() {
-    const keyword = context.mode ? searchKeyword() : '';
+    const keyword = context.userId ? searchKeyword() : '';
     if (keyword !== searchKey) { searchKey = keyword; searchTime = 0; searchRecords.clear(); searchReady = false; }
     renderSearch();
     if (!keyword || searchPending || Date.now() - searchTime < 5000) return;
     searchPending = true; searchTime = Date.now(); const mine = generation;
     try {
       const response = await (globalThis.LarpbloxExtension || chrome.runtime).sendMessage({type:'larpblox-search-users',keyword});
-      if (mine !== generation || keyword !== searchKeyword() || !context.mode || !response?.ok) return;
+      if (mine !== generation || keyword !== searchKeyword() || !context.userId || !response?.ok) return;
       const next = new Map();
       for (const record of (response?.ok && response.data?.players || []).slice(0, 50)) {
         try {
@@ -275,7 +299,7 @@
   async function scan() {
     if (typeof document === 'undefined' || document.hidden) return;
     await search();
-    if (!context.mode || !context.userId) {
+    if (!context.userId) {
       searchRecords.clear(); renderSearch(); records.clear(); apply();
       globalThis.LarpbloxIdentityGate?.resolvePeerProfile?.(profileId(), null); return;
     }
@@ -314,25 +338,30 @@
     finally { pending = false; if (mine !== generation || JSON.stringify(collect()) !== lookupKey) scan(); }
   }
   function update(next) {
-    if (context.userId !== next.userId || context.mode !== next.mode) { generation++; records.clear(); resolvedProfiles.clear(); lastPoll = 0; }
+    if (context.userId !== next.userId) { generation++; records.clear(); resolvedProfiles.clear(); lastPoll = 0; }
     context = next;
+    initialized = true;
+    const root = document.documentElement;
+    if (root && root.dataset.larpbloxPeerCardsEnabled !== String(Boolean(next.userId))) root.dataset.larpbloxPeerCardsEnabled = String(Boolean(next.userId));
+    updateCardVisibility();
     if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; scan(); }); }
   }
   let searchFrame = false;
   function refreshSearchPlacement() {
+    updateCardVisibility();
     if (searchFrame) return;
     searchFrame = true;
     requestAnimationFrame(() => {
       searchFrame = false;
       applyProfileTitle();
       applyCounts();
-      if (context.mode) scan();
+      if (context.userId) scan();
       // Navigation can happen before the next relay poll.
-      if (searchKey !== (context.mode ? searchKeyword() : '')) { scan(); return; }
+      if (searchKey !== (context.userId ? searchKeyword() : '')) { scan(); return; }
       if (renderSearch()) apply();
     });
   }
-  new MutationObserver(refreshSearchPlacement).observe(document, {childList:true, characterData:true, subtree:true, attributes:true, attributeFilter:['aria-busy','href','data-user-id','data-userid','data-target-user-id','data-target-userid']});
+  new MutationObserver(refreshSearchPlacement).observe(document, {childList:true, characterData:true, subtree:true, attributes:true, attributeFilter:['aria-busy','href','src','srcset','data-user-id','data-userid','data-target-user-id','data-target-userid']});
   document.addEventListener('load', refreshSearchPlacement, true);
   window.addEventListener('popstate', refreshSearchPlacement);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { lastPoll = 0; scan(); } });
