@@ -28,6 +28,13 @@ const peerRecord = id => ({
       contentType: 'text/html',
       body: `<!doctype html><html><body>
         <section class="friends-carousel-container" aria-label="Friends">
+          <a id="own-card" data-user-id="999" href="#">
+            <span id="own-name" class="friend-name">Native Own Name</span>
+          </a>
+          <div id="own-profile-card" class="avatar-card-container" data-user-id="999">
+            <a class="avatar-card-link" href="/users/999/profile"><span class="avatar-card-image"></span></a>
+            <div class="avatar-card-caption"><a id="own-profile-name" class="avatar-card-label" href="/users/999/profile">Native Profile Own Name</a></div>
+          </div>
           <a id="friend-card" data-user-id="${peerId}" href="#">
             <span class="avatar"><img id="friend-avatar" src="native-avatar.png" alt="Native friend avatar"></span>
             <span id="friend-name" class="friend-name">Native Friend Name</span>
@@ -55,7 +62,10 @@ const peerRecord = id => ({
     await page.addScriptTag({content: avatarSource});
     await page.addScriptTag({content: sharedSource});
 
-    await page.evaluate(() => LarpbloxSharedUsers.update({userId: '999', mode: true}));
+    await page.evaluate(() => LarpbloxSharedUsers.update({userId: '999', mode: true,
+      names: {username: 'my_larp_name', displayName: 'My Larp Name'}}));
+    await page.waitForFunction(() => document.querySelector('#own-name').textContent === 'My Larp Name', null, {timeout: 4000});
+    await page.waitForFunction(() => document.querySelector('#own-profile-name').textContent === 'My Larp Name', null, {timeout: 4000});
     await page.waitForFunction(() => document.querySelector('#friend-name').textContent === 'Lmao The Best', null, {timeout: 4000});
     await page.waitForFunction(() => document.querySelector('#friend-avatar').getAttribute('src') === 'https://cdn.example.test/larp-peer.png', null, {timeout: 4000});
     assert.ok((await page.evaluate(() => window.__sharedCalls)).some(ids => ids.includes(peerId)), 'relay should receive the carousel card user ID');
@@ -64,6 +74,16 @@ const peerRecord = id => ({
     assert.equal(await page.locator('#friend-status').getAttribute('data-presence'), 'online');
     assert.equal(await page.locator('#friend-status').getAttribute('aria-label'), 'Online');
     assert.equal(await page.locator('#friend-status').getAttribute('src'), 'native-status.png');
+    assert.ok((await page.evaluate(() => window.__sharedCalls)).every(ids => !ids.includes('999')), 'own ID must stay out of peer relay lookups');
+
+    await page.evaluate(() => LarpbloxSharedUsers.update({userId: '999', mode: false, names: {username: 'my_larp_name', displayName: 'My Larp Name'}}));
+    await page.waitForFunction(() => document.querySelector('#own-name').textContent === 'Native Own Name', null, {timeout: 4000});
+    await page.waitForFunction(() => document.querySelector('#own-profile-name').textContent === 'Native Profile Own Name', null, {timeout: 4000});
+    assert.equal(await page.locator('#friend-name').textContent(), 'Lmao The Best');
+
+    await page.evaluate(() => LarpbloxSharedUsers.update({userId: '999', mode: true,
+      names: {username: 'my_larp_name', displayName: 'My Larp Name'}}));
+    await page.waitForFunction(() => document.querySelector('#own-profile-name').textContent === 'My Larp Name', null, {timeout: 4000});
 
     await page.evaluate(() => {
       const root = document.querySelector('.friends-carousel-container');

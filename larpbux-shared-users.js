@@ -130,7 +130,10 @@
   }
   function applyNames() {
     const wanted = new Map();
-    for (const [id, record] of records) {
+    const nameRecords = new Map(records);
+    if (context.mode && context.userId && context.names?.username && context.names?.displayName)
+      nameRecords.set(String(context.userId), {name: {enabled: true, ...context.names}});
+    for (const [id, record] of nameRecords) {
       if (!record.name?.enabled) continue;
       const roots = [...document.querySelectorAll(identitySelector)].filter(element => identityId(element) === id).flatMap(element => {
         const labels = [...element.querySelectorAll(cardNameSelector)];
