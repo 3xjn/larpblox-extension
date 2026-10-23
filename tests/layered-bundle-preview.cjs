@@ -16,3 +16,9 @@ assert.equal(custom.assets[0].meta.order,11,'preserve saved layer order');
 assert.equal(custom.assets[0].meta.puffiness,.4);
 assert.equal(previewDefinition(avatar,{},[{id:1,assetType:8,itemType:'Asset'}]).playerAvatarType.playerAvatarType,'R6','rigid accessories retain the chosen rig');
 console.log('PASS: Hollow Horseman layered preview metadata, R15, saved order, and old snapshot repair.');
+
+const r6Pose = previewDefinition(avatar,{},[{id:23,assetType:51,itemType:'Asset'}]);
+assert.equal(r6Pose.playerAvatarType.playerAvatarType,'R6');
+assert.equal(r6Pose.assets.length,0,'R15 animation poses must not be rendered as R6');
+const oldR6 = gamePreviewDefinition({items:[{id:23,assetType:51,itemType:'Asset'}],equipped:['Asset:23'],gameLook:{items:[{id:23,assetType:51,itemType:'Asset'}],definition:{assets:[{id:23}],playerAvatarType:{playerAvatarType:'R6'}}}});
+assert.equal(oldR6.assets.length,0,'old R6 snapshots also drop R15 poses');

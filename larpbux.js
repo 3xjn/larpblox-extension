@@ -227,7 +227,9 @@
     const assets = definition.assets.map(asset => order[types.get(asset.id)]
       ? {...asset,meta:{version:1,order:order[types.get(asset.id)],puffiness:0,...asset.meta}} : asset);
     const requiresR15 = assets.some(asset => order[types.get(asset.id)] || types.get(asset.id) === 79);
-    return {...definition,assets,...(requiresR15 ? {playerAvatarType:{playerAvatarType:'R15'}} : {})};
+    return {...definition,assets:!requiresR15 && definition.playerAvatarType?.playerAvatarType === 'R6'
+      ? assets.filter(asset => !animationAssetTypes.includes(types.get(asset.id))) : assets,
+      ...(requiresR15 ? {playerAvatarType:{playerAvatarType:'R15'}} : {})};
   }
   function mergeGameSnapshot(state, snapshot, preserveBodyRemovals = false) {
     const bodySlot = type => Number(type) === 79 ? 17 : Number(type);
@@ -873,10 +875,17 @@
       if (rig === 'R6') {
         // Layered clothes and dynamic heads require R15. Unequip them rather
         // than letting the renderer silently switch the chosen rig back.
-        const incompatible = new Set([...look.items,...current.items].filter(item => [64,65,66,67,68,69,70,71,72,79].includes(Number(item.assetType))).map(item => item.id));
+        const incompatible = new Set(outfitAssets([...look.items,...current.items]).filter(item => [...animationAssetTypes,64,65,66,67,68,69,70,71,72,79].includes(Number(item.assetType))).map(item => item.id));
         definition.assets = definition.assets.filter(asset => !incompatible.has(asset.id));
         look = {...look, items:look.items.filter(item => !incompatible.has(item.id))};
-        current = {...current, equipped:current.equipped.filter(key => !incompatible.has(current.items.find(item => keyFor(item) === key)?.id))};
+        current = {...current, fullOutfitKey:undefined, equipped:[...new Set(current.equipped.flatMap(key => {
+          const item = current.items.find(item => keyFor(item) === key);
+          // Keep compatible body parts, but stop the parent bundle from
+          // expanding back into a dynamic head or an R15 animation pack.
+          return isBodyBundle(item) || isAnimationBundle(item)
+            ? outfitAssets([item]).filter(asset => !incompatible.has(asset.id)).map(keyFor)
+            : incompatible.has(item?.id) ? [] : [key];
+        }))]};
       }
       save({...current, gameLook:{...look, definition}}, true);
     } finally {clearTimeout(timeout);}
