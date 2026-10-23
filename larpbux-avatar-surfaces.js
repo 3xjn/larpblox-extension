@@ -115,7 +115,7 @@
     records.delete(image);
   }
   function removePreview(container, record) {
-    record.controller.abort(); record.viewer?.dispose(); record.host.remove();
+    record.observer?.disconnect(); record.controller.abort(); record.viewer?.dispose(); record.host.remove();
     if (previews.get(container) !== record) return;
     for (const [node, visibility] of record.hidden) node.style.visibility = visibility;
     container.style.position = record.position;
@@ -169,9 +169,26 @@
   }
   async function updateProfilePreviews(userId, key, result) {
     const {descriptor, definition} = result;
+    const native3D = container => {
+      const section = container.closest('.currently-wearing-avatar-with-background') || container;
+      const toggle = section.querySelector('.avatar-toggle-button button, .toggle-three-dee');
+      const label = toggle?.textContent.trim().toLowerCase();
+      if (label === '3d') return false;
+      return Boolean(container.querySelector('canvas:not(.larpblox-own-avatar-canvas)'));
+    };
+    const hideNative = (container, record) => {
+      for (const node of container.querySelectorAll('canvas, img')) {
+        if (node.closest('.larpblox-own-profile-preview, button, [role="button"], .avatar-toggle-button, .toggle-three-dee') ||
+            (node.tagName === 'IMG' && (!isPortrait(node) || !ownImage(node,userId)))) continue;
+        if (!record.hidden.has(node)) {
+          if (node.tagName === 'IMG') remember(node);
+          record.hidden.set(node,node.style.visibility);
+        }
+        node.style.visibility='hidden';
+      }
+    };
     const containers = [...document.querySelectorAll('.profile-avatar-thumb, .profile-avatar-left, .profile-avatar')]
-      .filter(container => !container.closest('#avatar-web-app') && ownImage(container, userId) &&
-        (container.matches('.profile-avatar-left') || container.querySelector('canvas:not(.larpblox-own-avatar-canvas)')));
+      .filter(container => !container.closest('#avatar-web-app') && ownImage(container, userId) && native3D(container));
     const wide = definition?.backgroundRequestModel?.id ? containers.filter(container => container.matches('.currently-wearing-avatar-with-background .profile-avatar-left')) : [];
     const candidates = containers.filter(container => !wide.some(banner => banner !== container && banner.contains(container)));
     // Background previews use the whole banner; other previews keep the native canvas wrapper.
@@ -179,7 +196,7 @@
     const previewKey = `${key}:${descriptor || 'flat'}`;
     for (const [container, record] of previews) if (!wanted.includes(container) || record.key !== previewKey || record.retryAt <= Date.now()) removePreview(container, record);
     for (const container of wanted) {
-      if (previews.has(container)) { await previews.get(container).ready; continue; }
+      if (previews.has(container)) { const record=previews.get(container); hideNative(container,record); await record.ready; continue; }
       const controller = new AbortController(), host = document.createElement('div');
       host.className = 'larpblox-own-profile-preview';
       host.style.cssText = 'position:absolute;inset:0;z-index:6;pointer-events:auto';
@@ -192,6 +209,9 @@
       image.style.cssText='position:absolute;inset:0;width:100%;height:100%;object-fit:contain';
       const message = document.createElement('span'); message.className='larpblox-profile-preview-status'; message.setAttribute('role','status'); message.textContent='Loading 3D…';
       host.append(image,message);
+      hideNative(container,record);
+      record.observer=new MutationObserver(()=>hideNative(container,record));
+      record.observer.observe(container,{childList:true,subtree:true});
       try {
         if (!descriptor) continue;
         const timer = setTimeout(()=>controller.abort(),10000);
@@ -202,9 +222,7 @@
         record.viewer = viewer;
         image.remove(); message.remove();
         host.querySelector('canvas')?.classList.add('larpblox-own-avatar-canvas');
-        for (const node of container.querySelectorAll('canvas:not(.larpblox-own-avatar-canvas)')) {
-          record.hidden.set(node, node.style.visibility); node.style.visibility = 'hidden';
-        }
+        hideNative(container,record);
       } catch (_) {
         if (previews.get(container) === record) { record.retryAt=Date.now()+5000; message.textContent='3D unavailable. Retrying…'; }
       }
