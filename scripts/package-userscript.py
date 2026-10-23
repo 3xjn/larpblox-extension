@@ -39,6 +39,9 @@ background = (root/'larpbux-game-background.js').read_text(encoding='utf-8').rep
 parts.append('(function(fetch) {\n' + background + '\n})(privilegedFetch);')
 parts.append('if (desktopHost) { serveDesktopFrame(); return; }')
 hooks = '\n;\n'.join((root/name).read_text(encoding='utf-8') for name in ['larpblox-real-avatar.js','larpbux-body-colors.js','larpblox-peer-identities.js'])
+# Inline handlers include document in their name lookup: bare URL is document.URL.
+# All page hooks need the browser constructor rather than that address string.
+hooks = 'const URL = globalThis.URL;\n' + hooks
 # Inline event handlers execute in the page realm; Roblox permits inline code.
 parts.append('const installPageHooks = () => { const trigger = document.createElement("input"); trigger.type = "hidden"; trigger.setAttribute("onchange", '+json.dumps(hooks)+'); document.documentElement.append(trigger); trigger.dispatchEvent(new Event("change")); trigger.remove(); }; if(document.documentElement) installPageHooks(); else new MutationObserver((_,o)=>{if(document.documentElement){o.disconnect();installPageHooks();}}).observe(document,{childList:true});')
 parts.append('const style = document.createElement("style"); style.textContent = '+json.dumps(payload['css'])+'; const mount = () => (document.head || document.documentElement).append(style); if(document.documentElement) mount(); else new MutationObserver((_,o)=>{if(document.documentElement){o.disconnect();mount();}}).observe(document,{childList:true});')

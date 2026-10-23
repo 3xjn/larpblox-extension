@@ -47,7 +47,7 @@ assert.ok(extension && chromePath,'Set USERSCRIPT_MANAGER_DIR and TEST_CHROME_PA
   }
   await context.grantPermissions(['local-network-access'],{origin:'https://www.roblox.com'});
   const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
-  await page.route('https://www.roblox.com/**',r=>r.fulfill({contentType:'text/html',headers:{'Content-Security-Policy':"script-src 'self' 'unsafe-inline'; connect-src 'self'; style-src 'self' 'unsafe-inline'; upgrade-insecure-requests;"},body:'<!doctype html><html class="dark-theme"><head><meta name="user-data" data-userid="999" data-name="NativeUser" data-displayname="Native Name"></head><body></body></html>'}));
+  await page.route('https://www.roblox.com/**',r=>r.fulfill({contentType:'text/html',headers:{'Content-Security-Policy':"script-src 'self' 'unsafe-inline'; connect-src 'self'; style-src 'self' 'unsafe-inline'; upgrade-insecure-requests;"},body:'<!doctype html><html class="dark-theme"><head><meta name="user-data" data-userid="999" data-name="NativeUser" data-displayname="Native Name"></head><body><main id="avatar-web-app"></main></body></html>'}));
   await page.goto('https://www.roblox.com/home');
   await page.waitForFunction(()=>document.documentElement.dataset.larpbloxPeerIdentitiesReady==='true');
   await page.bringToFront();const popupPromise=context.waitForEvent('page');
@@ -58,6 +58,43 @@ assert.ok(extension && chromePath,'Set USERSCRIPT_MANAGER_DIR and TEST_CHROME_PA
   assert.ok(messages.some(m=>m.type==='auth' && m.role==='browser'));
   assert.ok(messages.some(m=>m.type==='publish'),'Desktop request travels through manager-private storage');
   assert.deepEqual(errors,[]);
-  console.log(`PASS: installed ${manager} initializes native hooks, opens settings through its menu, and authenticates/publishes to Desktop under restrictive Roblox CSP.`);
+  await page.evaluate(()=>{
+   const colors=Object.fromEntries(['head','torso','leftArm','rightArm','leftLeg','rightLeg'].map(part=>[part+'Color','#ffffff']));
+   const look={version:1,userId:'999',items:[{id:15093053680,itemType:'Asset',assetType:79,name:'Headless Head'}],definition:{assets:[{id:15093053680}],bodyColors:colors,scales:{height:1,width:1,depth:1,head:1,bodyType:0,proportion:0},playerAvatarType:{playerAvatarType:'R6'}}};
+   localStorage.setItem('larpblox-cosmetics-v1:999',JSON.stringify({mode:true,balance:9999,items:look.items,equipped:['Asset:15093053680'],gameLook:look}));
+  });
+  let realRigWrites=0;
+  await page.route('https://avatar.roblox.com/**',r=>{
+   if(['POST','PATCH'].includes(r.request().method()))realRigWrites++;
+   return r.fulfill({json:{success:true}});
+  });
+  await page.goto('https://www.roblox.com/my/avatar');
+  await page.waitForFunction(()=>document.querySelector('#avatar-web-app')?.getAttribute('data-larpbux-avatar-view')==='larp');
+  const rigStatus=await page.evaluate(async()=>{
+   const response=await fetch('https://avatar.roblox.com/v4/avatar',{method:'PATCH',body:JSON.stringify({updateTypes:['UpdateAvatarType'],avatarDefinition:{updateAvatarModel:{playerAvatarType:'R15'}}})});
+   return response.status;
+  });
+  assert.equal(rigStatus,200);
+  await page.waitForFunction(()=>JSON.parse(localStorage.getItem('larpblox-cosmetics-v1:999')).gameLook.definition.playerAvatarType.playerAvatarType==='R15',null,{timeout:3000});
+  // Exercise the other native transport and repeat the return to R15.
+  assert.equal(await page.evaluate(()=>new Promise(resolve=>{
+   const xhr=new XMLHttpRequest();xhr.open('POST','https://avatar.roblox.com/v1/avatar/set-player-avatar-type');
+   xhr.onload=()=>resolve(xhr.status);xhr.send(JSON.stringify({playerAvatarType:'R6'}));
+  })),200);
+  await page.waitForFunction(()=>JSON.parse(localStorage.getItem('larpblox-cosmetics-v1:999')).gameLook.definition.playerAvatarType.playerAvatarType==='R6');
+  assert.equal(await page.evaluate(async()=>{
+   const response=await fetch('https://avatar.roblox.com/v4/avatar',{method:'PATCH',body:JSON.stringify({updateTypes:['UpdateAvatarType'],avatarDefinition:{updateAvatarModel:{playerAvatarType:'R15'}}})});
+   return response.status;
+  }),200);
+  await page.waitForFunction(()=>JSON.parse(localStorage.getItem('larpblox-cosmetics-v1:999')).gameLook.definition.playerAvatarType.playerAvatarType==='R15');
+  const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('larpblox-cosmetics-v1:999')));
+  assert.deepEqual(saved.gameLook.definition.assets,[{id:15093053680}],'round trips retain Headless');
+  assert.deepEqual(saved.equipped,['Asset:15093053680']);
+  assert.equal(realRigWrites,0,'native page rig edits must stay local through the installed userscript');
+  await page.reload();
+  await page.waitForFunction(()=>document.querySelector('#avatar-web-app')?.getAttribute('data-larpbux-avatar-view')==='larp');
+  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('larpblox-cosmetics-v1:999')).gameLook.definition.playerAvatarType.playerAvatarType),'R15');
+  assert.deepEqual(errors,[]);
+  console.log(`PASS: installed ${manager} initializes native hooks, opens settings, connects to Desktop, and switches R6/R15 through page Fetch/XHR while retaining Headless, persisting R15 after reload, and avoiding real avatar writes.`);
  }finally{await context?.close();for(const socket of sockets)socket.destroy();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;});
