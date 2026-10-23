@@ -70,7 +70,7 @@
       const aliases = record?.name?.enabled ? [record.name.displayName,record.name.username,'@' + record.name.username] : [];
       const nameReady = native || record && (!aliases.length || labels.every(label => aliases.includes(label.textContent.trim())));
       const images = [...card.querySelectorAll('.avatar img,.avatar-card-image img,img.avatar-card-image,.avatar-headshot img')].filter(image => !image.closest(statusSelector));
-      const avatarReady = native || record && images.every(image => image.getAttribute('src') && image.dataset.larpbloxPeerAvatar === image.getAttribute('src'));
+      const avatarReady = native || record && images.every(image => image.getAttribute('src') && !image.getAttribute('srcset') && image.dataset.larpbloxPeerAvatar === image.getAttribute('src'));
       for (const [key,value] of [['larpbloxPeerNameReady',Boolean(nameReady)],['larpbloxPeerAvatarReady',Boolean(avatarReady)]]) {
         if (card.dataset[key] !== String(value)) card.dataset[key] = String(value);
       }
@@ -134,7 +134,7 @@
         return labels.length ? labels : [element];
       });
       for (const card of document.querySelectorAll(cardSelector)) if (cardIdentityId(card) === id)
-        roots.push(...card.querySelectorAll('.avatar-name,.avatar-card-label'));
+        roots.push(...card.querySelectorAll(cardNameSelector));
       if (profileId() === id) roots.push(...document.querySelectorAll(profileSelector));
       for (const root of roots) {
         const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);

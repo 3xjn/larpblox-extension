@@ -33,7 +33,7 @@
     const nameReady = !aliases.length || [...document.querySelectorAll(profileNames)].every(element => aliases.includes(element.textContent.trim()));
     const images = [...document.querySelectorAll('.profile-avatar-thumb img,.profile-avatar-left img,.profile-avatar img,.profile-avatar-image img,.profile-avatar-headshot img,.user-profile-header-details-avatar-container img')]
       .filter(image => !image.closest('button,.avatar-status,.presence-icon,[data-presence]'));
-    const avatarReady = !record?.snapshot || images.every(image => /^data:image\/png/i.test(image.src || image.currentSrc) || image.dataset.larpbloxPeerAvatar === image.getAttribute('src'));
+    const avatarReady = !record?.snapshot || images.every(image => !image.getAttribute('srcset') && image.dataset.larpbloxPeerAvatar === image.getAttribute('src'));
     const root = document.documentElement;
     if (nameReady) root.removeAttribute('data-larpblox-identity-peer-name-pending');
     else root.dataset.larpbloxIdentityPeerNamePending = 'true';

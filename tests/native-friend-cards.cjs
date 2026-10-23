@@ -5,7 +5,8 @@ let playwright;
 try { playwright = require(process.env.PLAYWRIGHT_MODULE || 'playwright'); }
 catch (_) { playwright = require('C:/Users/noahk/.bun/install/cache/playwright-core@1.64.1@@@1'); }
 const {chromium} = playwright;
-const sharedSource = fs.readFileSync(path.join(__dirname, '../larpbux-shared-users.js'), 'utf8');
+let sharedSource = fs.readFileSync(path.join(__dirname, '../larpbux-shared-users.js'), 'utf8');
+if (process.env.REPRO_OLD_CARD_NAMES) sharedSource = sharedSource.replace('roots.push(...card.querySelectorAll(cardNameSelector))', "roots.push(...card.querySelectorAll('.avatar-name,.avatar-card-label'))");
 const avatarSource = fs.readFileSync(path.join(__dirname, '../larpbux-avatar-surfaces.js'), 'utf8');
 const identitySource = fs.readFileSync(path.join(__dirname, '../identity-gate.js'), 'utf8');
 const styleSource = fs.readFileSync(path.join(__dirname, '../larpbux.css'), 'utf8');
@@ -21,7 +22,7 @@ const fixture = () => `<meta name="user-data" data-userid="999"><main><section c
       <a class="avatar-card-link" data-testid="avatar-card-link" href="/users/${peer.id}/profile"><img class="avatar-card-image" style="width:48px;height:48px;border-radius:50%" src="native-${peer.id}.png"></a>
       <div class="avatar-status"><img class="presence-icon" data-presence="online" src="status-${peer.id}.png"></div>
     </div>
-    <a class="friends-carousel-tile-labels" data-testid="friends-carousel-tile-labels" href="/users/${peer.id}/profile"><div class="friends-carousel-tile-label"><div class="friends-carousel-tile-name"><span class="friends-carousel-display-name">${peer.native}</span></div></div><div class="friends-carousel-tile-sublabel"><div class="friends-carousel-tile-experience">Playing</div></div></a>
+    <${peer.id === '2290829441' ? 'a href="/users/2290829441/profile"' : 'div'} class="friends-carousel-tile-labels" data-testid="friends-carousel-tile-labels"><div class="friends-carousel-tile-label"><div class="friends-carousel-tile-name"><span class="friends-carousel-display-name">${peer.native}</span></div></div><div class="friends-carousel-tile-sublabel"><div class="friends-carousel-tile-experience">Playing</div></div></${peer.id === '2290829441' ? 'a' : 'div'}>
   </div></div>`).join('')}</div></section></main>`;
 
 (async () => {
