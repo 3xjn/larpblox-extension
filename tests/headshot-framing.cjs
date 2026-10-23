@@ -32,4 +32,16 @@ const headless=new THREE.Group();mesh(headless,'Torso',0,2,0,2,3,1);headless.upd
 const fallback=headshotFrame(headless,new THREE.Box3().setFromObject(headless));
 assert.ok(Number.isFinite(fallback.radius) && fallback.radius>0);
 assert.ok(fallback.target.y>2,'unrecognized/headless rigs get an upper-body portrait');
+const swordPose = new THREE.Group();
+mesh(swordPose,'Player1',0,5,0,1.2,1.2,1.2);
+mesh(swordPose,'Player2',0,3.2,0,2,2,1);
+mesh(swordPose,'Player3',1.5,5.3,-0.4,0.8,0.3,0.9); // Raised sword hand above the head.
+mesh(swordPose,'Handle1',1.5,4,-2,0.3,0.5,5.2);
+swordPose.updateMatrixWorld(true);
+const swordFrame=headshotFrame(swordPose,new THREE.Box3().setFromObject(swordPose));
+assert.ok(Math.abs(swordFrame.target.x)<1e-9,'raised gear hand must not replace the head as the portrait center');
+assert.ok(swordFrame.radius>=0.9,'a small raised hand must not zoom the portrait into a shoulder');
+const hiddenHead=swordPose.getObjectByName('Player1');hiddenHead.geometry.dispose();hiddenHead.geometry=new THREE.BoxGeometry(.01,.01,.01);hiddenHead.position.y=4;
+const headlessSwordFrame=headshotFrame(swordPose,new THREE.Box3().setFromObject(swordPose));
+assert.ok(Math.abs(headlessSwordFrame.target.x)<1e-9,'a raised Periastron hand must not replace a tiny Headless head either');
 console.log('PASS: headshots center on the actual offset head, ignore taller accessory meshes as head candidates, retain headwear, and handle headless exports.');

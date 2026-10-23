@@ -244,7 +244,7 @@
     for (const [id, surface] of wearing) if (!records.has(id)) { surface.update({active:false}); wearing.delete(id); }
     for (const [id, record] of records) {
       if (!portraits.has(id)) portraits.set(id, LarpbloxAvatarSurfaces.createForPeer());
-      portraits.get(id).update({userId:id, active:true, signature:JSON.stringify(record.snapshot) + (record.imageUrl || ''), imageUrl:record.imageUrl, backgroundId:record.snapshot.definition.backgroundRequestModel?.id, loadDefinition:async () => record.snapshot.definition});
+      portraits.get(id).update({userId:id, active:true, signature:JSON.stringify(record.snapshot) + (record.imageUrl || ''), imageUrl:record.imageUrl, backgroundId:record.snapshot.definition.backgroundRequestModel?.id, items:record.snapshot.items, loadDefinition:async () => record.snapshot.definition});
       if (globalThis.LarpbloxProfileWearing?.createForPeer && context.thumbnail) {
         if (!wearing.has(id)) wearing.set(id, LarpbloxProfileWearing.createForPeer());
         wearing.get(id).update({userId:id, active:true, signature:JSON.stringify(record.snapshot), items:record.snapshot.items, loadDefinition:async()=>record.snapshot.definition, thumbnail:context.thumbnail});

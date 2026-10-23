@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import {addAvatarEffects} from './larpbux-avatar-effects-source.js';
 
 const CDN = /^https:\/\/[a-z0-9-]+\.rbxcdn\.com\/[A-Za-z0-9._~%/-]+(?:\?[^#]*)?$/;
 const HASH = /^[A-Za-z0-9._~-]+$/;
@@ -89,16 +90,24 @@ async function teapotTexture() {
 }
 
 function exportedHead(root) {
-  let namedHead, numberedHead, highest = -Infinity;
+  let namedHead;
+  const parts = [], body = new THREE.Box3();
   root.traverse(part => {
     if (!part.isMesh) return;
     if (/^Head$/i.test(part.name)) namedHead = part;
     else if (/^Player\d+$/i.test(part.name)) {
-      const y = new THREE.Box3().setFromObject(part).getCenter(new THREE.Vector3()).y;
-      if (y > highest) { highest = y; numberedHead = part; }
+      const bounds = new THREE.Box3().setFromObject(part);
+      if (!bounds.isEmpty()) { parts.push({part, center:bounds.getCenter(new THREE.Vector3()), size:bounds.getSize(new THREE.Vector3())}); body.union(bounds); }
     }
   });
-  return namedHead || numberedHead;
+  const center = body.getCenter(new THREE.Vector3());
+  const bodyHeight=body.getSize(new THREE.Vector3()).y;
+  const headless=parts.find(({center:position,size})=>position.y>center.y && Math.max(size.x,size.y,size.z)<bodyHeight*.03);
+  // A gear pose can raise a hand above the face. Favor the upper body axis,
+  // rather than letting that small, off-center hand become the portrait's head.
+  const score = position => position.y - Math.hypot(position.x - center.x, position.z - center.z);
+  parts.sort((a,b) => score(b.center) - score(a.center));
+  return namedHead || headless?.part || parts[0]?.part;
 }
 
 async function addTeapot(root, definition, signal) {
@@ -157,6 +166,39 @@ export function smokestackMeshUVs(geometry, reference) {
     }), 2);
   }
   return null;
+}
+
+export function matchEffectMesh(root, reference, mesh) {
+  const scale = new THREE.Vector3(mesh.scale.x, mesh.scale.y, mesh.scale.z);
+  const offset = new THREE.Vector3(mesh.offset.x, mesh.offset.y, mesh.offset.z);
+  const points = Array.from({length:reference.positions.length / 3}, (_,i) => new THREE.Vector3().fromArray(reference.positions,i*3).multiply(scale).add(offset));
+  const shaped = {...reference, positions:points.flatMap(p=>p.toArray())};
+  let result;
+  root.traverse(node => {
+    if (result || !node.isMesh || !smokestackMeshUVs(node.geometry, shaped)) return;
+    const position = node.geometry.getAttribute('position'), index = node.geometry.index;
+    const actual = points.map((_,i)=>new THREE.Vector3().fromBufferAttribute(position,index ? index.getX(i) : i));
+    const basis = (a,b,c) => {
+      const x=b.clone().sub(a), y=c.clone().sub(a), z=x.clone().cross(y);
+      if (z.lengthSq()<1e-12) return;
+      z.normalize().multiplyScalar(Math.sqrt(x.length()*y.length()));
+      return new THREE.Matrix4().makeBasis(x,y,z).setPosition(a);
+    };
+    for (const order of [[0,1,2],[2,1,0],[1,2,0],[0,2,1],[2,0,1],[1,0,2]]) {
+      const source = points.map((_,i)=>points[i-i%3+order[i%3]]);
+      const triangle = source.findIndex((_,i)=>i%3===0 && basis(source[i],source[i+1],source[i+2]));
+      if (triangle<0) continue;
+      const nativeBasis=basis(source[triangle],source[triangle+1],source[triangle+2]);
+      const exportedBasis=basis(actual[triangle],actual[triangle+1],actual[triangle+2]);
+      if (!exportedBasis) continue;
+      const transform=exportedBasis.multiply(nativeBasis.invert());
+      const tolerance=Math.max(new THREE.Box3().setFromBufferAttribute(position).getSize(new THREE.Vector3()).length()*.015,.0001);
+      if (source.some((point,i)=>point.clone().applyMatrix4(transform).distanceTo(actual[i])>tolerance)) continue;
+      result={node,mapPosition:value=>value.clone().applyMatrix4(transform)};
+      break;
+    }
+  });
+  return result;
 }
 
 export function smokestackSeason(style = 'auto', date = new Date()) {
@@ -316,19 +358,8 @@ function descriptorView(camera) {
 }
 
 export function headshotFrame(root, avatarBox) {
-  // Numbered Player meshes are body parts in export order, not anatomy order.
-  // Accessories use Handle names; the highest body-part center is the head.
-  let namedHead, exportedHead, highest = -Infinity;
-  root.traverse(part => {
-    if (!part.isMesh) return;
-    if (/^Head$/i.test(part.name)) namedHead = part;
-    else if (/^Player\d+$/i.test(part.name)) {
-      const y = new THREE.Box3().setFromObject(part).getCenter(new THREE.Vector3()).y;
-      if (y > highest) { highest = y; exportedHead = part; }
-    }
-  });
   const size = avatarBox.getSize(new THREE.Vector3());
-  const head = namedHead || exportedHead;
+  const head = exportedHead(root);
   let bounds = head && new THREE.Box3().setFromObject(head);
   if (!bounds || bounds.isEmpty()) {
     bounds = avatarBox.clone();
@@ -507,6 +538,7 @@ export async function create(host, descriptorUrl, options = {}) {
   let smokestackEffect;
   let styleGeneration = 0;
   let smokestackPartsReady;
+  let gearEffects;
   let appliedHatSeason;
 
   const fitBackground = aspect => {
@@ -622,6 +654,19 @@ export async function create(host, descriptorUrl, options = {}) {
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
     const radius = Math.max(size.length() / 2, 0.5);
+    const effectItems = (options.items || []).filter(item => options.definition?.assets?.some(asset=>Number(asset.id)===Number(item.id)));
+    if (effectItems.length) {
+      const effectsController = new AbortController(), abortEffects = () => effectsController.abort();
+      signal.addEventListener('abort',abortEffects,{once:true});
+      const timer=setTimeout(abortEffects,3000);
+      try {
+        gearEffects=await addAvatarEffects(root,effectItems,{signal:effectsController.signal,deliveryUrl,
+          readMesh:async id=>{const response=await fetch(await deliveryUrl(id,effectsController.signal),{signal:effectsController.signal}); if(!response.ok) throw new Error('Effect mesh unavailable'); return readSmokestackMesh(await response.arrayBuffer());},
+          matchMesh:matchEffectMesh});
+        gearEffects.update(1);
+      } catch (error) { if(signal.aborted) throw error; }
+      finally {clearTimeout(timer);signal.removeEventListener('abort',abortEffects);}
+    }
     const saved = typeof options.view === 'function' ? options.view() : options.view;
     const hadView = applyView(camera, controls, saved);
     let autoFrame = !hadView;
@@ -727,6 +772,7 @@ export async function create(host, descriptorUrl, options = {}) {
       if (disposed) return;
       const delta = previousTime === undefined ? 0 : Math.min((time - previousTime) / 1000, 0.25);
       previousTime = time;
+      gearEffects?.update(time / 1000);
       if (!document.hidden && host.isConnected && host.getClientRects().length) controls.update(delta);
       animationFrame = requestAnimationFrame(animate);
     };
@@ -769,7 +815,7 @@ export async function create(host, descriptorUrl, options = {}) {
       },
       getView: () => viewState(camera, controls),
       setHatStyle,
-      getDiagnostics: () => ({version: 1, descriptorUrl, descriptor, objText, mtlText, avatarDefinition: options.definition, view: viewState(camera, controls), teapot:{present:Boolean(teapotPart), position:teapotPart?.getWorldPosition(new THREE.Vector3()).toArray(), scale:teapotPart?.scale.toArray()}, smokestack:{season:appliedHatSeason, matchedParts:smokestackParts.length, visible:smokestackParts.map(part => part.node.visible), textures:smokestackParts.map(part => part.material.map?.image?.currentSrc || part.material.map?.image?.src || '')}}),
+      getDiagnostics: () => ({version: 1, descriptorUrl, descriptor, objText, mtlText, avatarDefinition: options.definition, view: viewState(camera, controls), gearEffects:gearEffects?.diagnostics || [], teapot:{present:Boolean(teapotPart), position:teapotPart?.getWorldPosition(new THREE.Vector3()).toArray(), scale:teapotPart?.scale.toArray()}, smokestack:{season:appliedHatSeason, matchedParts:smokestackParts.length, visible:smokestackParts.map(part => part.node.visible), textures:smokestackParts.map(part => part.material.map?.image?.currentSrc || part.material.map?.image?.src || '')}}),
       dispose() {
         if (disposed) return;
         disposed = true;
@@ -779,6 +825,7 @@ export async function create(host, descriptorUrl, options = {}) {
         resizeObserver?.disconnect();
         controls?.dispose();
         canvas?.removeEventListener('keydown', keydown);
+        gearEffects?.dispose();
         cleanupObject(root);
         for (const texture of new Set(smokestackParts.map(part => part.original))) texture.dispose();
         smokestackEffect?.geometry.dispose();

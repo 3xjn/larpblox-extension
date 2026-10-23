@@ -7,7 +7,7 @@
   let cache, retryTimer, activeKey = '', activeAccount = '', lastFailure = '';
   let status = {stage: 'not-started'};
   const hasTeapot = definition => definition?.assets?.some(asset => Number(asset.id) === 1055299);
-  const pictureKey = definition => (globalThis.LarpbloxAvatarRequests?.definitionKey?.(definition) || JSON.stringify(definition)) + ':materials-v2' + (hasTeapot(definition) ? ':teapot-mesh-v1' : '');
+  const pictureKey = definition => (globalThis.LarpbloxAvatarRequests?.definitionKey?.(definition) || JSON.stringify(definition)) + ':materials-v2:gear-portraits-v3' + (hasTeapot(definition) ? ':teapot-mesh-v1' : '');
   const localHat = definition => definition?.assets?.some(asset => [169444515,1055299].includes(Number(asset.id)));
   function savedPictures(userId, definition) {
     try {
@@ -152,24 +152,25 @@
   async function render(definition, userId, signal, thumbnailType = '3d') {
     return LarpbloxAvatarRequests.render(definition, userId, signal, thumbnailType);
   }
-  async function pictures(descriptor, signal, definition) {
+  async function pictures(descriptor, signal, definition, items) {
+    items = (items || []).filter(item=>definition.assets?.some(asset=>Number(asset.id)===Number(item.id)));
     status = {stage: 'capturing', descriptor};
     const host = document.createElement('div');
     host.style.cssText = 'position:fixed;left:-10000px;top:-10000px;width:420px;height:420px;pointer-events:none';
     document.body.append(host);
     let viewer;
     try {
-      viewer = await LarpbloxAvatar3D.create(host, descriptor, {signal, static: true, definition});
+      viewer = await LarpbloxAvatar3D.create(host, descriptor, {signal, static: true, definition, items});
       const headshot = viewer.capture('headshot'), fullBody = viewer.capture('fullBody');
       if (!headshot?.startsWith('data:image/png') || !fullBody?.startsWith('data:image/png')) throw new Error('Avatar capture failed.');
       const backgroundUrl = viewer.getBackgroundUrl?.();
       const transparentBody = backgroundUrl ? viewer.capture('fullBody', {background:false}) : fullBody;
       const backgroundAspect = viewer.getBackgroundAspect?.() || 1;
-      return {descriptor, headshot, fullBody, transparentBody, backgroundUrl, backgroundAspect, definition};
+      return {descriptor, headshot, fullBody, transparentBody, backgroundUrl, backgroundAspect, definition, items};
     } finally { viewer?.dispose(); host.remove(); }
   }
   async function updateProfilePreviews(userId, key, result) {
-    const {descriptor, definition} = result;
+    const {descriptor, definition, items} = result;
     const native3D = container => {
       const section = container.closest('.currently-wearing-avatar-with-background') || container;
       const toggle = section.querySelector('.avatar-toggle-button button, .toggle-three-dee');
@@ -217,7 +218,7 @@
         if (!descriptor) continue;
         const timer = setTimeout(()=>controller.abort(),10000);
         let viewer;
-        try { viewer = await LarpbloxAvatar3D.create(host, descriptor, {signal: controller.signal, definition, background: !wide.includes(container)}); }
+        try { viewer = await LarpbloxAvatar3D.create(host, descriptor, {signal: controller.signal, definition, items, background: !wide.includes(container)}); }
         finally { clearTimeout(timer); }
         if (activeKey !== key || controller.signal.aborted || !container.isConnected) { viewer.dispose(); removePreview(container, record); continue; }
         record.viewer = viewer;
@@ -303,7 +304,7 @@
         controller.signal.addEventListener('abort',abort,{once:true});
         const timer=setTimeout(abort,10000);
         let result;
-        try { result = await pictures(descriptor, modelController.signal, definition); }
+        try { result = await pictures(descriptor, modelController.signal, definition, options.items); }
         finally { clearTimeout(timer); controller.signal.removeEventListener('abort',abort); }
         if (cache !== entry || controller.signal.aborted) throw new Error('Avatar preview cancelled.');
         entry.result = result; savePictures(userId, definition, result);

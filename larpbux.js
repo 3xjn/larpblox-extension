@@ -1205,7 +1205,7 @@
               const cancelModel = () => modelController.abort();
               signal.addEventListener('abort', cancelModel, {once: true});
               const modelTimeout = setTimeout(cancelModel, 8000);
-              try { nextViewer = await LarpbloxAvatar3D.create(pending, imageUrl, {signal: modelController.signal, view, definition, static:!threeDimensional}); }
+              try { nextViewer = await LarpbloxAvatar3D.create(pending, imageUrl, {signal: modelController.signal, view, definition, items:[...(state.gameLook?.items || []),...outfitAssets(state.items)], static:!threeDimensional}); }
               finally { clearTimeout(modelTimeout); signal.removeEventListener('abort', cancelModel); }
             } catch (error) {
               if (signal.aborted) throw error;
@@ -1285,7 +1285,7 @@
     if (typeof LarpbloxAvatarSurfaces !== 'undefined') LarpbloxAvatarSurfaces.update({
       userId: account,
       active: Boolean(current?.mode && (current.gameLook || selected.length || current.backgroundId)),
-      backgroundId: current?.backgroundId, signature, loadDefinition,
+      backgroundId: current?.backgroundId, signature, loadDefinition, items:[...(current?.gameLook?.items || []),...outfitAssets(current?.items || [])],
     });
     if (typeof LarpbloxSharedUsers !== 'undefined' && typeof LarpbloxSharedUsers.publishProfile === 'function') LarpbloxSharedUsers.publishProfile({
       userId: account, active: Boolean(current?.mode && current?.sharing), signature, loadDefinition, loadSnapshot: captureCharacter, names: current?.names, verified: current?.verified === true, socialCounts: current?.socialCounts,
