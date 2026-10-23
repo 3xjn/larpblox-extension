@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   function createSurfaces(peer = false) {
-  const imageSelector = '.avatar img, .avatar-card-image img, .avatar-headshot img, .profile-avatar-thumb img, .profile-avatar-image img, .profile-avatar-headshot img, .profile-avatar-left img, .user-profile-header-details-avatar-container img, a[href*="/users/"] img, .rbx2016-welcome-avatar, #nav-profile img, #navbar-avatar img';
+  const imageSelector = '.avatar img, .avatar-card-image img, .avatar-headshot img, .profile-avatar-thumb img, .profile-avatar-image img, .profile-avatar-headshot img, .profile-avatar-left img, .user-profile-header-details-avatar-container img, a[href*="/users/"] img, [data-user-id] img, [data-userid] img, [data-target-user-id] img, [data-target-userid] img, .rbx2016-welcome-avatar, #nav-profile img, #navbar-avatar img';
   const records = new Map(), previews = new Map(), hiddenCanvases = new Map(), banners = new Map();
   let cache, retryTimer, activeKey = '', activeAccount = '', lastFailure = '';
   let status = {stage: 'not-started'};
@@ -52,7 +52,7 @@
     }
     return false;
   }
-  const nonPortraitSelector = '[data-rblx-verified-badge-icon],[data-testid="verified-badge"],.icon-verified,.icon-filled-verified-backplate,.larpblox-verified-badge,.profile-verified-badge-icon';
+  const nonPortraitSelector = '[data-rblx-verified-badge-icon],[data-testid="verified-badge"],.icon-verified,.icon-filled-verified-backplate,.larpblox-verified-badge,.profile-verified-badge-icon,.avatar-status,.presence-icon,[data-presence]';
   const isPortrait = image => !image?.matches?.(nonPortraitSelector) && !image?.closest?.(nonPortraitSelector);
   function isHeadshotSurface(image) {
     if (!image || image.closest?.('.currently-wearing-avatar-with-background .profile-avatar-left, .profile-avatar-left')) return false;
@@ -107,6 +107,7 @@
   }
   function restore(image) {
     const record = remember(image);
+    if (peer && image.dataset.larpbloxPeerAvatar === record.applied) delete image.dataset.larpbloxPeerAvatar;
     for (const key of ['src', 'srcset', 'sizes']) {
       if (record[key] === null) image.removeAttribute(key);
       else image.setAttribute(key, record[key]);
@@ -257,6 +258,7 @@
       for (const image of images) {
         const record = remember(image);
         record.applied = options.imageUrl;
+        image.dataset.larpbloxPeerAvatar = options.imageUrl;
         if (image.getAttribute('src') !== options.imageUrl) image.setAttribute('src', options.imageUrl);
         image.removeAttribute('srcset');
         image.style.visibility = record.visibility;
@@ -266,6 +268,7 @@
     if (peer && options.imageUrl && !options.backgroundId && images.some(isHeadshotSurface) && typeof loadDefinition !== 'function') {
       for (const image of images) if (!isHeadshotSurface(image)) {
         const record = remember(image); record.applied = options.imageUrl;
+        image.dataset.larpbloxPeerAvatar = options.imageUrl;
         image.setAttribute('src', options.imageUrl); image.removeAttribute('srcset'); image.style.visibility = record.visibility;
       }
       return;
@@ -338,6 +341,7 @@
         const value = headshot ? result.headshot : (banners.has(banner) ? result.transparentBody : result.fullBody);
         if (!value) continue;
         record.applied = value;
+        if (peer) image.dataset.larpbloxPeerAvatar = value;
         if (image.getAttribute('src') !== value) image.setAttribute('src', value);
         if (image.getAttribute('srcset') !== null) image.removeAttribute('srcset');
         image.style.visibility = record.visibility;

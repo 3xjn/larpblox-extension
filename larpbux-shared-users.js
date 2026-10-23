@@ -34,7 +34,7 @@
     }
     finally { publishing = false; if (mine !== publicationGeneration) flushProfile(); }
   }
-  let context = {}, records = new Map(), pending = false, lastPoll = 0, queued = false, generation = 0;
+  let context = {}, records = new Map(), pending = false, lastPoll = 0, lastLookupKey = '', queued = false, generation = 0;
   const counts = new Map();
   const userIdFrom = value => {
     try {
@@ -43,6 +43,15 @@
     } catch { return undefined; }
   };
   const profileId = () => location.pathname.match(/^\/users\/([1-9]\d*)\/profile\/?$/)?.[1];
+  const identitySelector = 'a[href],[data-user-id],[data-userid],[data-target-user-id],[data-target-userid]';
+  const cardNameSelector = '.friend-name,.friends-carousel-display-name,.friend-display-name,.avatar-name,.display-name,.user-name,.username,[data-testid="friend-name"]';
+  function identityId(element) {
+    for (const key of ['data-user-id','data-userid','data-target-user-id','data-target-userid']) {
+      const id = element.getAttribute(key);
+      if (/^[1-9]\d{0,15}$/.test(id || '')) return id;
+    }
+    return userIdFrom(element.getAttribute('href'));
+  }
   const profileSelector = '#profile-header-title-container-name,.stylistic-alts-username,.profile-header-title,.profile-header-username,.profile-header-display-name,[data-testid="profile-header-title"],[data-testid="profile-header-username"],[data-testid="profile-header-display-name"]';
   let titleState;
   const resolvedProfiles = new Set();
@@ -78,12 +87,12 @@
     const found = new Set();
     const profile = profileId();
     if (profile) found.add(profile);
-    for (const anchor of document.querySelectorAll('a[href]')) {
-      const id = userIdFrom(anchor.getAttribute('href'));
+    for (const anchor of document.querySelectorAll(identitySelector)) {
+      const id = identityId(anchor);
       if (id) found.add(id);
     }
     found.delete(String(context.userId));
-    return [...found].slice(0, 50);
+    return [...found];
   }
   function restoreNames(wanted) {
     for (const [node, entry] of names) {
@@ -99,12 +108,15 @@
     const wanted = new Map();
     for (const [id, record] of records) {
       if (!record.name?.enabled) continue;
-      const roots = [...document.querySelectorAll('a[href]')].filter(anchor => userIdFrom(anchor.getAttribute('href')) === id);
+      const roots = [...document.querySelectorAll(identitySelector)].filter(element => identityId(element) === id).flatMap(element => {
+        const labels = [...element.querySelectorAll(cardNameSelector)];
+        return labels.length ? labels : [element];
+      });
       if (profileId() === id) roots.push(...document.querySelectorAll(profileSelector));
       for (const root of roots) {
         const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
         for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-          if (node.parentElement.closest('button,input,textarea,[contenteditable="true"]')) continue;
+          if (node.parentElement.closest('button,input,textarea,[contenteditable="true"],.avatar-status,.presence-icon,[data-presence]')) continue;
           const value = (names.get(node)?.real ?? node.nodeValue).trim();
           if (!value || value.length > 50 || /^(view profile|profile|\d[\d.,KkMm\s]*)$/i.test(value)) continue;
           const username = value.startsWith('@') || root.matches('.stylistic-alts-username,.profile-header-username,[data-testid="profile-header-username"]');
@@ -264,18 +276,22 @@
     if (typeof document === 'undefined' || document.hidden) return;
     await search();
     if (!context.mode || !context.userId) {
-      searchRecords.clear(); renderSearch(); records.clear(); apply(); return;
+      searchRecords.clear(); renderSearch(); records.clear(); apply();
+      globalThis.LarpbloxIdentityGate?.resolvePeerProfile?.(profileId(), null); return;
     }
     const ids = collect(), visible = new Set([...ids, ...searchRecords.keys()]);
     for (const [id, record] of searchRecords) records.set(id, record);
     for (const id of records.keys()) if (!visible.has(id)) records.delete(id);
     apply();
-    if (pending || !ids.length || Date.now() - lastPoll < 1000) return;
-    pending = true; lastPoll = Date.now(); const mine = generation;
+    const lookupKey = JSON.stringify(ids);
+    if (pending || !ids.length || lookupKey === lastLookupKey && Date.now() - lastPoll < 1000) return;
+    pending = true; lastPoll = Date.now(); lastLookupKey = lookupKey; const mine = generation;
     try {
-      const response = await (globalThis.LarpbloxExtension || chrome.runtime).sendMessage({type:'larpblox-shared-users', userIds:ids});
+      const responses = await Promise.all(Array.from({length:Math.ceil(ids.length / 50)}, (_, index) =>
+        (globalThis.LarpbloxExtension || chrome.runtime).sendMessage({type:'larpblox-shared-users', userIds:ids.slice(index * 50, (index + 1) * 50)})));
+      const response = {ok:responses.every(result => result?.ok), data:{players:responses.flatMap(result => result?.data?.players || [])}};
       if (mine !== generation) return;
-      if (!response?.ok) return;
+      if (!response?.ok) { globalThis.LarpbloxIdentityGate?.resolvePeerProfile?.(profileId(), null); return; }
       const next = new Map();
       for (let record of response.data.players || []) {
         try {
@@ -290,8 +306,12 @@
       for (const [id, record] of searchRecords) next.set(id, record);
       for (const id of ids) resolvedProfiles.add(id);
       records = next; apply();
-    } catch { /* Keep the last known profile through transient lookup failures. */ }
-    finally { pending = false; }
+      globalThis.LarpbloxIdentityGate?.resolvePeerProfile?.(profileId(), records.get(profileId()));
+    } catch {
+      globalThis.LarpbloxIdentityGate?.resolvePeerProfile?.(profileId(), records.get(profileId()));
+      /* Keep the last known profile through transient lookup failures. */
+    }
+    finally { pending = false; if (mine !== generation || JSON.stringify(collect()) !== lookupKey) scan(); }
   }
   function update(next) {
     if (context.userId !== next.userId || context.mode !== next.mode) { generation++; records.clear(); resolvedProfiles.clear(); lastPoll = 0; }
@@ -306,12 +326,13 @@
       searchFrame = false;
       applyProfileTitle();
       applyCounts();
+      if (context.mode) scan();
       // Navigation can happen before the next relay poll.
       if (searchKey !== (context.mode ? searchKeyword() : '')) { scan(); return; }
       if (renderSearch()) apply();
     });
   }
-  new MutationObserver(refreshSearchPlacement).observe(document, {childList:true, characterData:true, subtree:true, attributes:true, attributeFilter:['aria-busy']});
+  new MutationObserver(refreshSearchPlacement).observe(document, {childList:true, characterData:true, subtree:true, attributes:true, attributeFilter:['aria-busy','href','data-user-id','data-userid','data-target-user-id','data-target-userid']});
   document.addEventListener('load', refreshSearchPlacement, true);
   window.addEventListener('popstate', refreshSearchPlacement);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { lastPoll = 0; scan(); } });

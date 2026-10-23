@@ -3,6 +3,44 @@
   const selector = 'a[href="/users/profile"], #navigation a[href*="/profile"], #header a[href*="/profile"], header a[href*="/profile"], .rbx-header a[href*="/profile"]';
   const profileNames = '#profile-header-title-container-name,.stylistic-alts-username,.profile-header-title,.profile-header-username,.profile-header-display-name,[data-testid="profile-header-title"],[data-testid="profile-header-username"],[data-testid="profile-header-display-name"]';
   let earlyTitle;
+  let peerGate = {id:'', timer:0, record:undefined};
+  const peerProfile = () => location.pathname.match(/^\/users\/([1-9]\d*)\/profile\/?$/i)?.[1];
+  function clearPeerPending(id) {
+    if (id && peerGate.id && peerGate.id !== String(id)) return;
+    clearTimeout(peerGate.timer);
+    peerGate = {id:'', timer:0, record:undefined};
+    document.documentElement?.removeAttribute('data-larpblox-identity-peer-name-pending');
+    document.documentElement?.removeAttribute('data-larpblox-identity-peer-avatar-pending');
+  }
+  function setPeerPending(id) {
+    const root = document.documentElement;
+    if (!root || !id) return;
+    if (peerGate.id !== String(id)) {
+      clearTimeout(peerGate.timer);
+      peerGate = {id:String(id), timer:0, record:undefined};
+      root.dataset.larpbloxIdentityPeerNamePending = 'true';
+      root.dataset.larpbloxIdentityPeerAvatarPending = 'true';
+      peerGate.timer = setTimeout(() => {
+        if (peerGate.id === String(id) && peerGate.record === undefined) { peerGate.record = null; checkPeerReady(id); }
+      }, 5500);
+    }
+  }
+  function checkPeerReady(id) {
+    if (peerGate.id !== String(id)) return false;
+    const record = peerGate.record;
+    if (record === undefined) return false;
+    const aliases = record?.name?.enabled ? [record.name.displayName, record.name.username, '@' + record.name.username].filter(Boolean) : [];
+    const nameReady = !aliases.length || [...document.querySelectorAll(profileNames)].every(element => aliases.includes(element.textContent.trim()));
+    const images = [...document.querySelectorAll('.profile-avatar-thumb img,.profile-avatar-left img,.profile-avatar img,.profile-avatar-image img,.profile-avatar-headshot img,.user-profile-header-details-avatar-container img')]
+      .filter(image => !image.closest('button,.avatar-status,.presence-icon,[data-presence]'));
+    const avatarReady = !record?.snapshot || images.every(image => /^data:image\/png/i.test(image.src || image.currentSrc) || image.dataset.larpbloxPeerAvatar === image.getAttribute('src'));
+    const root = document.documentElement;
+    if (nameReady) root.removeAttribute('data-larpblox-identity-peer-name-pending');
+    else root.dataset.larpbloxIdentityPeerNamePending = 'true';
+    if (avatarReady) root.removeAttribute('data-larpblox-identity-peer-avatar-pending');
+    else root.dataset.larpbloxIdentityPeerAvatarPending = 'true';
+    return nameReady && avatarReady;
+  }
   function updateProfileTitle() {
     const id = location.pathname.match(/^\/users\/([1-9]\d*)\/profile\/?$/i)?.[1];
     if (earlyTitle?.id !== id) earlyTitle = undefined;
@@ -71,8 +109,17 @@
       const ready = !name && !display || aliases.includes(label) || /^(profile|view profile|my profile)$/i.test(label);
       if (link.dataset.larpbloxAliasReady !== String(ready)) link.dataset.larpbloxAliasReady = String(ready);
     }
+    if (!profile || ownProfile || !state?.mode) clearPeerPending();
+    else { setPeerPending(profile); checkPeerReady(profile); }
   }
-  globalThis.LarpbloxIdentityGate = {update, editProfileImage, profileTitleSource: id => earlyTitle?.id === id ? earlyTitle.real : undefined,
+  globalThis.LarpbloxIdentityGate = {update, editProfileImage, resolvePeerProfile: (id, record) => {
+    if (peerProfile() !== String(id)) return;
+    if (document.documentElement?.dataset.larpbloxIdentityOwnProfile === 'true') return;
+    setPeerPending(String(id));
+    clearTimeout(peerGate.timer);
+    peerGate.record = record || null;
+    checkPeerReady(String(id));
+  }, profileTitleSource: id => earlyTitle?.id === id ? earlyTitle.real : undefined,
     clearProfileTitle: id => {
       if (earlyTitle?.id === id) {
         if (document.title === earlyTitle.shown) document.title = earlyTitle.real;

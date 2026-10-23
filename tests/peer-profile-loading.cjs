@@ -1,0 +1,38 @@
+const assert=require('node:assert/strict');
+const path=require('node:path');
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
+(async()=>{const browser=await chromium.launch({channel:'chrome',headless:true});try{
+ const page=await browser.newPage();page.setDefaultTimeout(5000);
+ await page.route('https://www.roblox.com/**',r=>r.fulfill({contentType:'text/html',body:'<meta name="user-data" data-userid="999"><h1 class="profile-header-title">Real Friend</h1><span class="profile-header-username">@RealFriend</span><div class="profile-avatar-image"><img id="portrait" src="native.png"><span class="avatar-status"><img id="status" src="status.png"></span></div><button id="menu">Menu</button>'}));
+ await page.goto('https://www.roblox.com/users/2290829441/profile');
+ await page.evaluate(()=>{
+  localStorage.setItem('larpblox-cosmetics-v1:999',JSON.stringify({mode:true}));
+  window.LarpbloxGameBridge={validateSnapshot:s=>s};
+  window.LarpbloxExtension={sendMessage:()=>new Promise(resolve=>{window.resolveLookup=resolve})};
+  window.LarpbloxAvatarRequests={cached:(_,__,type)=>type==='3d'?'descriptor':null,render:async()=> 'descriptor'};
+  window.LarpbloxAvatar3D={create:()=>new Promise(resolve=>{window.resolvePicture=()=>resolve({capture:()=> 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==',dispose(){}})})};
+ });
+ await page.addStyleTag({path:path.join(__dirname,'../larpbux.css')});
+ for(const file of ['identity-gate.js','larpbux-avatar-surfaces.js','larpbux-shared-users.js'])await page.addScriptTag({path:path.join(__dirname,'..',file)});
+ const visible=selector=>page.locator(selector).evaluate(e=>getComputedStyle(e).visibility);
+ assert.equal(await visible('h1'),'hidden');assert.equal(await visible('#portrait'),'hidden');
+ assert.equal(await visible('#status'),'visible');assert.equal(await visible('#menu'),'visible');
+ await page.evaluate(()=>LarpbloxSharedUsers.update({userId:'999',mode:true}));
+ await page.waitForFunction(()=>typeof resolveLookup==='function');
+ await page.evaluate(()=>resolveLookup({ok:true,data:{players:[{userId:'2290829441',name:{enabled:true,username:'qos',displayName:'qos'},snapshot:{userId:'2290829441',definition:{assets:[]},items:[]}}]}}));
+ await page.waitForFunction(()=>document.querySelector('h1').textContent==='qos');
+ assert.equal(await visible('h1'),'visible');assert.equal(await visible('#portrait'),'hidden');
+ await page.waitForFunction(()=>typeof resolvePicture==='function');await page.evaluate(()=>resolvePicture());
+ await page.waitForFunction(()=>getComputedStyle(document.querySelector('#portrait')).visibility==='visible');
+ assert.match(await page.locator('#portrait').getAttribute('src'),/^data:image\/png/);
+ await page.evaluate(()=>{document.querySelector('h1').textContent='Real Friend';document.querySelector('#portrait').src='native-again.png'});
+ await page.waitForFunction(()=>document.querySelector('h1').textContent==='qos'&&document.querySelector('#portrait').src.startsWith('data:image/png'));
+ await page.evaluate(()=>{history.pushState({},'','/users/456/profile');LarpbloxIdentityGate.update();LarpbloxIdentityGate.resolvePeerProfile('456',null)});
+ assert.equal(await visible('h1'),'visible');assert.equal(await visible('#portrait'),'visible');
+ await page.evaluate(()=>{history.pushState({},'','/users/789/profile');LarpbloxIdentityGate.update()});
+ assert.equal(await visible('h1'),'hidden');
+ await page.waitForFunction(()=>getComputedStyle(document.querySelector('h1')).visibility==='visible',null,{timeout:6500});
+ await page.evaluate(()=>{document.querySelector('h1').textContent='Ordinary Friend';LarpbloxIdentityGate.update()});
+ assert.equal(await visible('h1'),'visible');
+ console.log('PASS: cold peer profile hides native identity until delayed name/avatar replacements arrive, preserves controls, repairs rerenders, and releases ordinary profiles.');
+}finally{await browser.close()}})().catch(e=>{console.error(e);process.exitCode=1});
