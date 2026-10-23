@@ -30,11 +30,11 @@ header = f'''// ==UserScript==
 // @downloadURL  {base}larpblox.user.js
 // ==/UserScript==
 '''
-parts = [header, "(() => { 'use strict'; if (location.origin === 'https://www.roblox.com' && window.top !== window) return; if (globalThis.__larpbloxWebsite || globalThis.__larpbloxUserscript) return; globalThis.__larpbloxUserscript = true; globalThis.__larpbloxWebsite = 'userscript';", (root/'userscript-runtime.js').read_text().replace('__USERSCRIPT_VERSION__',json.dumps(version))]
-parts.append((root/'userscript-desktop.js').read_text())
+parts = [header, "(() => { 'use strict'; if (location.origin === 'https://www.roblox.com' && window.top !== window) return; if (globalThis.__larpbloxWebsite || globalThis.__larpbloxUserscript) return; globalThis.__larpbloxUserscript = true; globalThis.__larpbloxWebsite = 'userscript';", (root/'userscript-runtime.js').read_text(encoding='utf-8').replace('__USERSCRIPT_VERSION__',json.dumps(version))]
+parts.append((root/'userscript-desktop.js').read_text(encoding='utf-8'))
 # Validators must exist before the background handlers start receiving requests.
-parts.append((root/'larpbux-game-bridge.js').read_text())
-background = (root/'larpbux-game-background.js').read_text().replace("importScripts('larpbux-game-bridge.js', 'remote-loader.js');", '')
+parts.append((root/'larpbux-game-bridge.js').read_text(encoding='utf-8'))
+background = (root/'larpbux-game-background.js').read_text(encoding='utf-8').replace("importScripts('larpbux-game-bridge.js', 'remote-loader.js');", '')
 # Keep privileged requests local to the existing background implementation.
 parts.append('(function(fetch) {\n' + background + '\n})(privilegedFetch);')
 parts.append('if (desktopHost) { serveDesktopFrame(); return; }')
@@ -47,7 +47,7 @@ parts.append('globalThis.LarpbloxUserscriptPopupData = '+json.dumps({key:value f
 parts.append("globalThis.LarpbloxPopupContext = {root:document.createElement('div')};")
 parts.append(payload['popup']['js'])
 parts.append('globalThis.renderUserscriptPopup = LarpbloxPopup.renderUserscriptPopup; globalThis.LarpbloxUserscriptPopupData.userscriptInstall = userscriptInstall;')
-parts.append((root/'userscript-popup.js').read_text())
+parts.append((root/'userscript-popup.js').read_text(encoding='utf-8'))
 parts.append("GM_registerMenuCommand('Open Larpblox', () => globalThis.LarpbloxUserscriptPopup.open());\n})();\n")
 output = root/'website-release'
 (output/'larpblox.user.js').write_text('\n;\n'.join(parts),encoding='utf-8')
