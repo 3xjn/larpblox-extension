@@ -72,12 +72,14 @@
     if (document.title !== shown) document.title = shown;
   }
   function editProfileImage(doc = document) {
+    const eligible = image => !image.closest('header,nav,#header,#navigation,.avatar-status,.presence-icon,[data-presence],[data-rblx-verified-badge-icon],[data-testid="verified-badge"]');
+    const choose = images => images.find(image => image.dataset.larpbloxEditAvatar === 'true' || /AvatarHeadshot/i.test(image.getAttribute('src') || '')) || images[0];
     const back = [...doc.querySelectorAll('a,button')].find(element => /^back to profile$/i.test(element.textContent.trim()));
     for (let root = back?.parentElement; root && root !== doc.body; root = root.parentElement) {
-      const image = [...root.querySelectorAll('img')].find(image => !image.closest('header,nav,#header,#navigation'));
+      const image = choose([...root.querySelectorAll('img')].filter(eligible));
       if (image) return image;
     }
-    return [...doc.querySelectorAll('.avatar-card-image img,main img,#content img,.content img')].find(image => !image.closest('header,nav,#header,#navigation'));
+    return choose([...doc.querySelectorAll('[data-larpblox-edit-avatar="true"],.avatar-card-image img,main img,#content img,.content img,.container-main img')].filter(eligible));
   }
   function update() {
     updateProfileTitle();
