@@ -1569,7 +1569,10 @@
       const response = await fetch(type === 'Asset' ? `https://economy.roblox.com/v2/assets/${id}/details` : `https://catalog.roblox.com/v1/bundles/${id}/details`, {signal: controller.signal});
       if (!response.ok) throw new Error('Item details could not be loaded. Click Buy to try again.');
       const data = await response.json();
-      const price = type === 'Asset' ? data.PriceInRobux : data.product?.priceInRobux;
+      const offSaleWearable = type === 'Asset' && data.IsForSale === false && !data.IsLimited && !data.IsLimitedUnique
+        && !data.CollectibleItemId && isWearableAsset({itemType:type,assetType:data.AssetTypeId});
+      // Award and discontinued wearables have no Roblox price; collecting them in Larp mode is free.
+      const price = (type === 'Asset' ? data.PriceInRobux : data.product?.priceInRobux) ?? (offSaleWearable ? 0 : null);
       const assets = type === 'Bundle' ? await bundleAssets(data, controller.signal) : undefined;
       return {id, itemType: type, assetType: type === 'Asset' ? data.AssetTypeId : 0, ...(type === 'Asset' ? {assetTypeVerified:true, limitedVerified:true, isLimited:data.IsLimited === true, isLimitedUnique:data.IsLimitedUnique === true} : {}), bundleType: type === 'Bundle' ? data.bundleType : undefined, assets, name: String(type === 'Asset' ? data.Name : data.name).slice(0, 128), price: price == null ? null : amount(price)};
       })();
