@@ -209,8 +209,7 @@
       container.style.position = 'relative'; container.append(host);
       const image = document.createElement('img'); image.src=result.fullBody; image.alt='Your avatar';
       image.style.cssText='position:absolute;inset:0;width:100%;height:100%;object-fit:contain';
-      const message = document.createElement('span'); message.className='larpblox-profile-preview-status'; message.setAttribute('role','status'); message.textContent='Loading 3D…';
-      host.append(image,message);
+      host.append(image);
       hideNative(container,record);
       record.observer=new MutationObserver(()=>hideNative(container,record));
       record.observer.observe(container,{childList:true,subtree:true});
