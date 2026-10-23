@@ -522,6 +522,12 @@
       respond({ok:true, ...popupState()});
       return;
     }
+    if (message.type === 'larpblox-popup-avatar-details') {
+      if (!previewViewer?.getDiagnostics) { respond({ok:false, error:'Open the Avatar page and wait for your 3D Larp avatar to load first.'}); return; }
+      try { savePreviewDetails(); respond({ok:true, ...popupState()}); }
+      catch (error) { respond({ok:false, error:error.message}); }
+      return;
+    }
     if (message.type === 'larpblox-popup-avatar-retry') {
       if (!/^\/my\/avatar\/?$/i.test(location.pathname)) { respond({ok:false, error:'Open the Avatar page to retry the preview.'}); return; }
       previewRetryKey = undefined; previewSignature = undefined; updateAvatar();
@@ -1553,6 +1559,24 @@
     exportBox.value = outfit(state, userId);
     updateItem(); updateAvatar();
   }
+  function savePreviewDetails() {
+    const data = {...(previewViewer?.getDiagnostics?.() || {}),
+      extensionVersion: extensionRuntime?.getManifest?.().version,
+      websiteVersion: extensionRuntime?.getManifest?.().websiteVersion,
+      route: location.pathname, userId, mode: state?.mode, equipped: state?.equipped,
+      hasGameLook: Boolean(state?.gameLook), previewFailure,
+      savedAvatarType: state?.gameLook?.definition?.playerAvatarType?.playerAvatarType,
+      avatarScripts: [...document.scripts].map(script => script.src).filter(Boolean),
+      outfitSelectionLog: JSON.parse(localStorage.getItem('larpblox-outfit-debug-v1') || '[]'),
+      savedOutfits: JSON.parse(localStorage.getItem(`larpblox-characters-v1:${userId}`) || '{"profiles":[]}'),
+      avatarEditorView,
+      avatarPictures: typeof LarpbloxAvatarSurfaces === 'undefined' ? {stage: 'module-not-loaded'} : LarpbloxAvatarSurfaces.getDiagnostics()};
+    const url = URL.createObjectURL(new Blob([JSON.stringify(data)], {type: 'application/json'}));
+    const download = node('a'); download.href = url; download.download = 'larpblox-preview-details.json';
+    document.body.append(download); download.click(); download.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    message.textContent = 'Preview details saved. Attach larpblox-preview-details.json in our chat.';
+  }
   function mount() {
     panel = node('section', '', 'larpbux-panel'); panel.hidden = true;
     const close = node('button', 'Close'); close.type = 'button'; close.addEventListener('click', () => { panel.hidden = true; });
@@ -1565,22 +1589,7 @@
     const select = node('button', 'Select outfit export'); select.type = 'button'; select.addEventListener('click', () => { exportBox.focus(); exportBox.select(); });
     const diagnostics = node('button', 'Save preview details'); diagnostics.type = 'button';
     diagnostics.addEventListener('click', () => action(() => {
-      const data = {...(previewViewer?.getDiagnostics?.() || {}),
-        extensionVersion: extensionRuntime?.getManifest?.().version,
-        websiteVersion: extensionRuntime?.getManifest?.().websiteVersion,
-        route: location.pathname, userId, mode: state?.mode, equipped: state?.equipped,
-        hasGameLook: Boolean(state?.gameLook), previewFailure,
-        savedAvatarType: state?.gameLook?.definition?.playerAvatarType?.playerAvatarType,
-        avatarScripts: [...document.scripts].map(script => script.src).filter(Boolean),
-        outfitSelectionLog: JSON.parse(localStorage.getItem('larpblox-outfit-debug-v1') || '[]'),
-        savedOutfits: JSON.parse(localStorage.getItem(`larpblox-characters-v1:${userId}`) || '{"profiles":[]}'),
-        avatarEditorView,
-        avatarPictures: typeof LarpbloxAvatarSurfaces === 'undefined' ? {stage: 'module-not-loaded'} : LarpbloxAvatarSurfaces.getDiagnostics()};
-      const url = URL.createObjectURL(new Blob([JSON.stringify(data)], {type: 'application/json'}));
-      const download = node('a'); download.href = url; download.download = 'larpblox-preview-details.json';
-      document.body.append(download); download.click(); download.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      message.textContent = 'Preview details saved. Attach larpblox-preview-details.json in our chat.';
+      savePreviewDetails();
     }));
     panel.append(node('h3', 'Your Larpbux collection'), list,
       node('p', 'Game import supports accessories, classic clothes, movement animations, and held gear visuals. Gear actions are not included. Other items are collection only. The updated game script must be installed first. For games: copy this export, then paste it into Accessories → Browser cosmetic outfit in Larpblox. Supported cosmetics are added to your current look.'), exportBox, select, diagnostics);
