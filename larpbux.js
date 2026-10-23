@@ -2027,13 +2027,17 @@
     document.body.append(toast);
     purchaseToastTimer = setTimeout(() => { toast.classList.add('is-leaving'); setTimeout(() => toast.remove(), 250); }, 3000);
   }
+  function robuxIcon() {
+    const icon = node('span', '', 'larpbux-robux-symbol icon-robux-16x16');
+    icon.setAttribute('role', 'img'); icon.setAttribute('aria-label', 'Robux');
+    return icon;
+  }
   function purchaseComplete(dialog, message) {
     dialog.classList.add('larpbux-purchase-complete');
     dialog.setAttribute('aria-label', 'Purchase Complete');
     const title = node('h2', 'Purchase Complete');
     const balance = node('div', '', 'larpbux-purchase-balance');
-    const icon = node('span', '', 'larpbux-robux-symbol'); icon.setAttribute('aria-label', 'Robux');
-    icon.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1 14 4.5v7L8 15l-6-3.5v-7Z" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="m8 4 3.5 2v4L8 12l-3.5-2V6Z" fill="none" stroke="currentColor"/></svg>';
+    const icon = robuxIcon();
     balance.append(icon, document.createTextNode(state.balance.toLocaleString('en-US')));
     const close = node('button', '×', 'larpbux-modal-close'); close.type = 'button'; close.setAttribute('aria-label', 'Close purchase'); close.addEventListener('click', closePurchase);
     const body = node('div', '', 'larpbux-complete-body');
@@ -2059,8 +2063,7 @@
     copy.append(node('p', `R$ ${item.price.toLocaleString('en-US')}`, 'larpbux-purchase-price'));
     for (const element of [balance, copy.lastElementChild]) {
       const value = element.textContent.replace(/^R\$\s*/, '');
-      const icon = node('span', '', 'larpbux-robux-symbol'); icon.setAttribute('aria-label', 'Robux');
-      icon.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1 14 4.5v7L8 15l-6-3.5v-7Z" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="m8 4 3.5 2v4L8 12l-3.5-2V6Z" fill="none" stroke="currentColor"/><path d="M6.5 6.5h3v3h-3Z" fill="currentColor"/></svg>';
+      const icon = robuxIcon();
       element.replaceChildren(icon, document.createTextNode(value));
     }
     body.append(image, copy);
@@ -2247,9 +2250,8 @@
     const close = node('button', '×', 'larpbux-modal-close'); close.type = 'button'; close.setAttribute('aria-label', 'Close purchase'); close.addEventListener('click', closePurchase);
     const question = node('p', `Would you like to buy ${count === 1 ? 'this item' : `these ${count} items`} for `, 'larpbux-cart-question');
     close.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 5 14 14M19 5 5 19" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
-    const robux = () => { const icon = node('span', '', 'larpbux-robux-symbol'); icon.setAttribute('aria-label', 'Robux'); icon.innerHTML = '<svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1 14 4.5v7L8 15l-6-3.5v-7Z" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="m8 4 3.5 2v4L8 12l-3.5-2V6Z" fill="none" stroke="currentColor"/></svg>'; return icon; };
     if (cost === 0) question.append(document.createTextNode('Free?'));
-    else if (cost !== undefined) question.append(robux(), document.createTextNode(` ${cost.toLocaleString('en-US')}?`));
+    else if (cost !== undefined) question.append(robuxIcon(), document.createTextNode(` ${cost.toLocaleString('en-US')}?`));
     else question.textContent = 'Review the items in your cart.';
     const previews = node('div', '', 'larpbux-cart-previews');
     let shown = 0;
@@ -2263,7 +2265,7 @@
     const buy = node('button', label, 'larpbux-buy-confirm'); buy.type = 'button'; buy.disabled = !count || Boolean(error);
     const cancel = node('button', 'Cancel', 'larpbux-buy-cancel'); cancel.type = 'button'; cancel.addEventListener('click', closePurchase); footer.append(buy, cancel);
     const balance = node('p', 'Your balance after this transaction will be ', 'larpbux-cart-balance');
-    if (cost !== undefined) balance.append(robux(), document.createTextNode(` ${(state.balance - cost).toLocaleString('en-US')}.`)); else balance.textContent = '';
+    if (cost !== undefined) balance.append(robuxIcon(), document.createTextNode(` ${(state.balance - cost).toLocaleString('en-US')}.`)); else balance.textContent = '';
     const status = node('p', error || (!count ? 'Select at least one item to buy.' : ''), 'larpbux-purchase-status'); status.setAttribute('role', 'status');
     buy.addEventListener('click', async () => {
       if (buy.disabled) return;

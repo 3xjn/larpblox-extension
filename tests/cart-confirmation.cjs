@@ -14,6 +14,9 @@ const assert=require('node:assert/strict');const path=require('node:path');const
  assert.equal(await dialog.locator('.larpbux-cart-question').textContent(),'Would you like to buy these 4 items for Free?');
  assert.equal(await dialog.locator('.larpbux-cart-previews img').count(),2);assert.equal(await dialog.locator('.larpbux-cart-overflow').textContent(),'+2');
  assert.match(await dialog.locator('.larpbux-cart-balance').textContent(),/4\.$/);
+ const balanceIcons=dialog.locator('.larpbux-cart-balance .icon-robux-16x16[role="img"][aria-label="Robux"]');
+ assert.equal(await balanceIcons.count(),1,'free cart prompt has one native Robux balance icon');
+ assert.equal(await balanceIcons.locator('svg').count(),0,'free cart prompt does not nest a custom SVG in the native Robux icon');
  assert.equal(await dialog.evaluate(e=>getComputedStyle(e).width),'480px');
  await page.waitForTimeout(350);
  await page.waitForFunction(()=>[...document.querySelectorAll('.larpbux-cart-previews img')].every(i=>i.complete&&i.naturalWidth));

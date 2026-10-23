@@ -31,7 +31,7 @@ html.rbx2016 :is(.icon-robux, .icon-robux-16x16, .icon-robux-28x28, .icon-robux-
   .icon-robux-gold-16x16, .icon-robux-gray, .icon-robux-gray-16x16,
   .icon-robux-white, .icon-robux-white-16x16, .icon-nav-robux,
   .icon-regular-robux, .icon-filled-robux,
-  svg[aria-label='Robux' i], img[alt='Robux' i]) {
+  svg[aria-label='Robux' i], img[alt='Robux' i]):not(.larpbux-robux-symbol) {
   background: var(--rbx16-robux-art) center / contain no-repeat !important;
   mask: none !important; -webkit-mask: none !important;
   filter: none !important; opacity: 1;
