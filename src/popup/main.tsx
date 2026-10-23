@@ -255,8 +255,10 @@ function App() {
       {state.avatarPage && state.mode && <section className="section space-y-2.5">
         <Choice id="avatar-view" label="Avatar to edit" value={state.avatarView || "larp"} disabled={busy} items={[{ value: "real", label: "Real avatar" }, { value: "larp", label: "Larp avatar" }]} onChange={view => void act("avatar-view", { type: "larpblox-popup-avatar-view", view })} />
         {state.previewStatus && <><p className="help" role="status">{state.previewStatus}</p><Button variant="outline" disabled={busy} loading={pending === "preview"} onClick={() => void act("preview", { type: "larpblox-popup-avatar-retry" })}>Retry avatar preview</Button></>}
-        {state.avatarView === "larp" && <Button variant="outline" disabled={busy} loading={pending === "preview-details"} onClick={() => void act("preview-details", { type: "larpblox-popup-avatar-details" }, [], "Preview details saved. Attach larpblox-preview-details.json in our chat.")}>Save preview details</Button>}
+
       </section>}
+
+      {state.mode && <section className="section"><Button variant="outline" disabled={busy} loading={pending === "preview-details"} onClick={() => void act("preview-details", { type: "larpblox-popup-avatar-details" }, [], "Preview details saved. Attach larpblox-preview-details.json in our chat.")}>Save preview details</Button></section>}
 
       <Disclosure title="More settings">
         <div className="secondary-group">

@@ -48,6 +48,7 @@ const source = fs.readFileSync(path.join(__dirname,'../website-release/larpblox.
   const thumbLeft=()=>modeSwitch.evaluate(n=>n.querySelector('[data-slot="switch-thumb"]').getBoundingClientRect().left-n.getBoundingClientRect().left);
   const offLeft=await thumbLeft();
   await page.getByRole('switch',{name:'Larp mode',exact:true}).click();
+  await page.getByRole('button',{name:'Save preview details',exact:true}).waitFor();
   await page.waitForFunction(()=>JSON.parse(localStorage.getItem('larpblox-cosmetics-v1:999')).mode===true);
   await page.waitForTimeout(220);
   assert.ok(await thumbLeft()>offLeft+5,'the checked switch thumb must slide right inside the userscript shadow root');
