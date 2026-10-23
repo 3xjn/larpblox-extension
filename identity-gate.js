@@ -3,6 +3,7 @@
   const selector = 'a[href="/users/profile"], #navigation a[href*="/profile"], #header a[href*="/profile"], header a[href*="/profile"], .rbx-header a[href*="/profile"]';
   const profileNames = '#profile-header-title-container-name,.stylistic-alts-username,.profile-header-title,.profile-header-username,.profile-header-display-name,[data-testid="profile-header-title"],[data-testid="profile-header-username"],[data-testid="profile-header-display-name"]';
   let earlyTitle;
+  const resolvedTitles = new Map();
   let peerGate = {id:'', timer:0, record:undefined};
   const peerProfile = () => location.pathname.match(/^\/users\/([1-9]\d*)\/profile\/?$/i)?.[1];
   function clearPeerPending(id) {
@@ -53,8 +54,11 @@
     } catch { return; }
     const display = !disabled && (state ? state.mode && (state.names?.displayName || state.names?.username)
       : cached?.expires > Date.now() && cached.displayName);
-    if (typeof display !== 'string' || !display) return;
-    const shown = `${display} - Roblox`;
+    const resolved = resolvedTitles.get(id);
+    const titleName = resolved || display;
+    // An uncached profile must not expose its account name while the lookup runs.
+    if (!titleName && (disabled || state && !state.mode || resolvedTitles.has(id))) return;
+    const shown = typeof titleName === 'string' && titleName ? `${titleName} - Roblox` : 'Roblox';
     if (!earlyTitle) earlyTitle = {id, real:document.title, shown};
     else if (document.title !== earlyTitle.shown) earlyTitle.real = document.title;
     earlyTitle.shown = shown;
@@ -121,7 +125,11 @@
     clearTimeout(peerGate.timer);
     peerGate.record = record || null;
     checkPeerReady(String(id));
-  }, profileTitleSource: id => earlyTitle?.id === id ? earlyTitle.real : undefined,
+  }, resolveProfileTitle: (id, display) => {
+      if (!id) return;
+      resolvedTitles.set(String(id), display || null);
+      if (display) updateProfileTitle();
+    }, profileTitleSource: id => earlyTitle?.id === id ? earlyTitle.real : undefined,
     clearProfileTitle: id => {
       if (earlyTitle && earlyTitle.id === id) {
         if (document.title === earlyTitle.shown) document.title = earlyTitle.real;

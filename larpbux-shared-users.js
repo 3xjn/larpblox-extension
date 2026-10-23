@@ -96,6 +96,7 @@
         } else localStorage.removeItem(key);
       }
     } catch { /* Titles still work when browser storage is unavailable. */ }
+    globalThis.LarpbloxIdentityGate?.resolveProfileTitle(id, display);
     if (!display) {
       if (titleState && document.title === titleState.shown) document.title = titleState.real;
       titleState = undefined;

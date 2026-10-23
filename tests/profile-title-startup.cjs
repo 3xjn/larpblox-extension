@@ -9,7 +9,7 @@ try {
   playwright = require('C:/Users/noahk/.bun/install/cache/playwright-core@1.64.1@@@1');
 }
 const {chromium} = playwright;
-const identitySource = fs.readFileSync(path.join(__dirname, '../identity-gate.js'), 'utf8');
+const identitySource = fs.readFileSync(process.env.IDENTITY_GATE_SOURCE || path.join(__dirname, '../identity-gate.js'), 'utf8');
 const sharedSource = fs.readFileSync(path.join(__dirname, '../larpbux-shared-users.js'), 'utf8');
 
 const cases = [
@@ -31,8 +31,9 @@ const cases = [
   {
     name: 'expired peer title',
     storage: {peer: {displayName: 'Captain Seven', expires: Date.now() - 1}},
-    expected: 'Native profile - Roblox',
+    expected: 'Roblox',
   },
+  {name: 'uncached profile title', storage: {}, expected: 'Roblox'},
 ];
 
 async function runCase(browser, testCase) {
@@ -64,7 +65,7 @@ async function runCase(browser, testCase) {
   await page.evaluate(() => { document.title = 'Native rewrite - Roblox'; });
   await page.waitForTimeout(50);
   const afterMutation = await page.title();
-  if (testCase.expected.endsWith(' - Roblox') && !testCase.expected.startsWith('Native ')) {
+  if (!testCase.expected.startsWith('Native ')) {
     assert.equal(afterMutation, testCase.expected, `${testCase.name}: native rewrite was not kept behind the cached title`);
   } else {
     assert.equal(afterMutation, 'Native rewrite - Roblox', `${testCase.name}: native title should remain available`);
@@ -149,6 +150,21 @@ async function runSharedIntegration(browser) {
   } finally {
     await missing.context.close();
   }
+  const cold = await open({}, async message => {
+    if (message.type !== 'larpblox-shared-users') return {ok:true};
+    await new Promise(resolve => setTimeout(resolve, 500));
+    return {ok:true,data:{players:[record]}};
+  });
+  try {
+    assert.equal(await cold.page.title(), 'Roblox');
+    await cold.page.evaluate(() => LarpbloxSharedUsers.update({userId:'999',mode:true}));
+    await cold.page.waitForTimeout(100);
+    assert.equal(await cold.page.title(), 'Roblox', 'uncached title stays neutral during lookup');
+    await cold.page.evaluate(() => {document.title='Real account - Roblox';});
+    await cold.page.waitForTimeout(50);
+    assert.equal(await cold.page.title(), 'Roblox', 'native rewrites stay hidden while pending');
+    await cold.page.waitForFunction(() => document.title === 'Fresh Seven - Roblox');
+  } finally { await cold.context.close(); }
 }
 
 (async () => {
@@ -156,7 +172,7 @@ async function runSharedIntegration(browser) {
   try {
     for (const testCase of cases) await runCase(browser, testCase);
     await runSharedIntegration(browser);
-    console.log('PASS: cached own and peer profile titles apply before DOMContentLoaded, while disabled and expired cache entries leave native titles intact.');
+    console.log('PASS: cached titles load immediately, uncached/expired titles stay neutral until resolved, and disabled/non-Larp profiles restore native titles.');
   } finally {
     await browser.close();
   }
