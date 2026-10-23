@@ -388,5 +388,5 @@
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { lastPoll = 0; scan(); } });
   setInterval(scan, 2000);
   setInterval(flushProfile, 60000);
-  globalThis.LarpbloxSharedUsers = {update, publishProfile};
+  globalThis.LarpbloxSharedUsers = {update, publishProfile, getProfileDiagnostics: () => portraits.get(profileId())?.getDiagnostics?.()};
 })();

@@ -735,7 +735,7 @@ export async function create(host, descriptorUrl, options = {}) {
     const size = box.getSize(new THREE.Vector3());
     const radius = Math.max(size.length() / 2, 0.5);
     const effectItems = (options.items || []).filter(item => options.definition?.assets?.some(asset=>Number(asset.id)===Number(item.id)));
-    if (effectItems.length) {
+    if (options.effects !== false && effectItems.length) {
       const effectsController = new AbortController(), abortEffects = () => effectsController.abort();
       signal.addEventListener('abort',abortEffects,{once:true});
       const timer=setTimeout(abortEffects,3000);
@@ -801,7 +801,7 @@ export async function create(host, descriptorUrl, options = {}) {
           }
         }
         if (generation !== styleGeneration || disposed) return false;
-        smokestackEffect = seasonalHatEffect(scene, parts, season);
+        if (options.effects !== false) smokestackEffect = seasonalHatEffect(scene, parts, season);
         appliedHatSeason = season;
         render();
         return true;

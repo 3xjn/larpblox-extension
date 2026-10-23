@@ -26,6 +26,12 @@ const obj=new OBJExporter().parse(root),xml=fs.readFileSync(path.join(__dirname,
  const host=document.querySelector('#host'),definition={assets:[{id:215718515}]},kinds=['headshot','fullBody'];
  const plain=await LarpbloxAvatar3D.create(host,'https://t0.rbxcdn.com/descriptor',{static:true,definition});
  const before=kinds.map(k=>plain.capture(k));plain.dispose();
+ for(const staticView of [false,true]) {
+ const noEffects=await LarpbloxAvatar3D.create(host,'https://t0.rbxcdn.com/descriptor',{static:staticView,definition,items:[{id:215718515,assetType:8}],effects:false});
+ if(JSON.stringify(noEffects.getDiagnostics().gearEffects)!=='[]')throw new Error('Effects must be absent when disabled');
+ if(noEffects.capture('headshot')!==before[0])throw new Error('Disabled effects must leave native headshot unchanged');
+ noEffects.dispose();
+ }
  const viewer=await LarpbloxAvatar3D.create(host,'https://t0.rbxcdn.com/descriptor',{static:true,definition,items:[{id:215718515,assetType:8}]});
  const after=kinds.map(k=>viewer.capture(k)),diagnostics=viewer.getDiagnostics().gearEffects;
  for(const src of [...before,...after]){const img=new Image();img.src=src;document.querySelector('#images').append(img);}

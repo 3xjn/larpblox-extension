@@ -523,7 +523,7 @@
       return;
     }
     if (message.type === 'larpblox-popup-avatar-details') {
-      if (!previewViewer?.getDiagnostics) { respond({ok:false, error:'Open the Avatar page and wait for your 3D Larp avatar to load first.'}); return; }
+      if (!previewViewer?.getDiagnostics && !globalThis.LarpbloxSharedUsers?.getProfileDiagnostics?.()?.render?.descriptor) { respond({ok:false, error:'Open the Avatar page and wait for your 3D Larp avatar to load first, or open the affected profile in 3D.'}); return; }
       try { savePreviewDetails(); respond({ok:true, ...popupState()}); }
       catch (error) { respond({ok:false, error:error.message}); }
       return;
@@ -1563,6 +1563,7 @@
   }
   function savePreviewDetails() {
     const data = {...(previewViewer?.getDiagnostics?.() || {}),
+      profilePreview: globalThis.LarpbloxSharedUsers?.getProfileDiagnostics?.(),
       extensionVersion: extensionRuntime?.getManifest?.().version,
       websiteVersion: extensionRuntime?.getManifest?.().websiteVersion,
       route: location.pathname, userId, mode: state?.mode, equipped: state?.equipped,

@@ -7,12 +7,12 @@
   let cache, retryTimer, activeKey = '', activeAccount = '', lastFailure = '';
   let status = {stage: 'not-started'};
   const hasTeapot = definition => definition?.assets?.some(asset => Number(asset.id) === 1055299);
-  const pictureKey = definition => (globalThis.LarpbloxAvatarRequests?.definitionKey?.(definition) || JSON.stringify(definition)) + ':materials-v2:gear-portraits-v5' + (hasTeapot(definition) ? ':teapot-mesh-v1' : '');
+  const pictureKey = definition => (globalThis.LarpbloxAvatarRequests?.definitionKey?.(definition) || JSON.stringify(definition)) + ':materials-v2:gear-portraits-v6' + (hasTeapot(definition) ? ':teapot-mesh-v1' : '');
   const localHat = definition => definition?.assets?.some(asset => [169444515,1055299].includes(Number(asset.id)));
   function savedPictures(userId, definition) {
     try {
       const saved = JSON.parse(localStorage.getItem(`larpblox-profile-pictures:${userId}`) || 'null');
-      if (saved?.version === 8 && (definition === undefined || saved.key === pictureKey(definition)) && saved.expires > Date.now() &&
+      if (saved?.version === 9 && (definition === undefined || saved.key === pictureKey(definition)) && saved.expires > Date.now() &&
           [saved.result.headshot,saved.result.fullBody,saved.result.transparentBody].every(url=>url?.startsWith('data:image/png')) &&
           saved.result.headshot !== saved.result.fullBody) return saved.result;
     } catch (_) {}
@@ -20,7 +20,7 @@
   function savePictures(userId, definition, result) {
     if (peer) return;
     try {
-      const saved = JSON.stringify({version:8, key:pictureKey(definition), expires:Date.now()+86400000, result});
+      const saved = JSON.stringify({version:9, key:pictureKey(definition), expires:Date.now()+86400000, result});
       if (result.headshot?.startsWith('data:image/png') && saved.length < 1500000) localStorage.setItem(`larpblox-profile-pictures:${userId}`, saved);
     } catch (_) {}
   }
@@ -160,7 +160,7 @@
     document.body.append(host);
     let viewer;
     try {
-      viewer = await LarpbloxAvatar3D.create(host, descriptor, {signal, static: true, definition, items, poseDescriptorUrl});
+      viewer = await LarpbloxAvatar3D.create(host, descriptor, {signal, static: true, effects: false, definition, items: [], poseDescriptorUrl});
       const headshot = viewer.capture('headshot'), fullBody = viewer.capture('fullBody');
       if (!headshot?.startsWith('data:image/png') || !fullBody?.startsWith('data:image/png')) throw new Error('Avatar capture failed.');
       const backgroundUrl = viewer.getBackgroundUrl?.();
@@ -217,7 +217,7 @@
         if (!descriptor) continue;
         const timer = setTimeout(()=>controller.abort(),10000);
         let viewer;
-        try { viewer = await LarpbloxAvatar3D.create(host, descriptor, {signal: controller.signal, definition, items, poseDescriptorUrl, background: !wide.includes(container)}); }
+        try { viewer = await LarpbloxAvatar3D.create(host, descriptor, {signal: controller.signal, effects: false, definition, items: [], poseDescriptorUrl, background: !wide.includes(container)}); }
         finally { clearTimeout(timer); }
         if (activeKey !== key || controller.signal.aborted || !container.isConnected) { viewer.dispose(); removePreview(container, record); continue; }
         record.viewer = viewer;
@@ -225,7 +225,11 @@
         host.querySelector('canvas')?.classList.add('larpblox-own-avatar-canvas');
         hideNative(container,record);
       } catch (_) {
-        if (previews.get(container) === record) { record.retryAt=Date.now()+5000; message.textContent='3D unavailable. Retrying…'; }
+        if (previews.get(container) === record) {
+          record.retryAt=Date.now()+5000;
+          const message = host.querySelector('.larpblox-profile-preview-status');
+          if (message) message.textContent='3D unavailable. Retrying…';
+        }
       }
       finally { finish(); }
     }
@@ -285,15 +289,17 @@
         const previous = savedPictures(userId, definition);
         const customHat = localHat(definition);
         let flat = !customHat && (globalThis.LarpbloxAvatarRequests?.cached?.(definition,userId,'2d') || options.imageUrl);
+        let nativePictures;
         // A cold profile must not depend on a 3D render before it can show any
         // avatar. Get a matching still first, then enhance it with the model.
-        if (!customHat && !previous && !flat && !globalThis.LarpbloxAvatarRequests?.cached?.(definition,userId,'3d')) {
+        if (!customHat && !previous && !flat) {
           try { flat = await render(definition, userId, controller.signal, '2d'); }
           catch (error) { if (controller.signal.aborted) throw error; }
         }
         if (previous || flat) {
           try {
-            entry.result = previous || await flatPictures(flat, controller.signal, definition);
+            nativePictures = previous || await flatPictures(flat, controller.signal, definition);
+            entry.result = nativePictures;
             savePictures(userId, definition, entry.result);
             if (cache === entry && !controller.signal.aborted) update(options);
           } catch (error) { if (controller.signal.aborted) throw error; }
@@ -306,6 +312,10 @@
         let result;
         try { result = await pictures(descriptor, modelController.signal, definition, options.items, poseDescriptorUrl); }
         finally { clearTimeout(timer); controller.signal.removeEventListener('abort',abort); }
+        if (nativePictures && !customHat) {
+          result.fullBody = nativePictures.fullBody;
+          if (!definition.backgroundRequestModel?.id) result.transparentBody = nativePictures.transparentBody;
+        }
         if (cache !== entry || controller.signal.aborted) throw new Error('Avatar preview cancelled.');
         entry.result = result; savePictures(userId, definition, result);
         update(options);
@@ -355,6 +365,8 @@
   }
   function getDiagnostics() {
     return {...status, account: activeAccount, trackedImages: records.size,
+      render: cache?.result && {descriptor:cache.result.descriptor, poseDescriptorUrl:cache.result.poseDescriptorUrl, definition:cache.result.definition, items:cache.result.items},
+      viewers: [...previews.values()].map(record=>record.viewer?.getDiagnostics?.()).filter(Boolean),
       candidates: [...document.querySelectorAll(imageSelector)].map(image => {
         const ancestors = [];
         for (let node = image, depth = 0; node && depth < 7; node = node.parentElement, depth++) {

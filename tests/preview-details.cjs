@@ -63,6 +63,15 @@ const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCA
     assert.equal(details.objText, 'v 0 0 0\\nf 1 1 1');
     assert.equal(details.definition.playerAvatarType.playerAvatarType, 'R15');
     assert.deepEqual(details.definition.assets.map(asset => asset.id), [HEAD_ID, GEAR_ID]);
+    await page.evaluate(() => {
+      window.LarpbloxSharedUsers = {getProfileDiagnostics:()=>({render:{descriptor:'native-peer-descriptor',definition:{assets:[{id:99119240}]}},viewers:[{objText:'peer native mesh',gearPose:{applied:true}}]})};
+    });
+    const profileDownloadPromise=page.waitForEvent('download');
+    await page.evaluate(()=>new Promise(resolve=>window.__popupListener({type:'larpblox-popup-avatar-details'},{},resolve)));
+    const profileDownload=await profileDownloadPromise;
+    const profileDetails=JSON.parse(require('node:fs').readFileSync(await profileDownload.path(),'utf8'));
+    assert.equal(profileDetails.profilePreview.render.descriptor,'native-peer-descriptor');
+    assert.equal(profileDetails.profilePreview.viewers[0].objText,'peer native mesh');
     console.log('PASS: avatar preview details action reports a cold viewer, then downloads the R15 mesh with dynamic head and gear IDs.');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
