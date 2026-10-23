@@ -7,7 +7,7 @@
   let cache, retryTimer, activeKey = '', activeAccount = '', lastFailure = '';
   let status = {stage: 'not-started'};
   const hasTeapot = definition => definition?.assets?.some(asset => Number(asset.id) === 1055299);
-  const pictureKey = definition => (globalThis.LarpbloxAvatarRequests?.definitionKey?.(definition) || JSON.stringify(definition)) + ':materials-v2:gear-portraits-v4' + (hasTeapot(definition) ? ':teapot-mesh-v1' : '');
+  const pictureKey = definition => (globalThis.LarpbloxAvatarRequests?.definitionKey?.(definition) || JSON.stringify(definition)) + ':materials-v2:gear-portraits-v5' + (hasTeapot(definition) ? ':teapot-mesh-v1' : '');
   const localHat = definition => definition?.assets?.some(asset => [169444515,1055299].includes(Number(asset.id)));
   function savedPictures(userId, definition) {
     try {

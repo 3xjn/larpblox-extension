@@ -13,15 +13,15 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE || 'playwright');
   await page.addScriptTag({path:path.resolve(__dirname,'../larpbux-avatar-surfaces.js')});
   await page.evaluate(async peer=>{
    const surface=peer?LarpbloxAvatarSurfaces.createForPeer():LarpbloxAvatarSurfaces;
-   await surface.update({userId:'123',active:true,signature:'crimson',items:[{id:99119240,assetType:19},{id:999,assetType:8}],loadDefinition:async()=>({assets:[{id:99119240}]})});
+   await surface.update({userId:'123',active:true,signature:'effects',items:[{id:99119240,assetType:19},{id:999,assetType:8},{id:998,assetType:8}],loadDefinition:async()=>({assets:[{id:99119240},{id:999}]})});
   },peer);
   assert.equal(await page.locator('#head').getAttribute('src'),'data:image/png;base64,headshot');
   assert.equal(await page.locator('#body').getAttribute('src'),'data:image/png;base64,fullBody');
   const calls=await page.evaluate(()=>calls.map(c=>({static:c.static,items:c.items,poseDescriptorUrl:c.poseDescriptorUrl})));
   assert.equal(calls.length,2,'both static portrait capture and live full-profile viewer are enhanced');
   for(const call of calls)assert.equal(call.poseDescriptorUrl,'pose-descriptor','static and interactive profiles use the same restored pose');
-  for(const call of calls)assert.deepEqual(call.items,[{id:99119240,assetType:19}],'only equipped effect items reach each viewer');
+  for(const call of calls)assert.deepEqual(call.items,[{id:99119240,assetType:19},{id:999,assetType:8}],'only equipped effect items reach each viewer');
   await page.close();
  }
- console.log('PASS: own and peer profiles pass equipped gear to headshot captures and the full-avatar viewer.');
+ console.log('PASS: own and peer profiles pass equipped gear and hats to headshot captures and the full-avatar viewer.');
 }finally{await browser.close();}})().catch(e=>{console.error(e);process.exitCode=1;});

@@ -374,11 +374,15 @@ export function headshotFrame(root, avatarBox) {
   const headSize = bounds.getSize(new THREE.Vector3());
   const target = bounds.getCenter(new THREE.Vector3());
   const bottom = bounds.min.y - headSize.y * 0.25;
-  const top = Math.max(bounds.max.y, avatarBox.max.y);
+  // Include hat flames in the portrait without letting held gear change its crop.
+  const hatEffects = new THREE.Box3();
+  root.traverse(node => {if(node.userData.avatarEffectAssetType === 8) hatEffects.union(new THREE.Box3().setFromObject(node.parent));});
+  const top = Math.max(bounds.max.y, avatarBox.max.y, hatEffects.isEmpty() ? -Infinity : hatEffects.max.y);
   // Center the head-and-headwear region; centering only the face leaves
   // an equally tall empty region below it and pulls the torso into the portrait.
   target.y = (bottom + top) / 2;
-  const radius = Math.max(Math.hypot(headSize.x / 2, Math.max(top - target.y, target.y - bottom)), headSize.z / 2, 0.25) * 1.1;
+  const halfWidth = hatEffects.isEmpty() ? headSize.x / 2 : Math.max(headSize.x / 2, target.x-hatEffects.min.x,hatEffects.max.x-target.x);
+  const radius = Math.max(Math.hypot(halfWidth, Math.max(top - target.y, target.y - bottom)), headSize.z / 2, 0.25) * 1.1;
   return {target, radius};
 }
 
@@ -598,7 +602,17 @@ export function restoreGearPose(original, posed) {
     const positions=node.geometry.getAttribute('position'),index=node.geometry.index;
     const reference={uvs:[],positions:Array.from({length:index?.count || positions.count},(_,i)=>new THREE.Vector3().fromBufferAttribute(positions,index?index.getX(i):i).toArray()).flat()};
     const match=matchEffectMesh(posed,reference,{scale:{x:1,y:1,z:1},offset:{x:0,y:0,z:0}});
-    if (match && !/^Player\d+$/i.test(match.node.name))headwear.push({node,placeholder:match.node});
+    if (match && !/^Player\d+$/i.test(match.node.name)) {
+      // A raised gear can occupy the headwear region. Preserve the native
+      // posed mesh whenever it moves independently of the head/torso.
+      const center=bounds.getCenter(new THREE.Vector3());
+      const followsHead=[new THREE.Vector3(),new THREE.Vector3(1,0,0),new THREE.Vector3(0,1,0),new THREE.Vector3(0,0,1)].every(axis=>{
+        const point=center.clone().add(axis);
+        const mapped=match.node.localToWorld(match.mapPosition(node.worldToLocal(point.clone())));
+        return mapped.distanceTo(point.add(offset))<.02;
+      });
+      if (followsHead) headwear.push({node,placeholder:match.node});
+    }
   });
   for(const item of headwear){item.node.position.add(offset);original.attach(item.placeholder);posed.attach(item.node);}
   head.position.add(offset);

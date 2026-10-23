@@ -45,3 +45,6 @@ const hiddenHead=swordPose.getObjectByName('Player1');hiddenHead.geometry.dispos
 const headlessSwordFrame=headshotFrame(swordPose,new THREE.Box3().setFromObject(swordPose));
 assert.ok(Math.abs(headlessSwordFrame.target.x)<1e-9,'a raised Periastron hand must not replace a tiny Headless head either');
 console.log('PASS: headshots center on the actual offset head, ignore taller accessory meshes as head candidates, retain headwear, and handle headless exports.');
+
+const flames=new THREE.Group();flames.userData.avatarEffectAssetType=8;const horn=root.getObjectByName('Handle2');horn.add(flames);const flame=new THREE.Sprite(new THREE.SpriteMaterial());flame.position.set(0,3,0);flame.scale.set(2,2,2);flames.add(flame);root.updateMatrixWorld(true);
+const fireFrame=headshotFrame(root,box);assert.ok(fireFrame.radius>frame.radius,'hat fire receives room in the portrait');assert.ok(fireFrame.target.y>frame.target.y,'portrait includes rising hat flames');

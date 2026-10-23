@@ -22,6 +22,26 @@ const emitterXml = '<roblox><Item class="Part"><Properties><string name="Name">H
 const parsedEmitter = parseGearEffects(emitterXml);
 assert.equal(parsedEmitter.staticEffects.filter(effect => effect.kind === 'particleEmitter').length, 1);
 assert.equal(parsedEmitter.staticEffects.find(effect => effect.kind === 'particleEmitter').textureId, '12345');
+const fieryHornsXml = fs.readFileSync(path.join(__dirname, 'fixtures/gear-effects/fiery-horns.xml'), 'utf8');
+const fieryHorns = parseGearEffects(fieryHornsXml);
+assert.equal(fieryHorns.mesh.id, '215680403');
+const fire = fieryHorns.staticEffects.find(effect => effect.kind === 'fire');
+assert.deepEqual(fire.color, {r:236 / 255, g:139 / 255, b:70 / 255});
+assert.deepEqual(fire.secondaryColor, {r:139 / 255, g:80 / 255, b:55 / 255});
+assert.equal(fire.size, 3);
+assert.equal(fire.heat, 8);
+const fieryRoot = new THREE.Group();
+const fieryHandle = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1)); fieryHandle.name = 'GearHandle'; fieryRoot.add(fieryHandle); fieryRoot.updateMatrixWorld(true);
+const fieryResult = await addAvatarEffects(fieryRoot, [{id:215718515, assetType:8}], {
+  deliveryUrl: async () => `data:text/xml,${encodeURIComponent(fieryHornsXml)}`,
+  readMesh: async id => ({id, positions:[0,0,0], uvs:[]}),
+  matchMesh: () => ({node:fieryHandle, mapPosition: position => position.add(new THREE.Vector3(0, 2, 0))}),
+});
+assert.equal(fieryResult.diagnostics[0].attached, true);
+assert.equal(fieryResult.diagnostics[0].effects[0], 'fire');
+assert.equal(fieryHandle.children.filter(child => child.name === 'LarpbloxGearFire').length, 1);
+fieryResult.update(2);
+fieryResult.dispose();
 const fixtureUrl = `data:text/xml,${encodeURIComponent(xml)}`;
 const root = new THREE.Group();
 const exported = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 5)); exported.name = 'GearHandle'; root.add(exported); root.updateMatrixWorld(true);
@@ -34,10 +54,15 @@ assert.equal(result.diagnostics[0].attached, true);
 assert.equal(exported.children.filter(child => child.name.includes('Gear')).length, 2);
 const light = exported.children.find(child => child.name === 'LarpbloxGearPointLight');
 assert.deepEqual(light.position.toArray(), [4,2,-3]);
-const beforeBounds = new THREE.Box3().setFromObject(root);
+const sparkle=exported.children.find(child=>child.name==='LarpbloxGearSparkles');
+const initialPositions=Array.from(sparkle.geometry.getAttribute('position').array);
+result.update(2);
+assert.notDeepEqual(Array.from(sparkle.geometry.getAttribute('position').array),initialPositions,'Sparkles must emit/move, not only change overall opacity');
+assert.ok(sparkle.material.size>=.45,'native sparkle texture must remain visible at profile-image size');
+const beforeBounds = new THREE.Box3().setFromBufferAttribute(exported.geometry.getAttribute('position'));
 const before = exported.children.find(child => child.name === 'LarpbloxGearSparkles').rotation.y;
 result.update(1); assert.notEqual(exported.children.find(child => child.name === 'LarpbloxGearSparkles').material.opacity, .9);
-assert.deepEqual(new THREE.Box3().setFromObject(root).min.toArray(), beforeBounds.min.toArray());
+assert.deepEqual(new THREE.Box3().setFromBufferAttribute(exported.geometry.getAttribute('position')).min.toArray(), beforeBounds.min.toArray());
 result.dispose(); assert.equal(exported.children.length, 0);
 const unmatched = await addAvatarEffects(new THREE.Group(), [{id:99119240, assetType:19}], {deliveryUrl: async () => fixtureUrl, readMesh: async () => ({}), matchMesh: () => null});
 assert.equal(unmatched.diagnostics[0].attached, false);

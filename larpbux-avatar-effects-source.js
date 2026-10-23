@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import sparkleAsset from './assets/roblox-sparkles.json';
+import fireAsset from './assets/roblox-fire.json';
 
 let sparkleTexture;
 async function nativeSparkleTexture() {
@@ -24,6 +25,12 @@ const property = (body, tag, name) => {
 };
 const vector = body => ({x:number(body.match(/<X>([^<]*)<\/X>/)?.[1]), y:number(body.match(/<Y>([^<]*)<\/Y>/)?.[1]), z:number(body.match(/<Z>([^<]*)<\/Z>/)?.[1])});
 const color = body => ({r:number(body.match(/<R>([^<]*)<\/R>/)?.[1]), g:number(body.match(/<G>([^<]*)<\/G>/)?.[1]), b:number(body.match(/<B>([^<]*)<\/B>/)?.[1])});
+const fireColor = (body, name) => {
+  const channels = property(body, 'Color3', name);
+  if (/<R>/.test(channels)) return color(channels);
+  const value = Number(channels) >>> 0;
+  return {r:((value >>> 16) & 255) / 255, g:((value >>> 8) & 255) / 255, b:(value & 255) / 255};
+};
 const enabled = body => property(body, 'bool', 'Enabled').toLowerCase() === 'true';
 const sequence = body => (body.match(/[-+]?(?:\d*\.)?\d+(?:e[-+]?\d+)?/gi) || []).map(Number);
 const assetId = body => property(body, 'Content', 'Texture').match(/(?:id=|rbxassetid:\/\/)(\d+)/i)?.[1];
@@ -64,6 +71,10 @@ function parse(xml) {
     if (item.className === 'Sparkles') staticEffects.push({kind:'sparkles', name, color:color(property(item.body, 'Color3', 'SparkleColor'))});
     if (item.className === 'PointLight') staticEffects.push({kind:'pointLight', name, color:color(property(item.body, 'Color3', 'Color')), brightness:number(property(item.body, 'float', 'Brightness')), range:number(property(item.body, 'float', 'Range'))});
   }
+  for (const item of blocks(['Fire'], 'Part').filter(item => item.parent === handleIndex)) {
+    if (!enabled(item.body)) continue;
+    staticEffects.push({kind:'fire', name:property(direct(item.body), 'string', 'Name'), color:fireColor(item.body, 'Color'), secondaryColor:fireColor(item.body, 'SecondaryColor'), size:number(property(item.body, 'float', 'size_xml')), heat:number(property(item.body, 'float', 'heat_xml'))});
+  }
   const emitters = blocks(['ParticleEmitter']).filter(item => item.parent === handleIndex || nodes[item.parent]?.className === 'Attachment' && nodes[item.parent]?.parent === handleIndex)
     .filter(item => enabled(item.body)).map(item => ({kind:'particleEmitter', textureId:assetId(item.body), parentIndex:item.parent,
       rate:number(property(item.body, 'float', 'Rate')), lifetime:sequence(property(item.body, 'NumberRange', 'Lifetime')),
@@ -78,7 +89,7 @@ function parse(xml) {
     kind:'trail', name:property(direct(item.body), 'string', 'Name'),
     attachment0:property(item.body, 'Ref', 'Attachment0'), attachment1:property(item.body, 'Ref', 'Attachment1'),
   }));
-  return {mesh, attachments, staticEffects:[...staticEffects,...emitters], trails,
+  return {mesh, handleSize:handle ? vector(property(direct(handle.body),'Vector3','size') || property(direct(handle.body),'Vector3','Size')) : {x:1,y:1,z:1}, attachments, staticEffects:[...staticEffects,...emitters], trails,
     disabledEmitters:objectBlocks(xml, ['ParticleEmitter', 'Fire', 'Smoke']).filter(item => !enabled(item.body)).length};
 }
 
@@ -142,20 +153,60 @@ async function load(id, deliveryUrl, signal) {
   return cache.get(key);
 }
 
-async function pointSet(node, colorValue) {
-  const box = new THREE.Box3().setFromObject(node), center = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3());
-  const positions = [];
-  for (let i = 0; i < 12; i++) {
-    const a = i * 2.399963229728653;
-    const point = new THREE.Vector3(center.x + Math.cos(a) * size.x * .48, center.y + ((i % 4) - 1.5) * size.y * .22, center.z + Math.sin(a) * size.z * .48);
-    node.worldToLocal(point); positions.push(point.x, point.y, point.z);
-  }
-  const geometry = new THREE.BufferGeometry(); geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+async function pointSet(node, colorValue, mapPosition, handleSize) {
+  const count=24, geometry=new THREE.BufferGeometry();
+  const positions=new THREE.Float32BufferAttribute(new Float32Array(count*3),3);
+  geometry.setAttribute('position',positions);
+  const random=i=>{const value=Math.sin(i*127.1+311.7)*43758.5453;return value-Math.floor(value);};
   const color = new THREE.Color(colorValue.r, colorValue.g, colorValue.b).convertSRGBToLinear();
   const map=await nativeSparkleTexture();
   if (map) map.needsUpdate=true;
-  const material = new THREE.PointsMaterial({color, map, size:Math.max(size.length() * .055, .012), transparent:true, opacity:.9, depthWrite:false, blending:THREE.AdditiveBlending});
-  return new THREE.Points(geometry, material);
+  const origin=mapPosition(new THREE.Vector3());
+  const unit=node.localToWorld(mapPosition(new THREE.Vector3(0,1,0))).distanceTo(node.localToWorld(origin));
+  // Sparkles has no item-defined size/rate controls. Keep its native texture
+  // visible at avatar scale instead of shrinking it with a narrow sword mesh.
+  const material=new THREE.PointsMaterial({color,map,size:.5*unit,transparent:true,opacity:.9,depthWrite:false,blending:THREE.AdditiveBlending});
+  const points=new THREE.Points(geometry,material);
+  points.userData.tick=time=>{
+    for(let i=0;i<count;i++) {
+      const age=((Number(time)+i/count*2)%2+2)%2;
+      const point=new THREE.Vector3((random(i*3+1)-.5)*handleSize.x,(random(i*3+2)-.5)*handleSize.y,(random(i*3+3)-.5)*handleSize.z);
+      point.addScaledVector(new THREE.Vector3(random(i+71)-.5,random(i+91)-.2,random(i+113)-.5),age*.3);
+      const mapped=mapPosition(point);positions.setXYZ(i,mapped.x,mapped.y,mapped.z);
+    }
+    positions.needsUpdate=true;geometry.computeBoundingSphere();
+  };
+  points.userData.tick(1);
+  return points;
+}
+
+async function fireSet(node, effect, mapPosition) {
+  // Roblox's built-in Fire has no asset-defined texture or emission curve.
+  // Use its native flame texture and item colors/size/heat in the web preview.
+  const texture = typeof document === 'undefined' ? null : await new THREE.TextureLoader().loadAsync(fireAsset.dataUrl);
+  const group = new THREE.Group(), count = 24;
+  const origin = node.localToWorld(mapPosition(new THREE.Vector3()));
+  const unit = Math.max(node.localToWorld(mapPosition(new THREE.Vector3(0,1,0))).distanceTo(origin), .01);
+  const random = i => {const n=Math.sin(i*127.1+311.7)*43758.5453;return n-Math.floor(n);};
+  const primary = new THREE.Color(effect.color.r,effect.color.g,effect.color.b).convertSRGBToLinear();
+  const secondary = new THREE.Color(effect.secondaryColor.r,effect.secondaryColor.g,effect.secondaryColor.b).convertSRGBToLinear();
+  for(let i=0;i<count;i++) {
+    const material = new THREE.SpriteMaterial({map:texture,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending});
+    const sprite = new THREE.Sprite(material);group.add(sprite);
+    sprite.userData.tick = time => {
+      const phase=Number(time)*(.7+effect.heat*.04)+i/count, age=((phase%1)+1)%1;
+      // Emit around the Handle, then rise in world space even on a tilted hat.
+      const base = node.localToWorld(mapPosition(new THREE.Vector3((random(i*3+1)-.5)*effect.size*.35,0,(random(i*3+2)-.5)*effect.size*.25)));
+      base.y += age*unit*effect.size*.7;
+      sprite.position.copy(node.worldToLocal(base));
+      sprite.scale.setScalar(unit*Math.max(effect.size,0)*(.22+.12*(1-age))/Math.max(node.getWorldScale(new THREE.Vector3()).y,.001));
+      material.color.copy(primary).lerp(secondary,age);
+      material.opacity=.85*(1-age);
+    };
+  }
+  group.userData.tick=time=>group.children.forEach(sprite=>sprite.userData.tick(time));
+  group.userData.tick(1);
+  return group;
 }
 
 export async function addAvatarEffects(root, items, options = {}) {
@@ -165,7 +216,7 @@ export async function addAvatarEffects(root, items, options = {}) {
   const matchMesh = options.matchMesh;
   const owned = [...new Map((items || []).filter(item => [19, 8].includes(Number(item?.assetType)) && Number.isSafeInteger(Number(item?.id))).map(item => [Number(item.id), item])).values()]
     .sort((a,b) => Number(b.assetType) - Number(a.assetType)).slice(0, 20);
-  const records = [], objects = [], sparkles = [], emitters = [];
+  const records = [], objects = [], sparkles = [], emitters = [], fires = [];
   async function process(item) {
     if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
     try {
@@ -181,12 +232,14 @@ export async function addAvatarEffects(root, items, options = {}) {
       const mapPosition = match.mapPosition || (value => value.clone());
       for (const effect of data.staticEffects) {
         let object;
-        if (effect.kind === 'sparkles') object = await pointSet(node, effect.color);
+        if (effect.kind === 'sparkles') object = await pointSet(node, effect.color, mapPosition, data.handleSize);
+        else if (effect.kind === 'fire') object = await fireSet(node, effect, mapPosition);
         else if (effect.kind === 'particleEmitter') { try { object = await emitterPoints(node, effect, value => mapPosition(value), deliveryUrl, signal); } catch (_) { object = null; } if (!object) continue; }
         else { object = new THREE.PointLight(new THREE.Color(effect.color.r, effect.color.g, effect.color.b).convertSRGBToLinear(), effect.brightness, effect.range); object.position.copy(mapPosition(new THREE.Vector3())); }
         if (signal.aborted) {disposeObject(object);throw new DOMException('Aborted','AbortError');}
         object.name = `LarpbloxGear${effect.kind[0].toUpperCase()}${effect.kind.slice(1)}`;
-        node.add(object); objects.push(object); if (effect.kind === 'sparkles') sparkles.push(object);if(effect.kind==='particleEmitter')emitters.push(object);
+        object.userData.avatarEffectAssetType = Number(item.assetType);
+        node.add(object); objects.push(object); if (effect.kind === 'sparkles') sparkles.push(object);if(effect.kind==='particleEmitter')emitters.push(object);if(effect.kind==='fire')fires.push(object);
       }
       const attachmentPositions = [...data.attachments].map(([name, position]) => ({name, position:mapPosition(new THREE.Vector3(position.x, position.y, position.z)).toArray()}));
       records.push({id:Number(item.id), attached:true, meshId:data.mesh?.id, effects:data.staticEffects.map(e=>e.kind), trails:data.trails.length, attachmentPositions, disabledEmitters:data.disabledEmitters});
@@ -200,7 +253,7 @@ export async function addAvatarEffects(root, items, options = {}) {
   const dispose = () => { for (const object of objects) { object.removeFromParent();disposeObject(object); } };
   await Promise.allSettled(Array.from({length:Math.min(3, owned.length)}, worker));
   if (signal.aborted) { dispose(); throw new DOMException('Aborted', 'AbortError'); }
-  return {update(timeSeconds = 0) { for (const points of sparkles) points.material.opacity = .72 + .18 * (0.5 + 0.5 * Math.sin(Number(timeSeconds) * 2.1));for(const emitter of emitters)emitter.userData.tick(Number(timeSeconds)); }, dispose, diagnostics:records};
+  return {update(timeSeconds = 0) { for (const points of sparkles) { points.userData.tick(timeSeconds); points.material.opacity = .72 + .18 * (0.5 + 0.5 * Math.sin(Number(timeSeconds) * 2.1)); }for(const emitter of emitters)emitter.userData.tick(Number(timeSeconds));for(const fire of fires)fire.userData.tick(Number(timeSeconds)); }, dispose, diagnostics:records};
 }
 
 export {parse as parseGearEffects};

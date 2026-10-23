@@ -29,6 +29,18 @@ assert.ok(center(posed.getObjectByName('Player14')).distanceTo(originalHand)>1,'
 const raisedSource=fixture(),raisedTarget=fixture(),raisedHead=exportedHead(raisedSource),raisedHeadCenter=center(raisedHead);
 raisedTarget.getObjectByName('Player14').geometry.translate(0,4,0);
 assert.equal(restoreGearPose(raisedSource,raisedTarget),true);assert.ok(center(raisedHead).distanceTo(raisedHeadCenter)<1e-5,'a raised hand must not be used as the torso anchor');
+const crimsonSource=fixture(),crimsonTarget=fixture();
+const bytes=zlib.gunzipSync(fs.readFileSync(path.join(__dirname,'fixtures/gear-portrait/crimson-periastron.mesh.gz')));
+const native=m.exports.readSmokestackMesh(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength));
+const crimsonGeometry=new THREE.BufferGeometry();crimsonGeometry.setAttribute('position',new THREE.Float32BufferAttribute(native.positions,3));
+const gearBox=new THREE.Box3().setFromBufferAttribute(crimsonGeometry.getAttribute('position'));
+crimsonGeometry.translate(-2,105.3-gearBox.min.y,0);
+const oldCrimson=new THREE.Mesh(crimsonGeometry,new THREE.MeshBasicMaterial());oldCrimson.name='HandleCrimson';crimsonSource.add(oldCrimson);
+const nativeCrimson=new THREE.Mesh(crimsonGeometry.clone().translate(3,-1.5,-1),oldCrimson.material.clone());nativeCrimson.name='HandleCrimson';crimsonTarget.add(nativeCrimson);
+crimsonTarget.getObjectByName('Player14').geometry.translate(0,2,0);
+assert.equal(restoreGearPose(crimsonSource,crimsonTarget),true);
+assert.ok(nativeCrimson.parent===crimsonTarget,'the native posed Crimson must stay beside its posed hand');
+assert.ok(oldCrimson.parent===crimsonSource,'a raised gear must never be transplanted as headwear');
 const same=fixture(),sameTarget=fixture();assert.equal(restoreGearPose(same,sameTarget),false,'working pose is untouched');
 const partial=new THREE.Group();partial.add(new THREE.Mesh(new THREE.BoxGeometry()));assert.equal(restoreGearPose(partial,fixture()),false,'unknown export is not modified');
 console.log('PASS: captured R15 Sword Cane body adopts pose while retaining exact dynamic head/headwear geometry, material and fit; unchanged and unknown exports stay intact.');

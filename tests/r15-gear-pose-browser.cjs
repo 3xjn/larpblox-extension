@@ -1,10 +1,17 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),zlib=require('node:zlib'),esbuild=require('esbuild');
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE || 'playwright');
-const built=esbuild.buildSync({stdin:{contents:`import * as THREE from 'three';import {OBJLoader} from 'three/addons/loaders/OBJLoader.js';import {OBJExporter} from 'three/addons/exporters/OBJExporter.js';export {THREE,OBJLoader,OBJExporter};`,resolveDir:path.resolve(__dirname,'..')},bundle:true,platform:'node',format:'cjs',nodePaths:[path.resolve(__dirname,'../../renderer-build/node_modules')],write:false});
+const built=esbuild.buildSync({stdin:{contents:`import * as THREE from 'three';import {OBJLoader} from 'three/addons/loaders/OBJLoader.js';import {OBJExporter} from 'three/addons/exporters/OBJExporter.js';import {readSmokestackMesh} from './larpbux-avatar-3d-source.js';export {THREE,OBJLoader,OBJExporter,readSmokestackMesh};`,resolveDir:path.resolve(__dirname,'..')},bundle:true,platform:'node',format:'cjs',nodePaths:[path.resolve(__dirname,'../../renderer-build/node_modules')],write:false});
 const m={exports:{}};new Function('module','exports','require',built.outputFiles[0].text)(m,m.exports,require);
 const {THREE,OBJLoader,OBJExporter}=m.exports;
-const original=zlib.gunzipSync(fs.readFileSync(path.join(__dirname,'fixtures/r15-gear-pose/sword-cane-neutral.obj.gz'))).toString();
+let original=zlib.gunzipSync(fs.readFileSync(path.join(__dirname,'fixtures/r15-gear-pose/sword-cane-neutral.obj.gz'))).toString();
 const root=new OBJLoader().parse(original);
+const nativeBytes=zlib.gunzipSync(fs.readFileSync(path.join(__dirname,'fixtures/gear-portrait/crimson-periastron.mesh.gz')));
+const native=m.exports.readSmokestackMesh(nativeBytes.buffer.slice(nativeBytes.byteOffset,nativeBytes.byteOffset+nativeBytes.byteLength));
+const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(native.positions,3));
+const gearBox=new THREE.Box3().setFromBufferAttribute(geometry.getAttribute('position'));geometry.translate(-2,105.3-gearBox.min.y,0);
+const crimson=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial());crimson.name='HandleCrimson';crimson.material.name='Crimson';root.add(crimson);
+original=new OBJExporter().parse(root);
+crimson.geometry.translate(3,-1.5,-1);
 const move=new THREE.Matrix4().makeTranslation(0,103.8,0).multiply(new THREE.Matrix4().makeRotationX(-80*Math.PI/180)).multiply(new THREE.Matrix4().makeTranslation(0,-103.8,0));
 for(const name of ['Player10','Player12','Player14','Handle1'])root.getObjectByName(name).geometry.applyMatrix4(move);
 const head=root.getObjectByName('Player1'),p=new THREE.Box3().setFromObject(head).getCenter(new THREE.Vector3());head.geometry.translate(-p.x,-p.y,-p.z).scale(.7,.8,.7).translate(p.x,p.y,p.z);
@@ -13,6 +20,9 @@ const materials=[...new Set([...original.matchAll(/^usemtl (.+)$/gm)].map(x=>x[1
 (async()=>{const browser=await chromium.launch({channel:'chrome',headless:true});try{
 const page=await browser.newPage({viewport:{width:840,height:460}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
 await page.route('**/*',r=>{const u=r.request().url(),headers={'access-control-allow-origin':'*'};
+if(u.includes('/v2/assetId/'))return r.fulfill({json:{locations:[{location:'https://t0.rbxcdn.com/gear-'+u.split('/').pop()}]},headers:{'access-control-allow-origin':'null','access-control-allow-credentials':'true'}});
+if(u.endsWith('/gear-99119240'))return r.fulfill({headers,body:fs.readFileSync(path.join(__dirname,'fixtures/gear-effects/crimson-periastron-mu.xml'),'utf8')});
+if(u.endsWith('/gear-80557857'))return r.fulfill({headers,body:nativeBytes});
 if(u.endsWith('/original') || u.endsWith('/posed'))return r.fulfill({headers,json:{obj:u.endsWith('/posed')?'pose-mesh':'original-mesh',mtl:'materials',textures:[],camera:{fov:35}}});
 if(u.endsWith('/original-mesh'))return r.fulfill({headers,body:original});
 if(u.endsWith('/pose-mesh'))return r.fulfill({headers,body:posed});
@@ -23,10 +33,13 @@ await page.addScriptTag({path:process.env.TEST_AVATAR_RENDERER || path.resolve(_
 const result=await page.evaluate(async()=>{
  const a=await LarpbloxAvatar3D.create(document.querySelector('#before'),'https://t0.rbxcdn.com/original',{static:true});
  const b=await LarpbloxAvatar3D.create(document.querySelector('#after'),'https://t0.rbxcdn.com/original',{static:true,poseDescriptorUrl:'https://t0.rbxcdn.com/posed'});
- const out={applied:b.getDiagnostics().gearPose?.applied,changed:a.capture('fullBody')!==b.capture('fullBody'),head:b.capture('headshot')};
- window.viewers=[a,b];return out;
+ const enhanced=await LarpbloxAvatar3D.create(document.querySelector('#after'),'https://t0.rbxcdn.com/original',{static:true,poseDescriptorUrl:'https://t0.rbxcdn.com/posed',definition:{assets:[{id:99119240}]},items:[{id:99119240,assetType:19}]});
+ const effects=enhanced.getDiagnostics().gearEffects;
+ const captures=['headshot','fullBody'].map(kind=>enhanced.capture(kind)!==b.capture(kind));
+ const out={effects,captures,applied:b.getDiagnostics().gearPose?.applied,changed:a.capture('fullBody')!==b.capture('fullBody'),head:b.capture('headshot')};
+ window.viewers=[a,b,enhanced];return out;
 });
-assert.equal(result.changed,true,'the lowered gear pose must be replaced before capture');assert.equal(result.applied,true);assert.match(result.head,/^data:image\/png/);assert.deepEqual(errors,[]);
+assert.equal(result.changed,true,'the lowered gear pose must be replaced before capture');assert.equal(result.applied,true);assert.match(result.head,/^data:image\/png/);assert.deepEqual(errors,[]);assert.equal(result.effects[0]?.attached,true);assert.deepEqual(result.captures,[true,true],'restored native gear receives visible effects in both captures');
 await page.screenshot({path:path.resolve(__dirname,'../.test-artifacts/r15-gear-pose.png')});
 await page.evaluate(()=>viewers.forEach(v=>v.dispose()));
 console.log('PASS: browser loads captured R15 outfit plus pose descriptor and captures restored gear pose with original dynamic head.');
