@@ -62,7 +62,7 @@ jobs:
 
       - name: Package remote website and loader
         run: |
-          python3 scripts/package-website.py
+          python3 scripts/package-userscript.py
           mkdir -p /tmp/larpblox-loader/larpblox-extension
           cp website-bundle.json /tmp/larpblox-loader/larpblox-extension/
           archive="$PWD/Larpblox-Extension-$RELEASE_VERSION.zip"
@@ -75,7 +75,7 @@ jobs:
           gh release create "$RELEASE_TAG" "Larpblox-Extension-$RELEASE_VERSION.zip" website-release/* \
             --target "$RELEASE_SHA" \
             --title "Larpblox Extension $RELEASE_VERSION" \
-            --notes "Version $RELEASE_VERSION from the main branch. Download the source ZIP and extract it to use the unpacked Chrome extension." \
+            --notes "Version $RELEASE_VERSION from the main branch. Install the auto-updating userscript with Tampermonkey or Violentmonkey: https://github.com/$GITHUB_REPOSITORY/releases/download/main-latest/larpblox.user.js . The loader ZIP remains available as an alternative." \
             --prerelease \
             --latest=false
 
@@ -99,4 +99,6 @@ jobs:
           fi
 
           # Publish the pointer after its versioned payload is available.
+          gh release upload main-latest website-release/larpblox.user.js --clobber
+          gh release upload main-latest website-release/larpblox.meta.js --clobber
           gh release upload main-latest website-release/website-latest.json --clobber

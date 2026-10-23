@@ -10,7 +10,12 @@ import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "@/c
 import "./styles.css";
 
 declare global {
-  var LarpbloxPopupContext: {logo: string; version: string; settingsOpen: boolean; theme: "light" | "dark"; ready: () => void} | undefined;
+  var LarpbloxPopupContext: {
+    logo: string; version: string; settingsOpen: boolean; theme: "light" | "dark"; ready: () => void;
+    runtime?: {sendMessage: (message: Message) => Promise<any>};
+    tabs?: {query: (query: {active?: boolean; currentWindow?: boolean}) => Promise<Array<{id?: number; url?: string}>>};
+    userscript?: boolean; openUpdate?: () => void; root?: HTMLElement; container?: HTMLElement;
+  } | undefined;
 }
 
 type PopupState = {
@@ -45,6 +50,7 @@ const HAT_STYLES = [
 ];
 
 function UpdateSettings() {
+  const context = globalThis.LarpbloxPopupContext;
   const [result, setResult] = useState<{version?: string; loaderVersion?:string; enabled?: boolean; pendingReload?: boolean}>({});
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(true);
@@ -52,7 +58,7 @@ function UpdateSettings() {
   async function run(action: string) {
     setBusy(true); setError(false); setNotice("");
     try {
-      const reply = await chrome.runtime.sendMessage({type:"larpblox-website-update", action});
+      const reply = await (context?.runtime || chrome.runtime).sendMessage({type:"larpblox-website-update", action});
       if (!reply?.ok) throw new Error(reply?.error || "Could not check for updates.");
       if (action === "enable") return;
       setResult({...reply, loaderVersion:reply.loaderVersion || result.loaderVersion, pendingReload: reply.pendingReload ?? reply.updated === true});
@@ -62,11 +68,17 @@ function UpdateSettings() {
     finally { setBusy(false); }
   }
   useEffect(() => {
+    if (context?.userscript) { setBusy(false); return; }
     void run("status");
     const focus = () => void run("status");
     window.addEventListener("focus", focus);
     return () => window.removeEventListener("focus", focus);
   }, []);
+  if (context?.userscript) return <section aria-label="Userscript settings" className="update-settings">
+    <div className="update-heading"><h2>Userscript</h2></div>
+    <p className="notice">Version {context.version}. Update the userscript from your userscript manager.</p>
+    {context.openUpdate && <Button variant="outline" className="h-10 w-full" onClick={context.openUpdate}>Update userscript</Button>}
+  </section>;
   return <section aria-label="Extension settings" className="update-settings">
     <div className="update-heading">
       <h2>Updates</h2>
@@ -126,7 +138,7 @@ function App() {
   async function send(message: Message): Promise<PopupState> {
     if (tabId.current === undefined) throw new Error("Open a signed-in Roblox tab first.");
     let response: Reply;
-    try { response = await chrome.runtime.sendMessage({type:"larpblox-popup-relay", tabId:tabId.current, message}); }
+    try { response = await (globalThis.LarpbloxPopupContext?.runtime || chrome.runtime).sendMessage({type:"larpblox-popup-relay", tabId:tabId.current, message}) as Reply; }
     catch { throw new Error("Reload your Roblox tab, then reopen Larpblox."); }
     if (!response?.ok) throw new Error(response?.error || "Could not update Larpblox. Reload Roblox and try again.");
     return response;
@@ -150,8 +162,9 @@ function App() {
     setPending("initialize");
     setNotice({ text: "Connecting to Roblox…" });
     try {
-      if (typeof chrome === "undefined" || !chrome.tabs) throw new Error("Open Larpblox from the extension button on a signed-in Roblox tab.");
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const tabs = globalThis.LarpbloxPopupContext?.tabs || globalThis.chrome?.tabs;
+      if (!tabs) throw new Error("Open Larpblox from the extension button on a signed-in Roblox tab.");
+      const [tab] = await tabs.query({ active: true, currentWindow: true });
       if (!tab?.id || !/^https:\/\/www\.roblox\.com\//i.test(tab.url || "")) throw new Error("Open a signed-in Roblox tab to manage your Larp settings.");
       tabId.current = tab.id;
       const next = await send({ type: "larpblox-popup-get-state" });
@@ -286,4 +299,9 @@ function App() {
   </main>;
 }
 
-createRoot(document.getElementById("root")!).render(<App />);
+export function renderUserscriptPopup(root: HTMLElement, context: NonNullable<typeof globalThis.LarpbloxPopupContext>) {
+  globalThis.LarpbloxPopupContext = {...context, root, container: context.container || root};
+  return createRoot(root).render(<App />);
+}
+
+if (!globalThis.LarpbloxPopupContext?.root) createRoot(document.getElementById("root")!).render(<App />);

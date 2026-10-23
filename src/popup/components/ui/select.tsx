@@ -125,7 +125,7 @@ export function SelectPopup({
   anchor?: SelectPrimitive.Positioner.Props["anchor"];
 }): React.ReactElement {
   return (
-    <SelectPrimitive.Portal {...portalProps}>
+    <SelectPrimitive.Portal container={globalThis.LarpbloxPopupContext?.container} {...portalProps}>
       <SelectPrimitive.Positioner
         align={align}
         alignItemWithTrigger={alignItemWithTrigger}

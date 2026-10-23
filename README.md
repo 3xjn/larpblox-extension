@@ -1,4 +1,40 @@
-# Current update
+# Larpblox userscript
+
+[![Install Larpblox](https://img.shields.io/badge/Install-Larpblox_userscript-e53935?style=for-the-badge)](https://github.com/3xjn/larpblox-extension/releases/download/main-latest/larpblox.user.js)
+
+[Visual installation guide](https://github.com/noahkcarmstrong-ops/larpblox/blob/main/docs/userscript-install.md)
+
+## Installation (automatic updates)
+
+1. Install [Tampermonkey](https://www.tampermonkey.net/) or [Violentmonkey](https://violentmonkey.github.io/). Follow its browser setup prompts.
+2. Disable the old Larpblox extension in your browser's Extensions page.
+3. Open [Install Larpblox](https://github.com/3xjn/larpblox-extension/releases/download/main-latest/larpblox.user.js) and click **Install** in your script manager.
+4. Refresh Roblox. Open the script manager's button and choose **Open Larpblox** for settings.
+
+The manager checks for updates using the script's update/download links. Keep
+its automatic updates enabled; timing depends on the manager. Future releases
+include all website code and hooks in one script, with no loader ZIP to replace.
+Existing Roblox-site Larpblox settings and outfits are reused in the same browser
+profile. Pairing reconnects automatically. Larpblox Desktop is still required
+for in-game syncing; the userscript replaces the browser extension only. If Chrome
+asks for **Local network access** on Roblox, choose **Allow** to connect Desktop.
+Tampermonkey and Violentmonkey are the intended managers; Greasemonkey is not
+yet supported. Disable the extension before enabling the script to avoid two
+copies changing the same page.
+
+Build locally with `npm run build` then `python scripts/package-userscript.py`.
+Run `node tests/userscript.cjs` with Playwright available. This checks the real
+built script with simulated manager/network APIs; the optional installed-manager check is `node tests/userscript-manager.cjs`
+with `TEST_CHROME_PATH`, `USERSCRIPT_MANAGER_DIR`, and (for Tampermonkey)
+`USERSCRIPT_MANAGER=tampermonkey`. Both installed managers passed with a local
+test Desktop service under restrictive Roblox-style browser security rules.
+This does not establish live gameplay or every-browser compatibility.
+
+# Extension installation (alternative)
+
+The unpacked extension remains available alongside the userscript.
+
+## Current extension update
 
 Larp dialogs and the extension popup follow Roblox's light or dark mode. The
 2016 theme option is temporarily removed; fresh installs and existing saved
