@@ -1,0 +1,15 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),zlib=require('node:zlib'),esbuild=require('esbuild');
+const built=esbuild.buildSync({stdin:{contents:fs.readFileSync(path.resolve(__dirname,'../larpbux-avatar-3d-source.js'),'utf8')+'\nexport {THREE,OBJLoader,exportedHead};',resolveDir:path.resolve(__dirname,'..')},bundle:true,platform:'node',format:'cjs',nodePaths:[path.resolve(__dirname,'../../renderer-build/node_modules')],write:false});
+const m={exports:{}};new Function('module','exports','require',built.outputFiles[0].text)(m,m.exports,require);
+const {THREE,OBJLoader,exportedHead,restoreGearPose}=m.exports;
+const load=name=>new OBJLoader().parse(zlib.gunzipSync(fs.readFileSync(path.join(__dirname,'fixtures/headless-periastron',name+'.obj.gz'))).toString());
+const source=load('original'),posed=load('posed'),head=source.getObjectByName('Player1'),torso=source.getObjectByName('Player7'),nativeTorso=posed.getObjectByName('Player7');
+assert.equal(exportedHead(source).name,'Player1','Headless Head must be identified from collapsed faces; its misleading bounds must not make the torso become the head');
+const positions=Array.from(nativeTorso.geometry.getAttribute('position').array);
+assert.equal(restoreGearPose(source,posed),true);
+assert.ok(torso.parent===source,'the old crouched torso must not be used as the replacement head');
+assert.ok(nativeTorso.parent===posed,'the native gear-posed torso must stay in the rendered model');
+assert.deepEqual(Array.from(nativeTorso.geometry.getAttribute('position').array),positions,'native torso shape stays intact');
+assert.ok(head.parent===posed,'the selected Headless Head remains equipped');
+assert.equal(posed.children.filter(n=>n.isMesh && /^Player\d+$/i.test(n.name)).length,15,'composed R15 body retains exactly its 15 parts');
+console.log('PASS: actual Headless Head/Crimson outfit preserves the native posed torso and selects the invisible head, not the crouched torso.');

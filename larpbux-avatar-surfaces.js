@@ -7,12 +7,12 @@
   let cache, retryTimer, activeKey = '', activeAccount = '', lastFailure = '';
   let status = {stage: 'not-started'};
   const hasTeapot = definition => definition?.assets?.some(asset => Number(asset.id) === 1055299);
-  const pictureKey = definition => (globalThis.LarpbloxAvatarRequests?.definitionKey?.(definition) || JSON.stringify(definition)) + ':materials-v2:gear-portraits-v6' + (hasTeapot(definition) ? ':teapot-mesh-v1' : '');
+  const pictureKey = definition => (globalThis.LarpbloxAvatarRequests?.definitionKey?.(definition) || JSON.stringify(definition)) + ':materials-v2:gear-portraits-v7' + (hasTeapot(definition) ? ':teapot-mesh-v1' : '');
   const localHat = definition => definition?.assets?.some(asset => [169444515,1055299].includes(Number(asset.id)));
   function savedPictures(userId, definition) {
     try {
       const saved = JSON.parse(localStorage.getItem(`larpblox-profile-pictures:${userId}`) || 'null');
-      if (saved?.version === 9 && (definition === undefined || saved.key === pictureKey(definition)) && saved.expires > Date.now() &&
+      if (saved?.version === 10 && (definition === undefined || saved.key === pictureKey(definition)) && saved.expires > Date.now() &&
           [saved.result.headshot,saved.result.fullBody,saved.result.transparentBody].every(url=>url?.startsWith('data:image/png')) &&
           saved.result.headshot !== saved.result.fullBody) return saved.result;
     } catch (_) {}
@@ -20,7 +20,7 @@
   function savePictures(userId, definition, result) {
     if (peer) return;
     try {
-      const saved = JSON.stringify({version:9, key:pictureKey(definition), expires:Date.now()+86400000, result});
+      const saved = JSON.stringify({version:10, key:pictureKey(definition), expires:Date.now()+86400000, result});
       if (result.headshot?.startsWith('data:image/png') && saved.length < 1500000) localStorage.setItem(`larpblox-profile-pictures:${userId}`, saved);
     } catch (_) {}
   }

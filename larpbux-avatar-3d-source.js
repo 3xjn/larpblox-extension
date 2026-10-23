@@ -102,7 +102,22 @@ function exportedHead(root) {
   });
   const center = body.getCenter(new THREE.Vector3());
   const bodyHeight=body.getSize(new THREE.Vector3()).y;
-  const headless=parts.find(({center:position,size})=>position.y>center.y && Math.max(size.x,size.y,size.z)<bodyHeight*.03);
+  const collapsed = part => {
+    const positions=part.geometry.getAttribute('position'), index=part.geometry.index;
+    const count=index?.count ?? positions?.count ?? 0;
+    if(count<3) return false;
+    const a=new THREE.Vector3(),b=new THREE.Vector3(),c=new THREE.Vector3();
+    for(let i=0;i+2<count;i+=3) {
+      a.fromBufferAttribute(positions,index?index.getX(i):i);
+      b.fromBufferAttribute(positions,index?index.getX(i+1):i+1).sub(a);
+      c.fromBufferAttribute(positions,index?index.getX(i+2):i+2).sub(a);
+      if(b.cross(c).lengthSq()>bodyHeight**4*1e-16) return false;
+    }
+    return true;
+  };
+  // Headless Head exports collapsed triangles at separate positions. Its box
+  // can be head-sized even though none of its faces have visible surface area.
+  const headless=parts.find(({part,center:position,size})=>position.y>center.y && (Math.max(size.x,size.y,size.z)<bodyHeight*.03 || collapsed(part)));
   // A gear pose can raise a hand above the face. Favor the upper body axis,
   // rather than letting that small, off-center hand become the portrait's head.
   const score = position => position.y - Math.hypot(position.x - center.x, position.z - center.z);
