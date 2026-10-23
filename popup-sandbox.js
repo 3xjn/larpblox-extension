@@ -21,11 +21,16 @@
         runtime:{sendMessage: value => request('message', value)},
         tabs:{query: value => request('activeTab', value)},
       };
-      globalThis.LarpbloxPopupContext = {logo:message.popup.logo, version:message.version, settingsOpen:message.settingsOpen,
+      document.documentElement.classList.toggle('dark', message.theme === 'dark');
+      document.documentElement.style.colorScheme = message.theme === 'dark' ? 'dark' : 'light';
+      globalThis.LarpbloxPopupContext = {logo:message.popup.logo, version:message.version, settingsOpen:message.settingsOpen, theme:message.theme,
         ready() { ready = true; send({type:'ready'}); }};
       const style = document.createElement('style'); style.textContent = message.popup.css; document.head.append(style);
       new ResizeObserver(() => send({type:'resize', height:Math.ceil(document.body.getBoundingClientRect().height)})).observe(document.body);
       const script = document.createElement('script'); script.textContent = message.popup.js; document.head.append(script);
+    } else if (message?.channel === channel && message.type === 'theme') {
+      document.documentElement.classList.toggle('dark', message.theme === 'dark');
+      document.documentElement.style.colorScheme = message.theme === 'dark' ? 'dark' : 'light';
     } else if (message?.channel === channel && message.type === 'reply') {
       const waiter = pending.get(message.id);
       if (!waiter) return;

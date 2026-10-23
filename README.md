@@ -1,3 +1,19 @@
+# Current update
+
+Larp dialogs and the extension popup follow Roblox's light or dark mode. The
+2016 theme option is temporarily removed; fresh installs and existing saved
+theme choices use Roblox's current appearance. Body-scale changes in the Larp
+avatar editor save with the outfit and update its previews and game sync.
+
+Existing users need the latest **Larpblox-Loader** ZIP from the public releases
+for the scale controls and popup theme support:
+
+1. Extract the new ZIP into your extension folder.
+2. Open `chrome://extensions` and click **Reload** on Larpblox.
+3. Refresh your Roblox tabs. If using the game client, reload Larpblox there too.
+
+Website-only **Check for updates** cannot replace the installed loader files.
+
 # Real avatar accessory stacking
 
 Accessory stacking is always enabled in Roblox's Avatar Editor, including with

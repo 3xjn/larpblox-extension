@@ -3,7 +3,7 @@
   if (globalThis.__larpbloxBodyColorsHooked) return;
   globalThis.__larpbloxBodyColorsHooked = true;
 
-  const PATHS = new Set(['/v1/avatar/set-body-colors', '/v2/avatar/set-body-colors', '/v4/avatar']);
+  const PATHS = new Set(['/v1/avatar/set-body-colors', '/v2/avatar/set-body-colors', '/v1/avatar/set-scales', '/v2/avatar/set-scales', '/v4/avatar']);
   const WAIT_MS = 15000;
   let sequence = 0;
 
@@ -35,12 +35,20 @@
   };
   // Current Roblox editor nests colors in its v4 avatar update model.
   const colorPayload = value => value?.avatarDefinition?.updateAvatarModel?.bodyColors ?? value?.bodyColor3s ?? value?.bodyColors;
+  const scalePayload = value => value?.avatarDefinition?.updateAvatarModel?.scales ?? value?.avatarDefinition?.updateAvatarModel?.bodyScales ?? value?.scales ?? value?.bodyScales ?? value?.bodyScale;
   const modernColors = body => {
     try {
       const value = parseBody(body);
       const colors = colorPayload(value);
       return colors !== undefined;
     } catch (_) { return false; }
+  };
+  const modernScales = body => { try { return scalePayload(parseBody(body)) !== undefined; } catch (_) { return false; } };
+  const validScales = scales => {
+    const value = scales?.scales || scales?.bodyScales || scales?.bodyScale || scales;
+    const aliases = new Set(['height','width','depth','head','bodyType','proportion'].flatMap(key => [key, `${key}Scale`, key === 'height' ? 'bodyHeightScale' : key === 'width' ? 'bodyWidthScale' : key === 'depth' ? 'bodyDepthScale' : key === 'proportion' ? 'bodyProportionScale' : key, key === 'height' ? 'BodyHeightScale' : key === 'width' ? 'BodyWidthScale' : key === 'depth' ? 'BodyDepthScale' : key === 'proportion' ? 'BodyProportionScale' : key[0].toUpperCase() + key.slice(1) + 'Scale', key[0].toUpperCase() + key.slice(1) + 'Scale']));
+    if (!value || !Object.keys(value).some(key => aliases.has(key)) || Object.entries(value).some(([key, entry]) => aliases.has(key) && (!Number.isFinite(Number(entry)) || Number(entry) < 0 || Number(entry) > 5))) throw new Error('Invalid body scale request.');
+    return value;
   };
   const validColors = colors => {
     const value = colors?.bodyColor3s || colors?.bodyColors || colors;
@@ -55,11 +63,11 @@
     return colors;
   };
   const responseJson = (ok, error) => ok ? {success: true} : {errors: [{message: error || 'The body color change was rejected.'}]};
-  const waitForPage = (colors, signal) => new Promise(resolve => {
+  const waitForPage = (type, payload, signal) => new Promise(resolve => {
     const id = `${Date.now()}-${++sequence}`;
     let timer;
     const finish = (ok, error, aborted = false) => {
-      clearTimeout(timer); document.removeEventListener('larpblox-body-colors-response', onResponse);
+      clearTimeout(timer); document.removeEventListener(type === 'scales' ? 'larpblox-avatar-scales-response' : 'larpblox-body-colors-response', onResponse);
       signal?.removeEventListener('abort', onAbort); resolve({ok, error, aborted});
     };
     const onResponse = event => {
@@ -67,13 +75,14 @@
       try { detail = typeof event.detail === 'string' ? JSON.parse(event.detail) : event.detail; } catch (_) { return; }
       if (detail?.id === id) finish(detail.ok === true, detail.error);
     };
-    const onAbort = () => finish(false, 'The body color change was cancelled.', true);
-    document.addEventListener('larpblox-body-colors-response', onResponse);
+    const onAbort = () => finish(false, `The body ${type === 'scales' ? 'scale' : 'color'} change was cancelled.`, true);
+    const eventName = type === 'scales' ? 'larpblox-avatar-scales-response' : 'larpblox-body-colors-response';
+    document.addEventListener(eventName, onResponse);
     if (signal?.aborted) { onAbort(); return; }
     signal?.addEventListener('abort', onAbort, {once: true});
     timer = setTimeout(() => finish(false, 'The body color change timed out.'), WAIT_MS);
-    document.dispatchEvent(new CustomEvent('larpblox-body-colors-request', {
-      detail: JSON.stringify({id, userId: userId(), colors}),
+    document.dispatchEvent(new CustomEvent(type === 'scales' ? 'larpblox-avatar-scales-request' : 'larpblox-body-colors-request', {
+      detail: JSON.stringify({id, userId: userId(), ...(type === 'scales' ? payload : {colors:payload})}),
     }));
   });
   const synthetic = async (body, signal) => {
@@ -83,7 +92,14 @@
       colors = validColors(colorPayload(parsed) ?? parsed);
     }
     catch (error) { return {ok: false, error: error.message}; }
-    return waitForPage(colors, signal);
+    return waitForPage('colors', colors, signal);
+  };
+  const syntheticScales = async (body, signal) => {
+    try {
+      const parsed = parseBody(body), scales = validScales(scalePayload(parsed) ?? parsed), colors = colorPayload(parsed);
+      return waitForPage('scales', {scales, ...(colors ? {colors:validColors(colors)} : {})}, signal);
+    }
+    catch (error) { return {ok:false, error:error.message}; }
   };
   const jsonResponse = result => new Response(JSON.stringify(responseJson(result.ok, result.error)), {
     status: result.ok ? 200 : 400,
@@ -99,9 +115,10 @@
     const method = String(init?.method || (input instanceof Request ? input.method : 'GET')).toUpperCase();
     let body = init?.body;
     if (body === undefined && input instanceof Request) body = await input.clone().text();
-    const modern = new URL(url).pathname === '/v4/avatar';
-    if (modern ? method !== 'PATCH' || !modernColors(body) : method !== 'POST') return nativeFetch.apply(this, arguments);
-    const result = await synthetic(body, init?.signal || (input instanceof Request ? input.signal : undefined));
+    const path = new URL(url).pathname, modern = path === '/v4/avatar', legacyScales = /\/avatar\/set-scales$/.test(path), legacyColors = /\/avatar\/set-body-colors$/.test(path);
+    const scales = (modern && method === 'PATCH' && modernScales(body)) || (legacyScales && method === 'POST');
+    if (modern ? method !== 'PATCH' || !modernColors(body) && !scales : method !== 'POST' || !legacyScales && !legacyColors) return nativeFetch.apply(this, arguments);
+    const result = scales ? await syntheticScales(body, init?.signal || (input instanceof Request ? input.signal : undefined)) : await synthetic(body, init?.signal || (input instanceof Request ? input.signal : undefined));
     if (result.aborted) throw new DOMException('The operation was aborted.', 'AbortError');
     return jsonResponse(result);
   };
@@ -121,13 +138,14 @@
   };
   XMLHttpRequest.prototype.send = function(body) {
     const request = this.__larpbloxBodyColorRequest;
-    const modern = request?.url && new URL(request.url).pathname === '/v4/avatar';
-    if (!active() || !request?.url || (modern ? request.method !== 'PATCH' || !modernColors(body) : request.method !== 'POST')) return xhrSend.apply(this, arguments);
+    const path = request?.url && new URL(request.url).pathname, modern = path === '/v4/avatar', legacyScales = /\/avatar\/set-scales$/.test(path || ''), legacyColors = /\/avatar\/set-body-colors$/.test(path || '');
+    const scales = (modern && request.method === 'PATCH' && modernScales(body)) || (legacyScales && request.method === 'POST');
+    if (!active() || !request?.url || (modern ? request.method !== 'PATCH' || !modernColors(body) && !scales : request.method !== 'POST' || !legacyScales && !legacyColors)) return xhrSend.apply(this, arguments);
     const xhr = this;
     const controller = new AbortController();
     let done = false;
     const finish = async () => {
-      const result = await synthetic(body, controller.signal);
+      const result = scales ? await syntheticScales(body, controller.signal) : await synthetic(body, controller.signal);
       if (done || result.aborted) return;
       done = true; xhr.__larpbloxBodyColorController = null; xhr.__larpbloxBodyColorAbort = null;
       const text = JSON.stringify(responseJson(result.ok, result.error));

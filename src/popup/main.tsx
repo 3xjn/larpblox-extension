@@ -10,7 +10,7 @@ import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "@/c
 import "./styles.css";
 
 declare global {
-  var LarpbloxPopupContext: {logo: string; version: string; settingsOpen: boolean; ready: () => void} | undefined;
+  var LarpbloxPopupContext: {logo: string; version: string; settingsOpen: boolean; theme: "light" | "dark"; ready: () => void} | undefined;
 }
 
 type PopupState = {
@@ -280,10 +280,6 @@ function App() {
         {status(countsNotice)}
         </div>
 
-        <div className="secondary-group space-y-2">
-        <Choice id="appearance" label="Website appearance" value={state.appearance} disabled={busy} items={[{ value: "modern", label: "Current Roblox" }, { value: "classic", label: "Classic Roblox (2016)" }]} onChange={appearance => void act("appearance", { type: "larpblox-popup-update", appearance })} />
-        <p className="help">Changes how Roblox looks in this browser.</p>
-        </div>
       </Disclosure>
     </>}
     </>}

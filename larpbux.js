@@ -292,6 +292,28 @@
     if (!changed) throw new Error('Choose a body color first.');
     return colors;
   }
+  function changedBodyScales(original, value) {
+    const source = value?.scales || value?.bodyScales || value?.bodyScale || value;
+    const scales = {...original};
+    const aliases = {
+      height:['height','heightScale','HeightScale','bodyHeightScale','BodyHeightScale'],
+      width:['width','widthScale','WidthScale','bodyWidthScale','BodyWidthScale'],
+      depth:['depth','depthScale','DepthScale','bodyDepthScale','BodyDepthScale'],
+      head:['head','headScale','HeadScale'],
+      bodyType:['bodyType','bodyTypeScale','BodyTypeScale'],
+      proportion:['proportion','proportionScale','ProportionScale','bodyProportionScale','BodyProportionScale'],
+    };
+    let changed = false;
+    for (const [name, keys] of Object.entries(aliases)) {
+      const key = keys.find(candidate => source?.[candidate] !== undefined);
+      if (!key) continue;
+      const number = Number(source[key]);
+      if (!Number.isFinite(number) || number < 0 || number > 5) throw new Error('This body scale could not be loaded. Try another value.');
+      scales[name] = number; changed = true;
+    }
+    if (!changed) throw new Error('Choose a body scale first.');
+    return scales;
+  }
   function gameOutfitMatches(snapshot, command) {
     const defaultSlots = [...animationAssetTypes, ...bodyAssetTypes];
     const requested = new Set(outfitAssets(command.items).map(item => item.assetType === 79 ? 17 : item.assetType));
@@ -321,7 +343,7 @@
     const backgrounds = state.items.filter(isBackground).map(({id, name}) => ({id, name}));
     return {version: 1, userId: String(userId), definition, backgroundId: definition.backgroundId || 0, backgrounds, items: definition.assets.map(asset => items.get(asset.id)).filter(Boolean).map(({id, name, assetType}) => ({id, name, assetType, itemType: 'Asset'}))};
   }
-  if (typeof module !== 'undefined' && module.exports) { module.exports = {changedBodyColors, addToCart, checkoutCart, changeUsername, localNames, localSocialCounts, amount, formatBalance, collect, equip, outfit, supportsOutfit, supportsCosmetic, isBackground, previewDefinition, matchesAvatarCategory, mergeGameSnapshot, gamePreviewDefinition, gameCommand, gameOutfitMatches, snapshotMatchesPending, smokestackStyle, hatStyleFor, hatStyleState, SMOKESTACK_HAT_ID, SMOKESTACK_STYLES}; return; }
+  if (typeof module !== 'undefined' && module.exports) { module.exports = {changedBodyColors, changedBodyScales, addToCart, checkoutCart, changeUsername, localNames, localSocialCounts, amount, formatBalance, collect, equip, outfit, supportsOutfit, supportsCosmetic, isBackground, previewDefinition, matchesAvatarCategory, mergeGameSnapshot, gamePreviewDefinition, gameCommand, gameOutfitMatches, snapshotMatchesPending, smokestackStyle, hatStyleFor, hatStyleState, SMOKESTACK_HAT_ID, SMOKESTACK_STYLES}; return; }
   let state, userId, panel, list, message, exportBox, purchaseDialog, previewElement, previewViewer, previewSignature, previewController;
   // Catalog Try On is deliberately separate from the saved Larp outfit.  It is
   // a disposable render only: no save(), bridge message, purchase, or equip is
@@ -814,6 +836,33 @@
         current = mergeGameSnapshot(current, look);
       }
       save({...current, gameLook:{...look, definition:{...look.definition, bodyColors:{...look.definition.bodyColors, ...patch}}}}, true);
+    } finally {clearTimeout(timeout);}
+  }
+  async function applyBodyScaleChange(request) {
+    const account = userId;
+    if (!editingLarp() || String(request.userId) !== String(account) || !/^\/my\/avatar\/?$/i.test(location.pathname)) throw new Error('Reopen the avatar editor with Larp mode on.');
+    const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 12000);
+    try {
+      const patch = changedBodyScales({}, request.scales);
+      let current = read(account);
+      if (!current.gameLook) {
+        const selected = outfitAssets(current.items.filter(item => current.equipped.includes(keyFor(item)) && supportsOutfit(item)));
+        await loadBrowserPreview(selected, controller.signal, current.backgroundId, Boolean(current.fullOutfitKey));
+      }
+      if (controller.signal.aborted || account !== userId || !editingLarp() || !/^\/my\/avatar\/?$/i.test(location.pathname)) throw new Error('Your avatar changed. Try the scale again.');
+      current = read(account);
+      if (!current.mode) throw new Error('Turn Larp mode on before changing scales.');
+      let look = current.gameLook;
+      if (!look) {
+        const {avatar, rules:baseRules} = await browserAvatarBase.promise;
+        const selected = outfitAssets(current.items.filter(item => current.equipped.includes(keyFor(item)) && supportsOutfit(item)));
+        const definition = previewDefinition(avatar, baseRules, selected, current.backgroundId, Boolean(current.fullOutfitKey));
+        const known = new Map((avatar.assets || []).map(item => [item.id, {id:item.id, name:item.name || 'Roblox item', assetType:item.assetType?.id, itemType:'Asset'}]));
+        for (const item of selected) known.set(item.id, item);
+        look = {version:1, userId:String(account), definition, items:definition.assets.map(asset => known.get(asset.id)).filter(item => item && Number.isInteger(item.assetType))};
+        current = mergeGameSnapshot(current, look);
+      }
+      save({...current, gameLook:{...look, definition:{...look.definition, scales:{...look.definition.scales, ...patch}}}}, true);
     } finally {clearTimeout(timeout);}
   }
   async function captureCharacter() {
@@ -2400,6 +2449,19 @@
         let error;
         try {await applyBodyColorChange(request);} catch (failure) {error = failure.message; if (message) message.textContent = error;}
         document.dispatchEvent(new CustomEvent('larpblox-body-colors-response', {detail:JSON.stringify({id:request.id, ok:!error, error})}));
+      });
+    });
+    let scaleQueue = Promise.resolve();
+    document.addEventListener('larpblox-avatar-scales-request', event => {
+      let request;
+      try {request = JSON.parse(event.detail);} catch (_) {return;}
+      scaleQueue = scaleQueue.catch(() => {}).then(async () => {
+        let error;
+        try {
+          if (request.colors) await applyBodyColorChange(request);
+          await applyBodyScaleChange(request);
+        } catch (failure) {error = failure.message; if (message) message.textContent = error;}
+        document.dispatchEvent(new CustomEvent('larpblox-avatar-scales-response', {detail:JSON.stringify({id:request.id, ok:!error, error})}));
       });
     });
     window.addEventListener('click',event=>{

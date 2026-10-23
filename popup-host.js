@@ -3,9 +3,19 @@
 (() => {
   const frame = document.querySelector('#popup');
   const recovery = document.querySelector('#recovery');
-  let channel, timer, generation = 0, activeTab, version, usingFallback = false;
+  let channel, timer, generation = 0, activeTab, version, usingFallback = false, themeMedia, themeMediaHandler;
   const allowedActions = new Set(['status','check','reload','enable']);
   const post = message => frame.contentWindow.postMessage({channel, ...message}, '*');
+  const osTheme = () => matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  async function pageTheme() {
+    const [tab] = await chrome.tabs.query({active:true,currentWindow:true});
+    activeTab = tab?.id;
+    if (!activeTab || !/^https:\/\/www\.roblox\.com\//i.test(tab?.url || '') || !chrome.tabs?.sendMessage) return null;
+    try {
+      const result = await chrome.tabs.sendMessage(activeTab, {type:'larpblox-popup-theme'});
+      return result?.theme === 'dark' || result?.theme === 'light' ? result.theme : null;
+    } catch { return null; }
+  }
   async function popupData(fallback) {
     const result = await chrome.runtime.sendMessage({type:'larpblox-website-update',action:fallback ? 'popup-fallback' : 'popup'});
     if (!result?.ok) throw new Error(result?.error || 'The popup could not be loaded.');
@@ -19,10 +29,19 @@
       if (current !== generation) return;
       version = data.version; usingFallback = fallback;
       channel = crypto.randomUUID();
+      const siteTheme = await pageTheme();
+      if (current !== generation) return;
+      const theme = siteTheme || osTheme();
+      if (themeMedia && themeMediaHandler) themeMedia.removeEventListener('change', themeMediaHandler);
+      themeMedia = siteTheme ? undefined : matchMedia('(prefers-color-scheme: dark)');
+      if (themeMedia) {
+        themeMediaHandler = () => post({type:'theme', theme:osTheme()});
+        themeMedia.addEventListener('change', themeMediaHandler);
+      } else themeMediaHandler = undefined;
       recovery.hidden = true;
       frame.hidden = false;
       frame.onload = () => {
-        post({type:'init', popup:data.popup, version:data.version, settingsOpen});
+        post({type:'init', popup:data.popup, version:data.version, settingsOpen, theme});
         timer = setTimeout(() => failed('The popup took too long to load.'), 10000);
       };
       frame.src = 'popup-sandbox.html?instance=' + channel;
