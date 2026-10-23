@@ -29,7 +29,8 @@
       ],
       "js": [
         "larpblox-real-avatar.js",
-        "larpbux-body-colors.js"
+        "larpbux-body-colors.js",
+        "larpblox-peer-identities.js"
       ],
       "run_at": "document_start",
       "world": "MAIN"

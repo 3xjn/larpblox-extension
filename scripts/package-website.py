@@ -20,8 +20,8 @@ def asset(match):
 
 css = "\n".join((root / name).read_text(encoding="utf-8") for name in sources["css"])
 css = re.sub(r"chrome-extension://__MSG_@@extension_id__/assets/([^'\")\s]+)", asset, css)
-# Client features use the stable data-request bridge introduced in API 3.
-loader_api = 3
+# API 4 requires the packaged MAIN-world peer identity reader.
+loader_api = 4
 payload = {"schema": 1, "version": version, "loaderApi": loader_api, "css": css,
            "scripts": [{"name": name, "code": (root / name).read_text(encoding="utf-8")} for name in sources["js"]]}
 payload["popup"] = {"schema": 1,
@@ -43,7 +43,7 @@ print(f"Built website {version}: {len(data):,} bytes")
 loader = output / f"Larpblox-Loader-{version}.zip"
 with zipfile.ZipFile(loader, "w", zipfile.ZIP_DEFLATED) as archive:
     for name in ("manifest.json", "larpbux-game-background.js", "larpbux-game-bridge.js",
-                 "remote-loader.js", "remote-bootstrap.js", "larpbux-body-colors.js", "larpblox-real-avatar.js", "popup.html",
+                 "remote-loader.js", "remote-bootstrap.js", "larpbux-body-colors.js", "larpblox-real-avatar.js", "larpblox-peer-identities.js", "popup.html",
                  "popup-host.js", "popup-sandbox.html", "popup-sandbox.js",
                  "website-bundle.json", "README.md", "THEME-LICENSE.txt",
                  "src/popup/LICENSE-COSS.txt", "src/popup/NOTICE.txt"):

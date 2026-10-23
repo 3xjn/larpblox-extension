@@ -43,10 +43,10 @@
     } catch { return undefined; }
   };
   const profileId = () => location.pathname.match(/^\/users\/([1-9]\d*)\/profile\/?$/)?.[1];
-  const identitySelector = 'a[href],[data-user-id],[data-userid],[data-target-user-id],[data-target-userid]';
-  const cardNameSelector = '.friend-name,.friends-carousel-display-name,.friend-display-name,.avatar-name,.avatar-card-label,.display-name,.user-name,.username,[data-testid="friend-name"]';
+  const identitySelector = 'a[href],[data-user-id],[data-userid],[data-target-user-id],[data-target-userid],[data-larpblox-peer-user-id]';
+  const cardNameSelector = '.player-name,.friend-name,.friends-carousel-display-name,.friend-display-name,.avatar-name,.avatar-card-label,.display-name,.user-name,.username,[data-testid="friend-name"]';
   function identityId(element) {
-    for (const key of ['data-user-id','data-userid','data-target-user-id','data-target-userid']) {
+    for (const key of ['data-user-id','data-userid','data-target-user-id','data-target-userid','data-larpblox-peer-user-id']) {
       const id = element.getAttribute(key);
       if (/^[1-9]\d{0,15}$/.test(id || '')) return id;
     }
@@ -55,7 +55,8 @@
   const profileSelector = '#profile-header-title-container-name,.stylistic-alts-username,.profile-header-title,.profile-header-username,.profile-header-display-name,[data-testid="profile-header-title"],[data-testid="profile-header-username"],[data-testid="profile-header-display-name"]';
   let titleState;
   const resolvedProfiles = new Set();
-  const cardSelector = '.friends-carousel-tile,.avatar-card-container';
+  const gamePeerSelector = '.game-card-friend-info .info-avatar .avatar-card,[data-testid^="game-tile-stats-"] .info-avatar .avatar-card,[data-testid="game-players-player-interaction-modal"] .interaction-item';
+  const cardSelector = '.friends-carousel-tile,.avatar-card-container,' + gamePeerSelector;
   // Roblox wraps native friend identities in a menu button; its contents are identity surfaces.
   const statusSelector = 'button:not(#friend-tile-button),.avatar-status,.presence-icon,[data-presence],[data-rblx-verified-badge-icon],[data-testid="verified-badge"],.larpblox-verified-badge';
   function cardIdentityId(card) {
@@ -66,7 +67,7 @@
     for (const card of document.querySelectorAll(cardSelector)) {
       const id = cardIdentityId(card);
       const record = records.get(id);
-      const native = !id || initialized && !context.userId || id === String(context.userId) || id && resolvedProfiles.has(id) && !record;
+      const native = !id && !card.matches(gamePeerSelector) || initialized && !context.userId || id === String(context.userId) || id && resolvedProfiles.has(id) && !record;
       const labels = [...card.querySelectorAll(cardNameSelector)].filter(label => !label.closest(statusSelector));
       const aliases = record?.name?.enabled ? [record.name.displayName,record.name.username,'@' + record.name.username] : [];
       const nameReady = native || record && (!aliases.length || labels.every(label => aliases.includes(label.textContent.trim())));
@@ -362,7 +363,7 @@
       if (renderSearch()) apply();
     });
   }
-  new MutationObserver(refreshSearchPlacement).observe(document, {childList:true, characterData:true, subtree:true, attributes:true, attributeFilter:['aria-busy','href','src','srcset','data-user-id','data-userid','data-target-user-id','data-target-userid']});
+  new MutationObserver(refreshSearchPlacement).observe(document, {childList:true, characterData:true, subtree:true, attributes:true, attributeFilter:['aria-busy','href','src','srcset','data-user-id','data-userid','data-target-user-id','data-target-userid','data-larpblox-peer-user-id']});
   document.addEventListener('load', refreshSearchPlacement, true);
   window.addEventListener('popstate', refreshSearchPlacement);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { lastPoll = 0; scan(); } });

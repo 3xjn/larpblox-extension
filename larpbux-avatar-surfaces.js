@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   function createSurfaces(peer = false) {
-  const imageSelector = '.avatar img, .avatar-card-image img, .avatar-headshot img, .profile-avatar-thumb img, .profile-avatar-image img, .profile-avatar-headshot img, .profile-avatar-left img, .user-profile-header-details-avatar-container img, a[href*="/users/"] img, [data-user-id] img, [data-userid] img, [data-target-user-id] img, [data-target-userid] img, .rbx2016-welcome-avatar, #nav-profile img, #navbar-avatar img';
+  const imageSelector = '.avatar img, .avatar-card-image img, .avatar-headshot img, .profile-avatar-thumb img, .profile-avatar-image img, .profile-avatar-headshot img, .profile-avatar-left img, .user-profile-header-details-avatar-container img, a[href*="/users/"] img, [data-larpblox-peer-user-id] img, [data-user-id] img, [data-userid] img, [data-target-user-id] img, [data-target-userid] img, .rbx2016-welcome-avatar, #nav-profile img, #navbar-avatar img';
   const records = new Map(), previews = new Map(), hiddenCanvases = new Map(), banners = new Map();
   let cache, retryTimer, activeKey = '', activeAccount = '', lastFailure = '';
   let status = {stage: 'not-started'};
@@ -73,7 +73,7 @@
     if (!peer && /^\/users\/profile\/edit\/?$/i.test(win.location?.pathname || '') && image === globalThis.LarpbloxIdentityGate?.editProfileImage(doc)) return true;
     if (image.classList?.contains('rbx2016-welcome-avatar')) return !peer;
     for (let node = image, depth = 0; node && depth < 10; node = node.parentElement, depth++) {
-      for (const key of ['data-user-id', 'data-userid', 'data-target-user-id', 'data-target-userid']) {
+      for (const key of ['data-user-id', 'data-userid', 'data-target-user-id', 'data-target-userid', 'data-larpblox-peer-user-id']) {
         const owner = node.getAttribute?.(key);
         if (owner) return String(owner) === String(userId);
       }

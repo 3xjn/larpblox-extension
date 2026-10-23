@@ -2,7 +2,7 @@
 // Packaged background code: downloaded code runs only through userScripts.
 (() => {
   'use strict';
-  const API = 3;
+  const API = 4;
   const KEY = 'larpblox-website-release';
   const SCRIPT = 'larpblox-website';
   const LATEST = 'https://github.com/3xjn/larpblox-extension/releases/download/main-latest/website-latest.json';
