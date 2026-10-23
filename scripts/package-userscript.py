@@ -33,6 +33,9 @@ header = f'''// ==UserScript==
 // ==/UserScript==
 '''
 parts = [header, "(() => { 'use strict'; if (location.origin === 'https://www.roblox.com' && window.top !== window) return; if (globalThis.__larpbloxWebsite || globalThis.__larpbloxUserscript) return; globalThis.__larpbloxUserscript = true; globalThis.__larpbloxWebsite = 'userscript';", (root/'userscript-runtime.js').read_text(encoding='utf-8').replace('__USERSCRIPT_VERSION__',json.dumps(version))]
+# Install the small synchronous title guard before background/page initialization.
+title_guard = (root/'profile-title-guard.js').read_text(encoding='utf-8')
+parts.append('if (location.origin === "https://www.roblox.com") { const installTitleGuard = () => { const node = document.createElement("input"); node.type="hidden"; node.setAttribute("onchange", '+json.dumps(title_guard)+'); document.documentElement.append(node); node.dispatchEvent(new Event("change")); node.remove(); }; if(document.documentElement) installTitleGuard(); else new MutationObserver((_,o)=>{if(document.documentElement){o.disconnect();installTitleGuard();}}).observe(document,{childList:true}); }')
 parts.append((root/'userscript-desktop.js').read_text(encoding='utf-8'))
 # Validators must exist before the background handlers start receiving requests.
 parts.append((root/'larpbux-game-bridge.js').read_text(encoding='utf-8'))

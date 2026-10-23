@@ -56,9 +56,16 @@
       : cached?.expires > Date.now() && cached.displayName);
     const resolved = resolvedTitles.get(id);
     const titleName = resolved || display;
+    const root = document.documentElement;
+    root.dataset.larpbloxTitleId = id;
     // An uncached profile must not expose its account name while the lookup runs.
-    if (!titleName && (disabled || state && !state.mode || resolvedTitles.has(id))) return;
+    if (!titleName && (disabled || state && !state.mode || resolvedTitles.has(id))) {
+      root.dataset.larpbloxTitleNative = 'true';
+      return;
+    }
     const shown = typeof titleName === 'string' && titleName ? `${titleName} - Roblox` : 'Roblox';
+    root.dataset.larpbloxTitleNative = 'false';
+    root.dataset.larpbloxTitleLock = shown;
     if (!earlyTitle) earlyTitle = {id, real:document.title, shown};
     else if (document.title !== earlyTitle.shown) earlyTitle.real = document.title;
     earlyTitle.shown = shown;
@@ -128,11 +135,11 @@
   }, resolveProfileTitle: (id, display) => {
       if (!id) return;
       resolvedTitles.set(String(id), display || null);
-      if (display) updateProfileTitle();
-    }, profileTitleSource: id => earlyTitle?.id === id ? earlyTitle.real : undefined,
+      updateProfileTitle();
+    }, profileTitleSource: id => document.documentElement?.dataset.larpbloxTitleSourceId === String(id) && document.documentElement.dataset.larpbloxTitleSource || (earlyTitle?.id === id ? earlyTitle.real : undefined),
     clearProfileTitle: id => {
       if (earlyTitle && earlyTitle.id === id) {
-        if (document.title === earlyTitle.shown) document.title = earlyTitle.real;
+        if (document.title === earlyTitle.shown) document.title = document.documentElement.dataset.larpbloxTitleSourceId === String(id) && document.documentElement.dataset.larpbloxTitleSource || earlyTitle.real;
         earlyTitle = undefined;
       }
     }};

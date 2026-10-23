@@ -11,6 +11,7 @@ try {
 const {chromium} = playwright;
 const identitySource = fs.readFileSync(process.env.IDENTITY_GATE_SOURCE || path.join(__dirname, '../identity-gate.js'), 'utf8');
 const sharedSource = fs.readFileSync(path.join(__dirname, '../larpbux-shared-users.js'), 'utf8');
+const guardSource = fs.readFileSync(path.join(__dirname, '../profile-title-guard.js'), 'utf8');
 
 const cases = [
   {
@@ -49,6 +50,7 @@ async function runCase(browser, testCase) {
         window.__titleAtDOMContentLoaded = document.title;
       }, {once: true});
     })();
+    ${guardSource}
     ${identitySource}
   `});
   await context.route('https://www.roblox.com/**', route => route.fulfill({
@@ -62,7 +64,16 @@ async function runCase(browser, testCase) {
   assert.equal(await page.evaluate(() => window.__titleAtDOMContentLoaded), testCase.expected, testCase.name);
   assert.equal(await page.title(), testCase.expected, testCase.name);
 
-  await page.evaluate(() => { document.title = 'Native rewrite - Roblox'; });
+  const synchronous = await page.evaluate(() => {
+    document.title = 'Native rewrite - Roblox';
+    const assignment = document.title;
+    document.querySelector('title').textContent = 'Native rewrite - Roblox';
+    const textContent = document.title;
+    document.querySelector('title').text = 'Native rewrite - Roblox';
+    return [assignment, textContent, document.title];
+  });
+  const protectedTitle = testCase.expected.startsWith('Native ') ? 'Native rewrite - Roblox' : testCase.expected;
+  assert.deepEqual(synchronous, [protectedTitle, protectedTitle, protectedTitle], `${testCase.name}: title writes must be blocked synchronously, before observers`);
   await page.waitForTimeout(50);
   const afterMutation = await page.title();
   if (!testCase.expected.startsWith('Native ')) {

@@ -47,7 +47,30 @@ assert.ok(extension && chromePath,'Set USERSCRIPT_MANAGER_DIR and TEST_CHROME_PA
   }
   await context.grantPermissions(['local-network-access'],{origin:'https://www.roblox.com'});
   const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
-  await page.route('https://www.roblox.com/**',r=>r.fulfill({contentType:'text/html',headers:{'Content-Security-Policy':"script-src 'self' 'unsafe-inline'; connect-src 'self'; style-src 'self' 'unsafe-inline'; upgrade-insecure-requests;"},body:'<!doctype html><html class="dark-theme"><head><meta name="user-data" data-userid="999" data-name="NativeUser" data-displayname="Native Name"></head><body><main id="avatar-web-app"></main></body></html>'}));
+  await page.route('https://www.roblox.com/**',r=>{
+   const url=new URL(r.request().url());
+   if(url.pathname==='/users/123/profile') return r.fulfill({contentType:'text/html',headers:{'Content-Security-Policy':"script-src 'self' 'unsafe-inline'; connect-src 'self'; style-src 'self' 'unsafe-inline'; upgrade-insecure-requests;"},body:'<!doctype html><html><head><title>Roblox</title><meta name="user-data" data-userid="999" data-name="NativeUser" data-displayname="Native Name"><script>window.__startupGuardType=typeof window.__larpbloxTitleGuard; document.title=\'Real Native Profile - Roblox\'; window.__startupTitleSample=document.title;</script></head><body><main></main></body></html>'});
+   return r.fulfill({contentType:'text/html',headers:{'Content-Security-Policy':"script-src 'self' 'unsafe-inline'; connect-src 'self'; style-src 'self' 'unsafe-inline'; upgrade-insecure-requests;"},body:'<!doctype html><html class="dark-theme"><head><meta name="user-data" data-userid="999" data-name="NativeUser" data-displayname="Native Name"></head><body><main id="avatar-web-app"></main></body></html>'});
+  });
+  await page.goto('https://www.roblox.com/users/123/profile');
+  await page.waitForFunction(()=>document.documentElement.dataset.larpbloxIdentityChecked==='true');
+  const coldStartup=await page.evaluate(()=>({title:document.title,sample:window.__startupTitleSample,guardType:window.__startupGuardType}));
+  assert.equal(coldStartup.title,'Roblox',`cold profile must keep the native title hidden after startup (parser sample=${coldStartup.sample}, guard=${coldStartup.guardType})`);
+  const coldMainTitle=await page.evaluate(()=>{
+   const node=document.createElement('input');
+   node.setAttribute('onchange',"document.title='Real Native Profile - Roblox'; this.dataset.sample=document.title;");
+   document.documentElement.append(node);node.dispatchEvent(new Event('change'));const sample=node.dataset.sample;node.remove();return sample;
+  });
+  assert.equal(coldMainTitle,'Roblox','cold profile must synchronously suppress a MAIN-realm native title write');
+  await page.evaluate(()=>localStorage.setItem('larpblox-profile-title:123',JSON.stringify({displayName:'Cached Larp',expires:Date.now()+60000})));
+  await page.goto('https://www.roblox.com/users/123/profile');
+  await page.waitForFunction(()=>document.documentElement.dataset.larpbloxIdentityChecked==='true');
+  const cachedMainTitle=await page.evaluate(()=>{
+   const node=document.createElement('input');
+   node.setAttribute('onchange',"document.title='Real Native Profile - Roblox'; this.dataset.sample=document.title;");
+   document.documentElement.append(node);node.dispatchEvent(new Event('change'));const sample=node.dataset.sample;node.remove();return sample;
+  });
+  assert.equal(cachedMainTitle,'Cached Larp - Roblox','cached peer title must synchronously suppress a MAIN-realm native title write');
   await page.goto('https://www.roblox.com/home');
   await page.waitForFunction(()=>document.documentElement.dataset.larpbloxPeerIdentitiesReady==='true');
   await page.bringToFront();const popupPromise=context.waitForEvent('page');

@@ -28,6 +28,7 @@
         "https://www.roblox.com/*"
       ],
       "js": [
+        "profile-title-guard.js",
         "larpblox-real-avatar.js",
         "larpbux-body-colors.js",
         "larpblox-peer-identities.js"
