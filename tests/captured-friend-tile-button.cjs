@@ -35,6 +35,37 @@ function card(peer) { return `<div class="friends-carousel-tile"><div><button ty
     assert.equal(await page.getByText('Add Friends').evaluate(n => getComputedStyle(n).visibility), 'visible');
     await page.evaluate(() => window.__releaseRelay());
     for (const peer of fixture.players) { const tile = page.locator(`.friends-carousel-tile:has(a[href="https://www.roblox.com/users/${peer.userId}/profile"])`); await tile.locator('.friends-carousel-display-name').waitFor({state:'visible'}); assert.equal(await tile.locator('.friends-carousel-display-name').textContent(), peer.displayName); await tile.locator('.avatar-card-image img').waitFor({state:'visible'}); assert.equal(await tile.locator('.avatar-card-image img').getAttribute('src'), peerImage); }
-    assert.deepEqual(errors, []); console.log('PASS: captured button-wrapped cards gate native identity, preserve status/buttons and Add Friends, then publish pawsocks/Nikilis.');
+    // Roblox renders the friend hover menu separately from the name on the tile.
+    await page.evaluate(peer => {
+      const menu = document.createElement('div');
+      menu.className = 'friend-tile-dropdown friend-tile-dropdown--iarc'; menu.id = 'presence-menu';
+      menu.innerHTML = `<div class="friend-presence-info"><span class="friend-tile-is-playing"></span><span class="friend-tile-game-name">Murder Mystery 2</span></div><button onclick="window.__joined=true">Join</button><button onclick="window.__chatted=true">Chat</button><a href="/users/${peer.userId}/profile">View Profile</a>`;
+      const title = menu.querySelector('.friend-tile-is-playing');
+      title.append(document.createTextNode(peer.native), document.createTextNode(' '), document.createTextNode('is playing'));
+      document.body.append(menu);
+    }, fixture.players[1]);
+    await page.waitForFunction(display => document.querySelector('.friend-tile-is-playing').textContent === `${display} is playing`, fixture.players[1].displayName, {timeout:2500});
+    // React can replace the text while the menu is open, then reuse it for a
+    // different friend. Keep the translated suffix and resolve by profile ID.
+    await page.evaluate(peer => {
+      document.querySelector('.friend-tile-is-playing').firstChild.nodeValue = peer.native;
+    }, fixture.players[1]);
+    await page.waitForFunction(display => document.querySelector('.friend-tile-is-playing').textContent === `${display} is playing`, fixture.players[1].displayName);
+    await page.evaluate(peer => {
+      document.querySelector('#presence-menu a').href = `/users/${peer.userId}/profile`;
+      document.querySelector('.friend-tile-is-playing').textContent = `${peer.native} is playing`;
+    }, fixture.players[0]);
+    await page.waitForFunction(display => document.querySelector('.friend-tile-is-playing').textContent === `${display} is playing`, fixture.players[0].displayName);
+    await page.evaluate(peer => {
+      const title = document.querySelector('.friend-tile-is-playing');
+      title.replaceChildren(document.createTextNode(peer.native), document.createTextNode(' joue actuellement'));
+    }, fixture.players[0]);
+    await page.waitForFunction(display => document.querySelector('.friend-tile-is-playing').textContent === `${display} joue actuellement`, fixture.players[0].displayName);
+    assert.equal(await page.locator('.friend-tile-game-name').textContent(), 'Murder Mystery 2');
+    assert.equal(await page.locator('#presence-menu a').textContent(), 'View Profile');
+    await page.getByRole('button', {name:'Join',exact:true}).click();
+    await page.getByRole('button', {name:'Chat',exact:true}).click();
+    assert.equal(await page.evaluate(() => window.__joined && window.__chatted), true);
+    assert.deepEqual(errors, []); console.log('PASS: friend cards and playing popovers show Larp display names, handle rerenders/reused menus/localized text, and preserve native actions.');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

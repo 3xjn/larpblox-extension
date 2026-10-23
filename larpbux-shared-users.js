@@ -138,6 +138,21 @@
       for (const card of document.querySelectorAll(cardSelector)) if (cardIdentityId(card) === id)
         roots.push(...card.querySelectorAll(cardNameSelector));
       if (profileId() === id) roots.push(...document.querySelectorAll(profileSelector));
+      // The hover menu lives outside the friend tile. Its profile action identifies
+      // the player; only the name text in the playing title belongs to us.
+      for (const link of document.querySelectorAll('.friend-tile-dropdown a[href]')) {
+        if (userIdFrom(link.getAttribute('href')) !== id) continue;
+        const title = link.closest('.friend-tile-dropdown').querySelector('.friend-tile-is-playing');
+        if (!title) continue;
+        const node = [...title.childNodes].find(node => node.nodeType === Node.TEXT_NODE && node.nodeValue.trim());
+        if (!node) continue;
+        const real = names.get(node)?.real ?? node.nodeValue;
+        const suffix = real.match(/(\s+is playing\s*)$/i)?.[1] || '';
+        const leading = real.match(/^\s*/)[0];
+        const trailing = suffix ? '' : real.match(/\s*$/)[0];
+        wanted.set(node, leading + record.name.displayName + trailing + suffix);
+      }
+
       for (const root of roots) {
         const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
         for (let node = walker.nextNode(); node; node = walker.nextNode()) {
