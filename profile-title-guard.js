@@ -42,4 +42,26 @@
       original.set.call(this, this instanceof HTMLTitleElement && this.ownerDocument === document ? filter(value) : value);
     }});
   }
+  // Keep our title first: the HTML parser can create native titles without
+  // calling any JavaScript setter.
+  const title = document.createElement('title');
+  title.dataset.larpbloxProtectedTitle = 'true';
+  const mount = () => {
+    const locked = expected();
+    if (locked === null) { title.remove(); return; }
+    const root = document.documentElement;
+    if (!root) return;
+    let head = document.head;
+    if (!head) { head = document.createElement('head'); root.prepend(head); }
+    const id = location.pathname.match(/^\/users\/(\d+)\/profile/i)?.[1];
+    const originalTitle = [...head.querySelectorAll('title')].find(element => element !== title);
+    if (originalTitle?.textContent && root.dataset.larpbloxTitleSourceId !== id) {
+      root.dataset.larpbloxTitleSource = originalTitle.textContent;
+      root.dataset.larpbloxTitleSourceId = id;
+    }
+    if (title.textContent !== locked) title.textContent = locked;
+    if (head.firstChild !== title) head.prepend(title);
+  };
+  mount();
+  new MutationObserver(mount).observe(document, {subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['data-larpblox-title-native','data-larpblox-title-lock','data-larpblox-title-id']});
 })();

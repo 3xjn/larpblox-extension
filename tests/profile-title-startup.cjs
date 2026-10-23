@@ -102,6 +102,7 @@ async function runSharedIntegration(browser) {
         window.LarpbloxAvatarSurfaces = {createForPeer: () => ({update() {}})};
         window.chrome = {runtime: {sendMessage: (...args) => window.__relay(...args)}};
       })();
+      ${guardSource}
       ${identitySource}
     `});
     await context.route('https://www.roblox.com/**', route => route.fulfill({
