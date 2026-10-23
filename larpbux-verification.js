@@ -107,7 +107,7 @@
     context.records = records instanceof Map ? records : new Map();
     schedule();
   }
-  if (typeof MutationObserver !== 'undefined') new MutationObserver(schedule).observe(document.documentElement, {childList:true, subtree:true});
+  if (typeof MutationObserver !== 'undefined') new MutationObserver(schedule).observe(document, {childList:true, subtree:true});
   globalThis.LarpbloxVerification = {update, setRecords};
   schedule();
 })();
