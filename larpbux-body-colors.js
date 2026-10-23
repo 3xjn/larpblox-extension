@@ -3,7 +3,7 @@
   if (globalThis.__larpbloxBodyColorsHooked) return;
   globalThis.__larpbloxBodyColorsHooked = true;
 
-  const PATHS = new Set(['/v1/avatar/set-body-colors', '/v2/avatar/set-body-colors', '/v1/avatar/set-scales', '/v2/avatar/set-scales', '/v4/avatar']);
+  const PATHS = new Set(['/v1/avatar/set-body-colors', '/v2/avatar/set-body-colors', '/v1/avatar/set-scales', '/v2/avatar/set-scales', '/v1/avatar/set-player-avatar-type', '/v2/avatar/set-player-avatar-type', '/v4/avatar']);
   const WAIT_MS = 15000;
   let sequence = 0;
 
@@ -36,6 +36,14 @@
   // Current Roblox editor nests colors in its v4 avatar update model.
   const colorPayload = value => value?.avatarDefinition?.updateAvatarModel?.bodyColors ?? value?.bodyColor3s ?? value?.bodyColors;
   const scalePayload = value => value?.avatarDefinition?.updateAvatarModel?.scales ?? value?.avatarDefinition?.updateAvatarModel?.bodyScales ?? value?.scales ?? value?.bodyScales ?? value?.bodyScale;
+  const rigPayload = value => value?.avatarDefinition?.updateAvatarModel?.playerAvatarType ?? value?.playerAvatarType;
+  const modernRig = body => { try { return rigPayload(parseBody(body)) !== undefined; } catch (_) { return false; } };
+  const validRig = value => {
+    const rig = value?.playerAvatarType ?? value;
+    if (rig === 'R6' || rig === 1) return 'R6';
+    if (rig === 'R15' || rig === 3) return 'R15';
+    throw new Error('Choose R6 or R15.');
+  };
   const modernColors = body => {
     try {
       const value = parseBody(body);
@@ -96,8 +104,10 @@
   };
   const syntheticScales = async (body, signal) => {
     try {
-      const parsed = parseBody(body), scales = validScales(scalePayload(parsed) ?? parsed), colors = colorPayload(parsed);
-      return waitForPage('scales', {scales, ...(colors ? {colors:validColors(colors)} : {})}, signal);
+      const parsed = parseBody(body), rig = rigPayload(parsed), colors = colorPayload(parsed);
+      const source = scalePayload(parsed) ?? (rig === undefined ? parsed : undefined);
+      const payload = {...(source !== undefined ? {scales:validScales(source)} : {}), ...(rig !== undefined ? {playerAvatarType:validRig(rig)} : {}), ...(colors ? {colors:validColors(colors)} : {})};
+      return waitForPage('scales', payload, signal);
     }
     catch (error) { return {ok:false, error:error.message}; }
   };
@@ -115,9 +125,9 @@
     const method = String(init?.method || (input instanceof Request ? input.method : 'GET')).toUpperCase();
     let body = init?.body;
     if (body === undefined && input instanceof Request) body = await input.clone().text();
-    const path = new URL(url).pathname, modern = path === '/v4/avatar', legacyScales = /\/avatar\/set-scales$/.test(path), legacyColors = /\/avatar\/set-body-colors$/.test(path);
-    const scales = (modern && method === 'PATCH' && modernScales(body)) || (legacyScales && method === 'POST');
-    if (modern ? method !== 'PATCH' || !modernColors(body) && !scales : method !== 'POST' || !legacyScales && !legacyColors) return nativeFetch.apply(this, arguments);
+    const path = new URL(url).pathname, modern = path === '/v4/avatar', legacyScales = /\/avatar\/set-scales$/.test(path), legacyColors = /\/avatar\/set-body-colors$/.test(path), legacyRig = /\/avatar\/set-player-avatar-type$/.test(path);
+    const scales = (modern && method === 'PATCH' && (modernScales(body) || modernRig(body))) || ((legacyScales || legacyRig) && method === 'POST');
+    if (modern ? method !== 'PATCH' || !modernColors(body) && !scales : method !== 'POST' || !legacyScales && !legacyColors && !legacyRig) return nativeFetch.apply(this, arguments);
     const result = scales ? await syntheticScales(body, init?.signal || (input instanceof Request ? input.signal : undefined)) : await synthetic(body, init?.signal || (input instanceof Request ? input.signal : undefined));
     if (result.aborted) throw new DOMException('The operation was aborted.', 'AbortError');
     return jsonResponse(result);
@@ -138,9 +148,9 @@
   };
   XMLHttpRequest.prototype.send = function(body) {
     const request = this.__larpbloxBodyColorRequest;
-    const path = request?.url && new URL(request.url).pathname, modern = path === '/v4/avatar', legacyScales = /\/avatar\/set-scales$/.test(path || ''), legacyColors = /\/avatar\/set-body-colors$/.test(path || '');
-    const scales = (modern && request.method === 'PATCH' && modernScales(body)) || (legacyScales && request.method === 'POST');
-    if (!active() || !request?.url || (modern ? request.method !== 'PATCH' || !modernColors(body) && !scales : request.method !== 'POST' || !legacyScales && !legacyColors)) return xhrSend.apply(this, arguments);
+    const path = request?.url && new URL(request.url).pathname, modern = path === '/v4/avatar', legacyScales = /\/avatar\/set-scales$/.test(path || ''), legacyColors = /\/avatar\/set-body-colors$/.test(path || ''), legacyRig = /\/avatar\/set-player-avatar-type$/.test(path || '');
+    const scales = (modern && request.method === 'PATCH' && (modernScales(body) || modernRig(body))) || ((legacyScales || legacyRig) && request.method === 'POST');
+    if (!active() || !request?.url || (modern ? request.method !== 'PATCH' || !modernColors(body) && !scales : request.method !== 'POST' || !legacyScales && !legacyColors && !legacyRig)) return xhrSend.apply(this, arguments);
     const xhr = this;
     const controller = new AbortController();
     let done = false;

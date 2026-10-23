@@ -324,6 +324,10 @@
     const background = value => Number(value.backgroundId ?? value.definition?.backgroundId ?? value.definition?.backgroundRequestModel?.id ?? 0);
     const actualAssets = new Map(snapshot.definition.assets.map(asset => [asset.id, asset]));
     const close = (a, b) => Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) < 0.0001;
+    const rig = command.definition?.playerAvatarType?.playerAvatarType;
+    const rigMatches = snapshot.definition?.playerAvatarType?.playerAvatarType === rig;
+    const scalesMatch = rig === 'R6' || Object.entries(command.definition?.scales || {}).every(([key,value]) =>
+      close(snapshot.definition?.scales?.[key] ?? (['bodyType','proportion'].includes(key) ? 0 : 1), value));
     const adjustmentsMatch = command.definition.assets.every(asset => {
       const actual = actualAssets.get(asset.id);
       if (!actual) return false;
@@ -333,7 +337,7 @@
       }));
     });
     const styleMatches = command.definition.assets.filter(asset => Number(asset.id) === SMOKESTACK_HAT_ID).every(asset => smokestackStyle(actualAssets.get(asset.id)?.meta?.smokestackStyle) === smokestackStyle(asset.meta?.smokestackStyle));
-    return String(snapshot.userId) === String(command.userId) && keys(snapshot) === keys(command) && bodyColorsMatch && adjustmentsMatch && styleMatches && background(snapshot) === background(command);
+    return String(snapshot.userId) === String(command.userId) && keys(snapshot) === keys(command) && bodyColorsMatch && rigMatches && scalesMatch && adjustmentsMatch && styleMatches && background(snapshot) === background(command);
   }
   const snapshotMatchesPending = gameOutfitMatches;
   function gameCommand(state, userId) {
@@ -843,7 +847,10 @@
     if (!editingLarp() || String(request.userId) !== String(account) || !/^\/my\/avatar\/?$/i.test(location.pathname)) throw new Error('Reopen the avatar editor with Larp mode on.');
     const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 12000);
     try {
-      const patch = changedBodyScales({}, request.scales);
+      const patch = request.scales === undefined ? {} : changedBodyScales({}, request.scales);
+      const rig = request.playerAvatarType;
+      if (rig !== undefined && !['R6','R15'].includes(rig)) throw new Error('Choose R6 or R15.');
+      if (!Object.keys(patch).length && rig === undefined) throw new Error('Choose a body scale or rig first.');
       let current = read(account);
       if (!current.gameLook) {
         const selected = outfitAssets(current.items.filter(item => current.equipped.includes(keyFor(item)) && supportsOutfit(item)));
@@ -862,7 +869,16 @@
         look = {version:1, userId:String(account), definition, items:definition.assets.map(asset => known.get(asset.id)).filter(item => item && Number.isInteger(item.assetType))};
         current = mergeGameSnapshot(current, look);
       }
-      save({...current, gameLook:{...look, definition:{...look.definition, scales:{...look.definition.scales, ...patch}}}}, true);
+      let definition = {...look.definition, scales:{...look.definition.scales, ...patch}, ...(rig ? {playerAvatarType:{playerAvatarType:rig}} : {})};
+      if (rig === 'R6') {
+        // Layered clothes and dynamic heads require R15. Unequip them rather
+        // than letting the renderer silently switch the chosen rig back.
+        const incompatible = new Set([...look.items,...current.items].filter(item => [64,65,66,67,68,69,70,71,72,79].includes(Number(item.assetType))).map(item => item.id));
+        definition.assets = definition.assets.filter(asset => !incompatible.has(asset.id));
+        look = {...look, items:look.items.filter(item => !incompatible.has(item.id))};
+        current = {...current, equipped:current.equipped.filter(key => !incompatible.has(current.items.find(item => keyFor(item) === key)?.id))};
+      }
+      save({...current, gameLook:{...look, definition}}, true);
     } finally {clearTimeout(timeout);}
   }
   async function captureCharacter() {
