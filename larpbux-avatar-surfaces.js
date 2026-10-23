@@ -222,7 +222,7 @@
         finally { clearTimeout(timer); }
         if (activeKey !== key || controller.signal.aborted || !container.isConnected) { viewer.dispose(); removePreview(container, record); continue; }
         record.viewer = viewer;
-        image.remove(); message.remove();
+        image.remove();
         host.querySelector('canvas')?.classList.add('larpblox-own-avatar-canvas');
         hideNative(container,record);
       } catch (_) {
