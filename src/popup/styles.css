@@ -100,6 +100,24 @@
   button, [role="switch"] { -webkit-tap-highlight-color: transparent; }
 }
 .popup-header { display: flex; align-items: center; min-height: 36px; padding-bottom: 18px; }
+/* Direct transforms also work in the userscript's shadow root, where Tailwind's
+   registered translate variables do not receive their document-level defaults. */
+.larpblox-switch-thumb {
+  pointer-events: none;
+  display: block;
+  height: 100%;
+  aspect-ratio: 1;
+  border-radius: 9999px;
+  background: var(--background);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 10%);
+  transform: translateX(0);
+  transition: transform 160ms ease, background-color 160ms ease;
+}
+.larpblox-switch-thumb[data-checked] { transform: translateX(calc(var(--thumb-size) - 4px)); }
+.larpblox-switch-thumb[data-checked]:dir(rtl) { transform: translateX(calc(4px - var(--thumb-size))); }
+@media (prefers-reduced-motion: reduce) {
+  .larpblox-switch-thumb { transition: none; }
+}
 .popup-header img { width: 152px; height: 34px; object-fit: contain; object-position: left center; }
 .settings-view .popup-header { padding-bottom: 14px; }
 .update-settings { display: grid; gap: 14px; padding-top: 14px; border-top: 1px solid var(--border); }

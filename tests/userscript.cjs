@@ -40,8 +40,30 @@ const source = fs.readFileSync(path.join(__dirname,'../website-release/larpblox.
   await page.getByRole('switch',{name:'Larp mode',exact:true}).waitFor();
   assert.equal(await page.getByRole('dialog',{name:'Larpblox settings'}).isVisible(),true);
   assert.equal(await page.getByRole('dialog').evaluate(n=>n.classList.contains('dark')),true);
+  const modeSwitch=page.getByRole('switch',{name:'Larp mode',exact:true});
+  const thumbLeft=()=>modeSwitch.evaluate(n=>n.querySelector('[data-slot="switch-thumb"]').getBoundingClientRect().left-n.getBoundingClientRect().left);
+  const offLeft=await thumbLeft();
   await page.getByRole('switch',{name:'Larp mode',exact:true}).click();
   await page.waitForFunction(()=>JSON.parse(localStorage.getItem('larpblox-cosmetics-v1:999')).mode===true);
+  await page.waitForTimeout(220);
+  assert.ok(await thumbLeft()>offLeft+5,'the checked switch thumb must slide right inside the userscript shadow root');
+  assert.ok(await modeSwitch.evaluate(n=>getComputedStyle(n.querySelector('[data-slot="switch-thumb"]')).transitionDuration.split(',').some(value=>parseFloat(value)>0)),'the thumb must animate between positions');
+  const checkSwitches=async()=>{
+   for(const name of ['Larp mode','Share appearance','Larp verification']) {
+    const control=page.getByRole('switch',{name,exact:true});
+    const position=()=>control.evaluate(n=>n.querySelector('[data-slot="switch-thumb"]').getBoundingClientRect().left-n.getBoundingClientRect().left);
+    const checked=await control.getAttribute('aria-checked');
+    const before=await position();
+    await control.click();await page.waitForTimeout(220);
+    assert.notEqual(await control.getAttribute('aria-checked'),checked,`${name} changes state`);
+    const after=await position();
+    assert.ok(checked==='true'?after<before-5:after>before+5,`${name} thumb follows its state`);
+    await control.click();await page.waitForTimeout(220);
+    assert.equal(await control.getAttribute('aria-checked'),checked);
+    assert.ok(Math.abs(await position()-before)<1,`${name} thumb returns to its original position`);
+   }
+  };
+  await checkSwitches();
   const relay=await page.evaluate(()=>LarpbloxExtension.sendMessage({type:'larpblox-shared-users',userIds:['1585368861']}));
   assert.equal(relay.ok,true);
   assert.ok(await page.evaluate(()=>window.__requests.some(url=>url.includes('/v1/profiles?userIds=1585368861'))));
@@ -52,6 +74,7 @@ const source = fs.readFileSync(path.join(__dirname,'../website-release/larpblox.
   assert.ok(await page.getByRole('dialog').evaluate(n=>Number(getComputedStyle(n).backgroundColor.match(/[\d.]+/)[0]) < .2));
   await page.evaluate(()=>document.documentElement.className='light-theme');
   await page.waitForFunction(()=>!document.querySelector('#larpblox-userscript-popup').shadowRoot.querySelector('[role=dialog]').classList.contains('dark'));
+  await checkSwitches();
   await page.getByRole('dialog').screenshot({path:path.join(__dirname,'../.test-artifacts/userscript-light.png')});
   await page.getByRole('button',{name:'Close Larpblox settings'}).click();
   assert.equal(await page.getByRole('dialog').isVisible(),false);
