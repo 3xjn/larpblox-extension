@@ -1,0 +1,21 @@
+{
+  "players": [
+    {
+      "userId": "1585368861",
+      "native": "johnkotarivals",
+      "username": "NateDogg20207",
+      "displayName": "pawsocks",
+      "verified": false,
+      "nativeImage": "native-pawsocks.png"
+    },
+    {
+      "userId": "2290829441",
+      "native": "LmaoImTheBest1",
+      "username": "Nikilis",
+      "displayName": "Nikilis",
+      "verified": true,
+      "nativeImage": "native-nikilis.png"
+    }
+  ],
+  "addFriends": "<div class=\"friends-carousel-tile\"><button type=\"button\" id=\"friend-tile-button\"><a href=\"/users/friends#!/friend-requests\"><div class=\"add-friends-icon-container\"><span aria-hidden=\"true\" data-testid=\"foundation-web-icon\" class=\"add-friends-icon\"></span></div><div class=\"friends-carousel-tile-labels\" data-testid=\"friends-carousel-tile-labels\"><div class=\"friends-carousel-tile-label\"><div class=\"friends-carousel-tile-name\"><span class=\"friends-carousel-display-name\">Add Friends</span></div></div></div></a></button></div>"
+}

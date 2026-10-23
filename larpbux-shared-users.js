@@ -56,7 +56,8 @@
   let titleState;
   const resolvedProfiles = new Set();
   const cardSelector = '.friends-carousel-tile,.avatar-card-container';
-  const statusSelector = 'button,.avatar-status,.presence-icon,[data-presence],[data-rblx-verified-badge-icon],[data-testid="verified-badge"],.larpblox-verified-badge';
+  // Roblox wraps native friend identities in a menu button; its contents are identity surfaces.
+  const statusSelector = 'button:not(#friend-tile-button),.avatar-status,.presence-icon,[data-presence],[data-rblx-verified-badge-icon],[data-testid="verified-badge"],.larpblox-verified-badge';
   function cardIdentityId(card) {
     const link = [...card.querySelectorAll('a[href]')].find(element => userIdFrom(element.getAttribute('href')));
     return identityId(card) || (link && userIdFrom(link.getAttribute('href')));
@@ -65,7 +66,7 @@
     for (const card of document.querySelectorAll(cardSelector)) {
       const id = cardIdentityId(card);
       const record = records.get(id);
-      const native = initialized && !context.userId || id === String(context.userId) || id && resolvedProfiles.has(id) && !record;
+      const native = !id || initialized && !context.userId || id === String(context.userId) || id && resolvedProfiles.has(id) && !record;
       const labels = [...card.querySelectorAll(cardNameSelector)].filter(label => !label.closest(statusSelector));
       const aliases = record?.name?.enabled ? [record.name.displayName,record.name.username,'@' + record.name.username] : [];
       const nameReady = native || record && (!aliases.length || labels.every(label => aliases.includes(label.textContent.trim())));
@@ -139,7 +140,7 @@
       for (const root of roots) {
         const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
         for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-          if (node.parentElement.closest('button,input,textarea,[contenteditable="true"],.avatar-status,.presence-icon,[data-presence]')) continue;
+          if (node.parentElement.closest('button:not(#friend-tile-button),input,textarea,[contenteditable="true"],.avatar-status,.presence-icon,[data-presence]')) continue;
           const value = (names.get(node)?.real ?? node.nodeValue).trim();
           if (!value || value.length > 50 || /^(view profile|profile|\d[\d.,KkMm\s]*)$/i.test(value)) continue;
           const username = value.startsWith('@') || root.matches('.stylistic-alts-username,.profile-header-username,[data-testid="profile-header-username"]');
