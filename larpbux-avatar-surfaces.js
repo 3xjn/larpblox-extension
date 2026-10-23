@@ -7,22 +7,22 @@
   let cache, retryTimer, activeKey = '', activeAccount = '', lastFailure = '';
   let status = {stage: 'not-started'};
   const hasTeapot = definition => definition?.assets?.some(asset => Number(asset.id) === 1055299);
-  const pictureKey = definition => (globalThis.LarpbloxAvatarRequests?.definitionKey?.(definition) || JSON.stringify(definition)) + ':materials-v2:native-2d-portraits-v8' + (hasTeapot(definition) ? ':teapot-mesh-v1' : '');
+  const pictureKey = definition => (globalThis.LarpbloxAvatarRequests?.definitionKey?.(definition) || JSON.stringify(definition)) + ':materials-v2:native-2d-headshots-v9' + (hasTeapot(definition) ? ':teapot-mesh-v1' : '');
   function savedPictures(userId, definition) {
     try {
       const saved = JSON.parse(localStorage.getItem(`larpblox-profile-pictures:${userId}`) || 'null');
-      if (saved?.version === 11 && (definition === undefined || saved.key === pictureKey(definition)) && saved.expires > Date.now() &&
+      if (saved?.version === 12 && (definition === undefined || saved.key === pictureKey(definition)) && saved.expires > Date.now() &&
           [saved.result.headshot,saved.result.fullBody,saved.result.transparentBody].every(url=>url?.startsWith('data:image/png'))) return saved.result;
     } catch (_) {}
   }
   function savePictures(userId, definition, result) {
     if (peer) return;
     try {
-      const saved = JSON.stringify({version:11, key:pictureKey(definition), expires:Date.now()+86400000, result});
+      const saved = JSON.stringify({version:12, key:pictureKey(definition), expires:Date.now()+86400000, result});
       if (result.headshot?.startsWith('data:image/png') && saved.length < 1500000) localStorage.setItem(`larpblox-profile-pictures:${userId}`, saved);
     } catch (_) {}
   }
-  async function flatPictures(url, signal, definition) {
+  async function flatPictures(url, signal, definition, items = []) {
     const image = new Image(); image.crossOrigin = 'anonymous';
     await new Promise((resolve,reject) => {
       const finish = error => { clearTimeout(timer); signal.removeEventListener('abort',abort); image.onload=image.onerror=null; error ? reject(error) : resolve(); };
@@ -35,7 +35,34 @@
     const canvas = document.createElement('canvas'); canvas.width=image.naturalWidth; canvas.height=image.naturalHeight;
     canvas.getContext('2d').drawImage(image,0,0);
     const fullBody = canvas.toDataURL('image/png');
-    return {headshot:fullBody,fullBody,transparentBody:fullBody,definition};
+    const equipped = new Set((definition.assets || []).map(asset => Number(asset.id)));
+    const gear = items.some(item => Number(item.assetType?.id ?? item.assetType) === 19 && equipped.has(Number(item.id)));
+    let headshot = fullBody;
+    if (!gear) {
+      // ponytail: crop the native still to retain its real effects. This cannot
+      // reproduce the separate camera angle used by Roblox's headshot service.
+      const context = canvas.getContext('2d'), {width, height} = canvas;
+      const pixels = context.getImageData(0, 0, width, height).data;
+      let top = height, bottom = -1;
+      for (let y = 0; y < height; y++) {
+        let solid = 0;
+        for (let x = 0; x < width; x++) if (pixels[(y * width + x) * 4 + 3] >= 200) solid++;
+        // Ignore isolated sparks when locating the avatar, without deleting them.
+        if (solid >= Math.max(2, width * .02)) { top = Math.min(top, y); bottom = y; }
+      }
+      if (bottom > top) {
+        const upperBottom = top + (bottom - top + 1) * .56;
+        let left = width, right = -1;
+        for (let y = top; y < upperBottom; y++) for (let x = 0; x < width; x++) {
+          if (pixels[(y * width + x) * 4 + 3] >= 200) { left = Math.min(left, x); right = Math.max(right, x); }
+        }
+        const side = Math.max(upperBottom - top, right - left + 1) * 1.08;
+        const portrait = document.createElement('canvas'); portrait.width = width; portrait.height = height;
+        portrait.getContext('2d').drawImage(canvas, (left + right + 1 - side) / 2, top - side * .04, side, side, 0, 0, width, height);
+        headshot = portrait.toDataURL('image/png');
+      }
+    }
+    return {headshot,fullBody,transparentBody:fullBody,definition};
   }
   const numericId = value => /^[1-9]\d*$/.test(String(value || ''));
   const idFromHref = href => String(href || '').match(/\/users\/(\d+)(?:\/|$)/i)?.[1] || '';
@@ -239,7 +266,7 @@
       image.removeAttribute('srcset');
       image.style.visibility = record.visibility;
     }
-    if (peer && options.imageUrl && !options.backgroundId && !document.querySelector('.profile-avatar-thumb canvas, .profile-avatar-left canvas, .profile-avatar canvas')) {
+    if (peer && options.imageUrl && !options.backgroundId && !images.some(isHeadshotSurface) && !document.querySelector('.profile-avatar-thumb canvas, .profile-avatar-left canvas, .profile-avatar canvas')) {
       for (const image of images) {
         const record = remember(image);
         record.applied = options.imageUrl;
@@ -278,7 +305,7 @@
         }
         if (previous || flat) {
           try {
-            nativePictures = previous || await flatPictures(flat, controller.signal, definition);
+            nativePictures = previous || await flatPictures(flat, controller.signal, definition, options.items);
             entry.result = nativePictures;
             savePictures(userId, definition, entry.result);
             if (cache === entry && !controller.signal.aborted) update(options);
