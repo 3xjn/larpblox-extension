@@ -18,11 +18,11 @@ await page.waitForFunction(()=>commands.some(snapshot=>snapshot.definition.scale
 const rigStatus=await page.evaluate(async()=>{const r=await fetch('https://avatar.roblox.com/v4/avatar',{method:'PATCH',body:JSON.stringify({avatarDefinition:{updateAvatarModel:{playerAvatarType:1}}})});return r.status});assert.equal(rigStatus,200);
 await page.waitForFunction(()=>JSON.parse(localStorage.getItem('larpblox-cosmetics-v1:123')).gameLook.definition.playerAvatarType.playerAvatarType==='R6',null,{timeout:2500});
 assert.equal(mutations,0,'Larp rig edits must never change the real Roblox account');
-saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('larpblox-cosmetics-v1:123')));assert.deepEqual(saved.gameLook.definition.assets.map(a=>a.id),[808]);assert.deepEqual(saved.equipped,['Asset:808','Asset:811']);
-await page.waitForFunction(()=>previewDefinition.playerAvatarType.playerAvatarType==='R6');assert.deepEqual(await page.evaluate(()=>previewDefinition.assets.map(a=>a.id).sort()),[808,811]);
+saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('larpblox-cosmetics-v1:123')));assert.deepEqual(saved.gameLook.definition.assets.map(a=>a.id),[808,810]);assert.deepEqual(saved.equipped,['Asset:808','Asset:810','Asset:811']);
+await page.waitForFunction(()=>previewDefinition.playerAvatarType.playerAvatarType==='R6');assert.deepEqual(await page.evaluate(()=>previewDefinition.assets.map(a=>a.id).sort()),[808,810,811]);
 await page.waitForFunction(()=>commands.some(snapshot=>snapshot.definition.playerAvatarType.playerAvatarType==='R6'));
 await page.waitForFunction(()=>editorDefinitions.at(-1)?.playerAvatarType.playerAvatarType==='R6');
-assert.deepEqual(await page.evaluate(()=>editorDefinitions.at(-1).assets.map(a=>a.id).sort()),[808,811]);
+assert.deepEqual(await page.evaluate(()=>editorDefinitions.at(-1).assets.map(a=>a.id).sort()),[808,810,811]);
 const r6Definition=await page.evaluate(()=>previewDefinition);
 const profile=await browser.newPage();
 await profile.route('https://www.roblox.com/**',r=>r.fulfill({contentType:'text/html',body:'<div class="currently-wearing-avatar-with-background"><div class="profile-avatar-left"><canvas></canvas></div></div>'}));
@@ -34,7 +34,7 @@ await profile.evaluate(()=>{
 await profile.addScriptTag({path:path.join(root,'larpbux-avatar-surfaces.js')});
 await profile.evaluate(definition=>LarpbloxAvatarSurfaces.update({userId:'123',active:true,signature:JSON.stringify(definition),loadDefinition:async()=>definition}),r6Definition);
 assert.ok(await profile.locator('.larpblox-own-profile-preview canvas').count(),'profile 3D viewer is replaced');
-assert.ok(await profile.evaluate(()=>profileDefinitions.length>=2 && profileDefinitions.every(d=>d.playerAvatarType.playerAvatarType==='R6' && d.assets.every(a=>![810,812].includes(a.id)))),'profile capture and visible 3D viewer both receive R6 without R15 assets');
+assert.ok(await profile.evaluate(()=>profileDefinitions.length>=2 && profileDefinitions.every(d=>d.playerAvatarType.playerAvatarType==='R6' && d.assets.some(a=>a.id===810) && d.assets.every(a=>a.id!==812))),'profile capture and visible 3D viewer both receive R6 with the equipped dynamic head and without R15 animations');
 await profile.close();
 
 const r15Status=await page.evaluate(()=>new Promise(resolve=>{const xhr=new XMLHttpRequest();xhr.open('POST','https://avatar.roblox.com/v1/avatar/set-player-avatar-type');xhr.onload=()=>resolve(xhr.status);xhr.send(JSON.stringify({playerAvatarType:'R15'}));}));assert.equal(r15Status,200);

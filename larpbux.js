@@ -226,7 +226,8 @@
     const order = {64:4,65:5,66:1,67:7,68:6,69:2,70:3,71:3,72:8};
     const assets = definition.assets.map(asset => order[types.get(asset.id)]
       ? {...asset,meta:{version:1,order:order[types.get(asset.id)],puffiness:0,...asset.meta}} : asset);
-    const requiresR15 = assets.some(asset => order[types.get(asset.id)] || types.get(asset.id) === 79);
+    // Dynamic heads have native static R6 meshes; only layered clothes need R15.
+    const requiresR15 = assets.some(asset => order[types.get(asset.id)]);
     return {...definition,assets:!requiresR15 && definition.playerAvatarType?.playerAvatarType === 'R6'
       ? assets.filter(asset => !animationAssetTypes.includes(types.get(asset.id))) : assets,
       ...(requiresR15 ? {playerAvatarType:{playerAvatarType:'R15'}} : {})};
@@ -873,15 +874,13 @@
       }
       let definition = {...look.definition, scales:{...look.definition.scales, ...patch}, ...(rig ? {playerAvatarType:{playerAvatarType:rig}} : {})};
       if (rig === 'R6') {
-        // Layered clothes and dynamic heads require R15. Unequip them rather
-        // than letting the renderer silently switch the chosen rig back.
-        const incompatible = new Set(outfitAssets([...look.items,...current.items]).filter(item => [...animationAssetTypes,64,65,66,67,68,69,70,71,72,79].includes(Number(item.assetType))).map(item => item.id));
+        // Keep heads and body parts: Roblox supplies their native R6 meshes.
+        const incompatible = new Set(outfitAssets([...look.items,...current.items]).filter(item => [...animationAssetTypes,64,65,66,67,68,69,70,71,72].includes(Number(item.assetType))).map(item => item.id));
         definition.assets = definition.assets.filter(asset => !incompatible.has(asset.id));
         look = {...look, items:look.items.filter(item => !incompatible.has(item.id))};
         current = {...current, fullOutfitKey:undefined, equipped:[...new Set(current.equipped.flatMap(key => {
           const item = current.items.find(item => keyFor(item) === key);
-          // Keep compatible body parts, but stop the parent bundle from
-          // expanding back into a dynamic head or an R15 animation pack.
+          // Keep body parts and heads without reintroducing R15-only assets.
           return isBodyBundle(item) || isAnimationBundle(item)
             ? outfitAssets([item]).filter(asset => !incompatible.has(asset.id)).map(keyFor)
             : incompatible.has(item?.id) ? [] : [key];
@@ -1571,6 +1570,8 @@
         websiteVersion: extensionRuntime?.getManifest?.().websiteVersion,
         route: location.pathname, userId, mode: state?.mode, equipped: state?.equipped,
         hasGameLook: Boolean(state?.gameLook), previewFailure,
+        savedAvatarType: state?.gameLook?.definition?.playerAvatarType?.playerAvatarType,
+        avatarScripts: [...document.scripts].map(script => script.src).filter(Boolean),
         outfitSelectionLog: JSON.parse(localStorage.getItem('larpblox-outfit-debug-v1') || '[]'),
         savedOutfits: JSON.parse(localStorage.getItem(`larpblox-characters-v1:${userId}`) || '{"profiles":[]}'),
         avatarEditorView,

@@ -22,3 +22,14 @@ assert.equal(r6Pose.playerAvatarType.playerAvatarType,'R6');
 assert.equal(r6Pose.assets.length,0,'R15 animation poses must not be rendered as R6');
 const oldR6 = gamePreviewDefinition({items:[{id:23,assetType:51,itemType:'Asset'}],equipped:['Asset:23'],gameLook:{items:[{id:23,assetType:51,itemType:'Asset'}],definition:{assets:[{id:23}],playerAvatarType:{playerAvatarType:'R6'}}}});
 assert.equal(oldR6.assets.length,0,'old R6 snapshots also drop R15 poses');
+
+// Roblox supplies a static R6 mesh for dynamic heads, including Headless.
+for (const id of [15093053680,86019983967406]) {
+  const head = {id,assetType:79,itemType:'Asset'};
+  const preview = previewDefinition(avatar,{},[head]);
+  assert.equal(preview.playerAvatarType.playerAvatarType,'R6','dynamic heads must not force R15');
+  assert.deepEqual(preview.assets,[{id}],'keep the original head ID for Roblox R6 conversion');
+  const saved = gamePreviewDefinition({items:[head],equipped:[`Asset:${id}`],gameLook:{items:[head],definition:preview}});
+  assert.equal(saved.playerAvatarType.playerAvatarType,'R6');
+  assert.deepEqual(saved.assets,[{id}]);
+}
