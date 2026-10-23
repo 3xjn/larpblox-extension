@@ -26,6 +26,8 @@ header = f'''// ==UserScript==
 // @grant        GM_removeValueChangeListener
 // @connect      larp.3xjn.dev
 // @connect      127.0.0.1
+// @connect      github.com
+// @connect      release-assets.githubusercontent.com
 // @updateURL    {base}larpblox.meta.js
 // @downloadURL  {base}larpblox.user.js
 // ==/UserScript==

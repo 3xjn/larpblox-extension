@@ -51,7 +51,7 @@ const HAT_STYLES = [
 
 function UpdateSettings() {
   const context = globalThis.LarpbloxPopupContext;
-  const [result, setResult] = useState<{version?: string; loaderVersion?:string; enabled?: boolean; pendingReload?: boolean}>({});
+  const [result, setResult] = useState<{version?: string; loaderVersion?:string; enabled?: boolean; pendingReload?: boolean; updateAvailable?: boolean; latestVersion?: string}>({});
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState(false);
@@ -62,13 +62,12 @@ function UpdateSettings() {
       if (!reply?.ok) throw new Error(reply?.error || "Could not check for updates.");
       if (action === "enable") return;
       setResult({...reply, loaderVersion:reply.loaderVersion || result.loaderVersion, pendingReload: reply.pendingReload ?? reply.updated === true});
-      setNotice(reply.enabled === false ? "Enable Allow User Scripts in the extension’s details, then return here." :
+      setNotice(context?.userscript ? (reply.updateAvailable ? `Version ${reply.latestVersion} is available.` : "You’re up to date.") : reply.enabled === false ? "Enable Allow User Scripts in the extension’s details, then return here." :
         reply.updated === false ? "You’re up to date." : "");
     } catch (failure) { setError(true); setNotice(failure instanceof Error ? failure.message : "Could not check for updates."); }
     finally { setBusy(false); }
   }
   useEffect(() => {
-    if (context?.userscript) { setBusy(false); return; }
     void run("status");
     const focus = () => void run("status");
     window.addEventListener("focus", focus);
@@ -76,8 +75,10 @@ function UpdateSettings() {
   }, []);
   if (context?.userscript) return <section aria-label="Userscript settings" className="update-settings">
     <div className="update-heading"><h2>Userscript</h2></div>
-    <p className="notice">Version {context.version}. Update the userscript from your userscript manager.</p>
-    {context.openUpdate && <Button variant="outline" className="h-10 w-full" onClick={context.openUpdate}>Update userscript</Button>}
+    <p className="notice">Installed version {context.version}</p>
+    <Button variant="outline" className="h-10 w-full" loading={busy} disabled={busy} onClick={() => void run("check")}>{busy ? "Checking…" : "Check for updates"}</Button>
+    {!busy && !error && result.updateAvailable && context.openUpdate && <Button className="h-10 w-full" onClick={context.openUpdate}>Update userscript</Button>}
+    {notice && <p role="status" className={error ? "notice error" : "notice"}>{notice}</p>}
   </section>;
   return <section aria-label="Extension settings" className="update-settings">
     <div className="update-heading">

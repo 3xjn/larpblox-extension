@@ -35,8 +35,20 @@ async function sendMessage(message) {
   if (message?.type === 'larpblox-popup-relay') return dispatch(message.message);
   if (message?.type === 'larpblox-website-update') {
     if (message.action === 'reload') { location.reload(); return {ok:true}; }
-    if (message.action === 'check') { window.open(userscriptInstall,'_blank','noopener'); }
-    return {ok:true,enabled:true,version:userscriptVersion,userscript:true,updated:false};
+    return new Promise((resolve, reject) => {
+      const fail = () => reject(new Error('Could not check for updates. Please try again.'));
+      GM_xmlhttpRequest({method:'GET',url:userscriptInstall.replace('.user.js','.meta.js')+'?check='+Date.now(),anonymous:true,timeout:15000,
+        onload(response) {
+          const latest = response.responseText?.match(/^\/\/\s*@version\s+(\d+(?:\.\d+)+)\s*$/m)?.[1];
+          if (response.status !== 200 || !latest) return fail();
+          const installed = userscriptVersion.split('.').map(Number), available = latest.split('.').map(Number);
+          let newer = false;
+          for (let i=0;i<Math.max(installed.length,available.length);i++) {
+            if ((available[i] || 0) !== (installed[i] || 0)) { newer = (available[i] || 0) > (installed[i] || 0); break; }
+          }
+          resolve({ok:true,version:userscriptVersion,latestVersion:latest,updateAvailable:newer});
+        },onerror:fail,ontimeout:fail});
+    });
   }
   return new Promise(resolve => {
     let handled = false;

@@ -23,6 +23,10 @@ const source = fs.readFileSync(path.join(__dirname,'../website-release/larpblox.
     window.GM_registerMenuCommand=(name,fn)=>window.__menu.push({name,fn});
     window.GM_xmlhttpRequest=options=>{
       window.__requests.push(options.url);
+      if(options.url.includes('/larpblox.meta.js')) {
+       setTimeout(()=>window.__updateFailure ? options.onerror() : options.onload({status:200,responseText:'// @version '+(window.__latestVersion || '0.0.1')}),0);
+       return {abort(){}};
+      }
       let response={players:[]};
       if(options.url.endsWith('/v1/pair')) response={code:'a'.repeat(32)};
       if(options.url.includes('/v1/game/')) response=null;
@@ -80,8 +84,18 @@ const source = fs.readFileSync(path.join(__dirname,'../website-release/larpblox.
   assert.equal(await page.getByRole('dialog').isVisible(),false);
   await page.evaluate(()=>window.__menu[0].fn());
   assert.equal(await page.getByRole('dialog').isVisible(),true);
+  await page.evaluate(version=>window.__latestVersion=version,source.match(/@version\s+(\S+)/)[1]);
   await page.getByRole('button',{name:'Settings',exact:true}).click();
-  await page.getByText(/Update the userscript from your userscript manager/).waitFor();
+  await page.getByText('You’re up to date.',{exact:true}).waitFor();
+  assert.equal(await page.getByRole('button',{name:'Update userscript',exact:true}).count(),0);
+  await page.evaluate(()=>window.__latestVersion='999.0.0');
+  await page.getByRole('button',{name:'Check for updates',exact:true}).click();
+  await page.getByText('Version 999.0.0 is available.',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Update userscript',exact:true}).waitFor();
+  await page.evaluate(()=>window.__updateFailure=true);
+  await page.getByRole('button',{name:'Check for updates',exact:true}).click();
+  await page.getByText('Could not check for updates. Please try again.',{exact:true}).waitFor();
+  assert.equal(await page.getByRole('button',{name:'Update userscript',exact:true}).count(),0);
   assert.equal(await page.getByText('This update needs a newer Larpblox loader.').count(),0);
   await page.reload();
   await page.waitForFunction(()=>window.__menu.length===1);
