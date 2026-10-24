@@ -23,7 +23,7 @@ const {chromium} = require('playwright');
             </li>
             <li id="dynamic-head-card" class="item-card" data-item-type="Bundle">
               <div class="item-card-container"><div class="item-card-thumb-container">
-                <a class="item-card-thumb" href="/bundles/202/Dynamic-Head"><img src="dynamic.png"></a>
+                <button class="item-card-thumb" type="button"><img src="dynamic.png"></button>
               </div><div class="item-card-caption"><a class="item-card-name-link" href="/bundles/202/Dynamic-Head">Owned Dynamic Head</a></div></div>
             </li>
             <li id="animation-card" class="item-card" data-item-type="Bundle">
@@ -40,8 +40,17 @@ const {chromium} = require('playwright');
           </ul>
         </div>
       </main>`;
+    const inventoryHtml = `
+      <meta name="user-data" data-userid="123">
+      <main id="inventory-web-app"><div id="inventory-container"><div class="item-cards">
+        <div id="inventory-native-card" class="item-card" data-item-type="Bundle">
+          <div class="item-card-container"><div class="item-card-thumb-container">
+            <button class="item-card-thumb" type="button"><img src="owned.png"></button>
+          </div><div class="item-card-caption"><a class="item-card-name-link" href="/bundles/126/John">Owned John Package</a></div></div>
+        </div>
+      </div></div></main>`;
     const accountPosts = [];
-    await page.route('https://www.roblox.com/**', r => r.fulfill({contentType: 'text/html', body: html}));
+    await page.route('https://www.roblox.com/**', r => r.fulfill({contentType: 'text/html', body: r.request().url().includes('/users/123/inventory') ? inventoryHtml : html}));
     await page.route('https://thumbnails.roblox.com/**', r => r.fulfill({json: {data: []}}));
     const johnItems = [
       {id: 301809996, type: 'Asset', name: 'John Shirt', assetType: 11},
@@ -118,14 +127,22 @@ const {chromium} = require('playwright');
     const johnCard = page.locator('#john-card');
     await card.waitFor({state: 'attached', timeout: 2000});
     await page.waitForFunction(() => document.querySelector('#owned-package-card')?.classList.contains('larpbux-native-item'), null, {timeout: 2000});
-    await page.evaluate(() => {
-      window.__openedUrls = [];
-      window.open = url => { window.__openedUrls.push(url); return {closed: false}; };
-    });
-    await johnCard.locator('.item-card-name').evaluate(element => {
-      element.dispatchEvent(new MouseEvent('auxclick', {button: 1, bubbles: true, cancelable: true}));
-    });
-    assert.ok((await page.evaluate(() => window.__openedUrls[0])).includes('/bundles/126'), 'middle-clicking John card text opens its bundle');
+    const beforeEditorMiddleClick = await page.evaluate(() => JSON.parse(localStorage.getItem('larpblox-cosmetics-v1:123')).equipped);
+    const middleClickOpens = async (locator, expectedPath, label) => {
+      const popupReady = page.context().waitForEvent('page', {timeout: 2000});
+      await locator.click({button: 'middle', noWaitAfter: true, timeout: 2000});
+      const popup = await popupReady;
+      await popup.waitForURL(url => new URL(url).pathname.startsWith(expectedPath), {timeout: 2000}).catch(async error => {
+        throw new Error(`${label}: popup opened at ${popup.url()} instead of ${expectedPath}: ${error.message}`);
+      });
+      assert.equal(page.url(), 'https://www.roblox.com/my/avatar', `${label} leaves the editor on the same page`);
+      assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('larpblox-cosmetics-v1:123')).equipped), beforeEditorMiddleClick, `${label} does not equip or remove the package`);
+      await popup.close();
+    };
+    await middleClickOpens(johnCard.locator('.item-card-link img'), '/bundles/126/John', 'outer-anchor picture');
+    await middleClickOpens(johnCard.locator('.item-card-name'), '/bundles/126/John', 'outer-anchor caption');
+    await middleClickOpens(dynamicCard.locator('.item-card-thumb img'), '/bundles/202/', 'button picture');
+    await middleClickOpens(dynamicCard.locator('.item-card-name-link'), '/bundles/202/', 'button caption link');
     await johnCard.locator('.item-card-link img').click({noWaitAfter: true, timeout: 2000});
     await page.waitForFunction(() => JSON.parse(localStorage.getItem('larpblox-cosmetics-v1:123')).equipped.includes('Asset:301826032'), null, {timeout: 2000});
     let johnState = await page.evaluate(() => JSON.parse(localStorage.getItem('larpblox-cosmetics-v1:123')));
@@ -211,6 +228,25 @@ const {chromium} = require('playwright');
     assert.equal(await card.getAttribute('data-larpbux-equipped'), 'false');
     assert.equal(await card.locator('.larpbux-native-equipped').count(), 0, 'native card clears the local equipped indicator');
     assert.deepEqual(accountPosts, [], 'native package Remove must not submit an account avatar change');
+
+    await page.goto('https://www.roblox.com/users/123/inventory#!/bundles', {waitUntil: 'domcontentloaded', timeout: 5000});
+    await page.addScriptTag({path: path.join(__dirname, '../larpbux-game-bridge.js')});
+    await page.addStyleTag({path: path.join(__dirname, '../larpbux.css')});
+    await page.addScriptTag({path: path.join(__dirname, '../larpbux.js')});
+    const inventoryCard = page.locator('#inventory-native-card');
+    await inventoryCard.waitFor({state: 'attached', timeout: 2000});
+    const beforeInventoryMiddleClick = await page.evaluate(() => JSON.parse(localStorage.getItem('larpblox-cosmetics-v1:123')).equipped);
+    const inventoryMiddleClickOpens = async (locator, expectedPath, label) => {
+      const popupReady = page.context().waitForEvent('page', {timeout: 2000});
+      await locator.click({button: 'middle', noWaitAfter: true, timeout: 2000});
+      const popup = await popupReady;
+      await popup.waitForURL(url => new URL(url).pathname.startsWith(expectedPath), {timeout: 2000});
+      assert.equal(page.url(), 'https://www.roblox.com/users/123/inventory#!/bundles', `${label} leaves inventory on the same page`);
+      assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('larpblox-cosmetics-v1:123')).equipped), beforeInventoryMiddleClick, `${label} does not mutate outfit state`);
+      await popup.close();
+    };
+    await inventoryMiddleClickOpens(inventoryCard.locator('.item-card-thumb img'), '/bundles/126', 'inventory picture');
+    await inventoryMiddleClickOpens(inventoryCard.locator('.item-card-name-link'), '/bundles/126', 'inventory caption');
     console.log('PASS: owned native BodyParts, DynamicHead, and AvatarAnimations packages resolve assets, preserve compatible parts, wear/remove locally, preserve balance, and avoid account POSTs.');
   } finally {
     await browser.close();

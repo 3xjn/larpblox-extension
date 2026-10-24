@@ -3,6 +3,28 @@
   const MAX = Number.MAX_SAFE_INTEGER;
   const keyFor = item => `${item.itemType}:${item.id}`;
   const itemPathFor = item => `/${item.itemType === 'Bundle' ? 'bundles' : 'catalog'}/${item.id}`;
+  function linkOwnedPackageThumbnails(root) {
+    for (const card of root.querySelectorAll('.item-card')) {
+      const link = card.querySelector('a[href*="/bundles/"]');
+      const holder = card.querySelector('.item-card-thumb-container');
+      if (!link || !holder || holder.closest('a[href]') || holder.querySelector('a[href]')) continue;
+      const thumbnailLink = document.createElement('a');
+      thumbnailLink.href = link.href;
+      thumbnailLink.style.display = 'contents';
+      // Keep the existing left-click control; middle-click uses a normal link.
+      thumbnailLink.addEventListener('click', event => {
+        if (event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) event.preventDefault();
+      });
+      holder.before(thumbnailLink); thumbnailLink.append(holder);
+    }
+  }
+  if (typeof window !== 'undefined') for (const type of ['mousedown', 'auxclick']) window.addEventListener(type, event => {
+    if (event.button !== 1) return;
+    const link = event.target.closest?.('.item-card a[href*="/bundles/"]');
+    if (!link) return;
+    // Preserve the browser's native new-tab action before site handlers cancel it.
+    event.stopImmediatePropagation();
+  }, true);
   function openItemOnMiddleClick(event, item) {
     if (event.button !== 1) return;
     event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation();
@@ -738,6 +760,7 @@
     const root = nativeInventoryRoot();
     const routeAccount = location.pathname.match(/^\/users\/(\d+)\//i)?.[1] || new URLSearchParams(location.search).get('userId') || userId;
     if (!state?.mode || !userId || !root || routeAccount !== String(userId)) { clearNativeInventory(); return; }
+    linkOwnedPackageThumbnails(root);
     const category = nativeInventoryCategory();
     repairPurchasedTypes();
     const types = Array.isArray(category) ? category : typeof category === 'number' ? [category] : null;
@@ -1378,6 +1401,7 @@
       }
       updateAvatarPreview(editor); return;
     }
+    linkOwnedPackageThumbnails(editor);
     repairPurchasedTypes();
     updateAvatarPreview(editor);
     const list = [...editor.querySelectorAll('.items-list.avatar-item-list')].find(element => element.getClientRects().length);
