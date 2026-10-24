@@ -1502,7 +1502,8 @@
       const native = nativeCardItem(card);
       if (!native) continue;
       const nativeKey = keyFor(native);
-      const equipped = isBackground(native) ? state.backgroundId === native.id : state.equipped.includes(nativeKey);
+      const resolved = state.items.find(item => keyFor(item) === nativeKey) || native;
+      const equipped = isBackground(resolved) ? state.backgroundId === native.id : isBodyBundle(resolved) ? resolved.assets.filter(isWearableAsset).every(part => state.equipped.includes(keyFor(part))) : state.equipped.includes(nativeKey);
       card.classList.add('larpbux-native-item');
       card.dataset.larpbuxEquipped = String(equipped);
       for (const control of card.querySelectorAll('.item-card-thumb, .item-card-thumb-container button')) {
@@ -1528,17 +1529,18 @@
         const finish = item => action(() => {
           if (!supportsCosmetic(item) || !editingLarp() || account !== userId) return;
           const current = read(userId), existing = current.items.find(value => keyFor(value) === nativeKey);
-          const next = existing ? current : {...current, items: [...current.items, item]};
+          // Use the purchase importer at zero cost so package parts exist before equip().
+          const next = existing ? current : collect(current, item);
           save(equip(next, nativeKey), true);
         });
         const known = state.items.find(item => keyFor(item) === nativeKey);
         if (supportsCosmetic(known)) { finish(known); return; }
         if (native.assetTypeVerified && supportsCosmetic(native)) { finish(native); return; }
         const endpoint = native.itemType === 'Bundle' ? `https://catalog.roblox.com/v1/bundles/${native.id}/details` : `https://economy.roblox.com/v2/assets/${native.id}/details`;
-        fetch(endpoint).then(response => response.ok ? response.json() : null).then(data => {
+        fetch(endpoint).then(response => response.ok ? response.json() : null).then(async data => {
           if (!data) return;
           if (native.itemType === 'Asset') finish({...native, assetType: Number(data.AssetTypeId) || 0, assetTypeVerified: true});
-          else if (data.bundleType === 'AvatarAnimations') finish({...native, bundleType: data.bundleType, assets: (data.items || []).filter(entry => entry.type === 'Asset').map(entry => ({id: Number(entry.id), assetType: Number(entry.assetType), name: String(entry.name || ''), itemType: 'Asset'}))});
+          else if (['AvatarAnimations', 'BodyParts', 'DynamicHead'].includes(data.bundleType)) finish({...native, bundleType: data.bundleType, assets: await bundleAssets(data)});
         }).catch(() => {});
       };
       card.addEventListener('click', click, true);
