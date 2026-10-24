@@ -1514,7 +1514,7 @@
       if (holder) updateEquipped(holder, equipped);
       if (!card._larpbuxNativeAuxclick) {
         card.addEventListener('auxclick', event => {
-          if (event.button !== 1 || !event.target.closest?.('.item-card-thumb, .item-card-thumb-container, button')) return;
+          if (event.button !== 1) return;
           openItemOnMiddleClick(event, native);
         }, true);
         card._larpbuxNativeAuxclick = true;
@@ -1524,7 +1524,8 @@
         if (!editingLarp() || account !== userId) return;
         const target = event.target;
         const anchor = target?.closest?.('a');
-        if (anchor && !anchor.closest?.('.item-card-thumb, .item-card-thumb-container, button')) return;
+        // Roblox can wrap both the thumbnail and caption inside one link.
+        if (anchor && !target?.closest?.('.item-card-thumb, .item-card-thumb-container, button')) return;
         event.preventDefault?.(); event.stopPropagation?.(); event.stopImmediatePropagation?.();
         const finish = item => action(() => {
           if (!supportsCosmetic(item) || !editingLarp() || account !== userId) return;
