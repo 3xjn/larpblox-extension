@@ -42,7 +42,7 @@
       if (profile) selectProfile(current, profile, card);
       return;
     }
-    if (card?._larpbuxWearCreation && event.target.closest?.('.item-card-thumb')
+    if (card?._larpbuxWearCreation && event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey && event.target.closest?.('.item-card-thumb, .item-card-thumb-container, .thumbnail-2d-container')
         && !event.target.closest?.('.item-card-menu, .item-card-options, .icon-more, .icon-settings')) {
       card._larpbuxWearCreation(event);
     }
@@ -98,16 +98,44 @@
     return entry.promise;
   }
   function creations(editor) {
-    const label = [...editor.querySelectorAll('.breadcrumb-container,.breadcrumb,.avatar-category-title,[aria-label="Breadcrumb"],[aria-label="breadcrumb"]')].find(e => e.getClientRects().length && text(e.textContent));
-    return /creation/i.test(label?.textContent || editor.querySelector('[aria-selected="true"]')?.textContent || '');
+    const labels = [...editor.querySelectorAll('.breadcrumb-container,.breadcrumb,.avatar-category-title,[aria-label="Breadcrumb"],[aria-label="breadcrumb"],[aria-selected="true"]')]
+      .filter(e => e.getClientRects().length)
+      .map(e => text(e.textContent))
+      .filter(Boolean);
+    return /creation|character|avatar|outfit/i.test(labels.join(' '));
   }
   const node = (tag, className, label) => { const e = document.createElement(tag); e.className = className || ''; if (label) e.textContent = label; return e; };
+  function linkNativeCard(card, record) {
+    const options = record.options;
+    if (!options.linkNative || card._larpbuxNativeLinkAttempted) return;
+    card._larpbuxNativeLinkAttempted = true;
+    Promise.resolve().then(() => options.linkNative(card)).then(href => {
+      if (!href || !card.isConnected || current !== record) return;
+      href = String(href);
+      if (!/^\/?(?:catalog|bundles)\/\d+(?:[/?#].*)?$/i.test(href) && !/^https?:\/\/[^/]+\/(?:catalog|bundles)\/\d+(?:[/?#].*)?$/i.test(href)) return;
+      const holder = card.querySelector('.item-card-thumb-container');
+      const thumb = holder?.querySelector('.item-card-thumb');
+      if (thumb && thumb.tagName !== 'A') {
+        const anchor = node('a'); anchor.href = href; anchor.style.display = 'contents';
+        anchor.addEventListener('click', event => {
+          if (event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) event.preventDefault();
+        });
+        thumb.before(anchor); anchor.append(thumb);
+      } else if (thumb) thumb.href = href;
+      const name = card.querySelector('.item-card-name-link, .item-card-name');
+      if (name) {
+        if (name.tagName === 'A') name.href = href;
+        else { const anchor = node('a'); anchor.href = href; anchor.style.display = 'contents'; name.before(anchor); anchor.append(name); }
+      }
+    }).catch(() => {});
+  }
   function clear() {
     current?.dialog?.remove();
     if (current) for (const control of current.editor.querySelectorAll('.item-card,button,a')) {
       for (const property of ['_larpbuxWearCreation', '_larpbuxCharacterHandler']) {
         if (control[property]) { control.removeEventListener('click', control[property], true); delete control[property]; }
       }
+      delete control._larpbuxNativeLinkAttempted;
     }
     if (current) for (const e of current.editor.querySelectorAll('.larpbux-character-card,.larpbux-character-dialog')) e.remove();
     current = undefined;
@@ -216,8 +244,9 @@
     for (const card of list.querySelectorAll('.item-card:not(.larpbux-character-card)')) {
       if (card._larpbuxWearCreation) continue;
       card._larpbuxWearCreation = async event => {
+        if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
         if (!current || current.editor !== editor || !current.options.active || !creations(editor)) return;
-        if (!event.target.closest('.item-card-thumb') || event.target.closest('.item-card-menu, .item-card-options, .icon-more, .icon-settings')) return;
+        if (!event.target.closest('.item-card-thumb, .item-card-thumb-container, .thumbnail-2d-container') || event.target.closest('.item-card-menu, .item-card-options, .icon-more, .icon-settings')) return;
         event.preventDefault(); event.stopImmediatePropagation();
         if (card.dataset.larpbloxLoading === 'true') return;
         card.dataset.larpbloxLoading = 'true';
@@ -229,6 +258,7 @@
         finally { card.dataset.larpbloxLoading = 'false'; }
       };
       card.addEventListener('click', card._larpbuxWearCreation, true);
+      linkNativeCard(card, record);
     }
     const create = [...editor.querySelectorAll('button,a')].find(e => /^create(?: new)?(?: character| outfit)?$/i.test(text(e.textContent)));
     if (create && !create._larpbuxCharacterHandler) {

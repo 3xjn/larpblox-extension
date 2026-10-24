@@ -20,10 +20,12 @@
   }
   if (typeof window !== 'undefined') for (const type of ['mousedown', 'auxclick']) window.addEventListener(type, event => {
     if (event.button !== 1) return;
-    const link = event.target.closest?.('.item-card a[href*="/bundles/"]');
-    if (!link) return;
-    // Preserve the browser's native new-tab action before site handlers cancel it.
-    event.stopImmediatePropagation();
+    const card = event.target.closest?.('.item-card');
+    const link = card?.querySelector('a[href*="/bundles/"]');
+    if (!link || event.target.closest?.('.item-card-menu, .item-card-options, .icon-more, .icon-settings')) return;
+    // Native owned thumbnails may be buttons rather than links.
+    event.preventDefault(); event.stopImmediatePropagation();
+    if (type === 'auxclick') window.open(link.href, '_blank', 'noopener');
   }, true);
   function openItemOnMiddleClick(event, item) {
     if (event.button !== 1) return;
@@ -236,7 +238,7 @@
       if (!hex) throw new Error('Roblox could not load the avatar colors for the preview.');
         bodyColors[part.replace(/ColorId$/, 'Color')] = hex.startsWith('#') ? hex : `#${hex}`;
     }
-    const definition = {assets, bodyColors, scales: avatar.scales, playerAvatarType: {playerAvatarType: avatar.playerAvatarType}};
+    const definition = {assets, bodyColors, scales: avatar.scales || avatar.scale, playerAvatarType: {playerAvatarType: avatar.playerAvatarType}};
     if (Number.isSafeInteger(Number(backgroundId)) && Number(backgroundId) > 0) {
       definition.backgroundId = Number(backgroundId);
       definition.backgroundRequestModel = {id: Number(backgroundId)};
@@ -955,6 +957,65 @@
     const next = mergeGameSnapshot({...state, backgroundId: undefined}, JSON.parse(JSON.stringify(snapshot)));
     save(hatStyleState(next, selectedStyle || 'auto'), true);
   }
+  const nativeOutfitPages = new Map();
+  async function nativeOutfitId(card, account, readJson) {
+    let id = Number(card.dataset.outfitId || card.dataset.userOutfitId);
+    const source = card.querySelector('img')?.getAttribute('src') || '';
+    if (!id && /type=Outfit/i.test(source)) id = Number(source.match(/[?&]id=(\d+)/i)?.[1]);
+    if (id) return id;
+    const name = (card.querySelector('.item-card-name-link, .item-card-name')?.textContent || '').trim();
+    if (!nativeOutfitPages.has(account)) {
+      const loading = (async () => {
+        const outfits = [];
+        for (let page = 1; page <= 20; page++) {
+          const result = await readJson(`https://avatar.roblox.com/v1/users/${account}/outfits?outfitType=Avatar&page=${page}&itemsPerPage=100`);
+          outfits.push(...(result.data || []));
+          // Roblox can filter a page down below 100 entries after pagination.
+          if (Number.isFinite(result.total) ? page * 100 >= result.total : (result.data || []).length < 100) break;
+        }
+        return outfits;
+      })();
+      nativeOutfitPages.set(account, loading);
+      loading.catch(() => nativeOutfitPages.delete(account));
+    }
+    const matches = (await nativeOutfitPages.get(account)).filter(outfit => outfit.name.trim() === name);
+    if (matches.length !== 1) throw new Error('Could not identify this saved outfit. Give it a unique name and try again.');
+    card.dataset.outfitId = String(matches[0].id);
+    return matches[0].id;
+  }
+  const nativeCharacterLinks = new Map();
+  let nativeCharacterLinkQueue = Promise.resolve();
+  async function nativeCharacterLink(card) {
+    const direct = card.querySelector('a[href*="/bundles/"]');
+    if (direct) return direct.href;
+    const account = userId;
+    const readJson = async url => {
+      const response = await fetch(url, {credentials:'include', signal:AbortSignal.timeout(15000)});
+      if (!response.ok) throw new Error('Could not load this package link.');
+      return response.json();
+    };
+    const id = await nativeOutfitId(card, account, readJson);
+    if (!nativeCharacterLinks.has(id)) {
+      const loading = nativeCharacterLinkQueue.then(async () => {
+        const outfit = await readJson(`https://avatar.roblox.com/v1/outfits/${id}/details`);
+        if (outfit.isEditable === true) return null;
+        const asset = (outfit.assets || []).find(asset => [17,27,28,29,30,31,79].includes(Number(asset.assetType?.id))) || outfit.assets?.[0];
+        if (!asset) return null;
+        let cursor = '';
+        do {
+          const result = await readJson(`https://catalog.roblox.com/v1/assets/${asset.id}/bundles?limit=100${cursor ? '&cursor=' + encodeURIComponent(cursor) : ''}`);
+          const bundle = (result.data || []).find(bundle => bundle.items?.some(item => item.type === 'UserOutfit' && Number(item.id) === Number(id)));
+          if (bundle) return `https://www.roblox.com/bundles/${bundle.id}`;
+          cursor = result.nextPageCursor;
+        } while (cursor);
+        return null;
+      });
+      nativeCharacterLinkQueue = loading.catch(() => {});
+      nativeCharacterLinks.set(id, loading);
+      loading.catch(() => nativeCharacterLinks.delete(id));
+    }
+    return nativeCharacterLinks.get(id);
+  }
   async function applyNativeCharacter(card) {
     const account = userId;
     const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 20000);
@@ -964,20 +1025,7 @@
       return response.json();
     };
     try {
-      let id = Number(card.dataset.outfitId || card.dataset.userOutfitId);
-      const source = card.querySelector('img')?.getAttribute('src') || '';
-      if (!id && /type=Outfit/i.test(source)) id = Number(source.match(/[?&]id=(\d+)/i)?.[1]);
-      if (!id) {
-        const name = (card.querySelector('.item-card-name-link, .item-card-name')?.textContent || '').trim();
-        const matches = [];
-        for (let page = 1; page <= 20; page++) {
-          const result = await readJson(`https://avatar.roblox.com/v1/users/${account}/outfits?outfitType=Avatar&page=${page}&itemsPerPage=100`);
-          matches.push(...(result.data || []).filter(outfit => outfit.name === name));
-          if (!(result.data || []).length || result.data.length < 100) break;
-        }
-        if (matches.length !== 1) throw new Error('Could not identify this saved outfit. Give it a unique name and try again.');
-        id = matches[0].id;
-      }
+      const id = await nativeOutfitId(card, account, readJson);
       const avatar = await readJson(`https://avatar.roblox.com/v1/outfits/${id}/details`);
       const rules = avatar.bodyColor3s ? {} : await readJson('https://avatar.roblox.com/v1/avatar-rules');
       const definition = previewDefinition(avatar, rules, []);
@@ -1383,7 +1431,7 @@
     const editor = document.querySelector('#avatar-web-app');
     syncAvatarEditorView(editor);
     updateLarpHatRail(editor);
-    if (typeof LarpbloxCharacters !== 'undefined') LarpbloxCharacters.update({editor, userId, active: editingLarp(), capture: captureCharacter, apply: applyCharacter, applyNative: applyNativeCharacter, thumbnail: characterThumbnail});
+    if (typeof LarpbloxCharacters !== 'undefined') LarpbloxCharacters.update({editor, userId, active: editingLarp(), capture: captureCharacter, apply: applyCharacter, applyNative: applyNativeCharacter, linkNative:nativeCharacterLink, thumbnail: characterThumbnail});
     if (!editor) {
       restoreNativeEquipControls();
       for (const card of document.querySelectorAll('.larpbux-avatar-item')) card.remove();
