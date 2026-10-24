@@ -1,7 +1,7 @@
 (() => {
   'use strict';
-  if (globalThis.__larpbloxBodyColorsHooked) return;
-  globalThis.__larpbloxBodyColorsHooked = true;
+  if (globalThis.__larpbloxBodyColorsHooked === 2) return;
+  globalThis.__larpbloxBodyColorsHooked = 2;
 
   const PATHS = new Set(['/v1/avatar/set-body-colors', '/v2/avatar/set-body-colors', '/v1/avatar/set-scales', '/v2/avatar/set-scales', '/v1/avatar/set-player-avatar-type', '/v2/avatar/set-player-avatar-type', '/v4/avatar']);
   const READ_PATHS = new Set(['/v1/avatar', '/v2/avatar/avatar']);

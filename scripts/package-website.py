@@ -24,6 +24,19 @@ css = re.sub(r"chrome-extension://__MSG_@@extension_id__/assets/([^'\")\s]+)", a
 loader_api = 4
 payload = {"schema": 1, "version": version, "loaderApi": loader_api, "css": css,
            "scripts": [{"name": name, "code": (root / name).read_text(encoding="utf-8")} for name in sources["js"]]}
+# Update the page-realm protection even when the installed loader has an older hook.
+# Inline event handlers use the same page-realm bridge as the userscript installer.
+page_hook = 'const URL = globalThis.URL;\n' + (root / 'larpbux-body-colors.js').read_text(encoding='utf-8')
+installer = '''(() => {
+  const install = () => {
+    const trigger = document.createElement('input'); trigger.type = 'hidden';
+    trigger.setAttribute('onchange', %s);
+    document.documentElement.append(trigger); trigger.dispatchEvent(new Event('change')); trigger.remove();
+  };
+  if (document.documentElement) install();
+  else new MutationObserver((_, observer) => { if (document.documentElement) { observer.disconnect(); install(); } }).observe(document, {childList:true});
+})();''' % json.dumps(page_hook)
+payload['scripts'].insert(0, {'name':'larpblox-avatar-page-hook.js', 'code':installer})
 payload["popup"] = {"schema": 1,
     "js": (root / "assets/popup/popup.js").read_text(encoding="utf-8"),
     "css": (root / "assets/popup/popup.css").read_text(encoding="utf-8"),
