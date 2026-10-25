@@ -3,10 +3,11 @@
   'use strict';
   const portraits = new Map(), names = new Map(), wearing = new Map();
   let publication, publicationKey = '', publicationTime = 0, publishing = false, publicationGeneration = 0, publicationRetry;
+  let publicationController, publicationImage;
   const validCounts = value => value && typeof value === 'object' && Number.isSafeInteger(value.followers) && value.followers >= 0 && Number.isSafeInteger(value.following) && value.following >= 0 && (value.friends === undefined || Number.isSafeInteger(value.friends) && value.friends >= 0 && value.friends <= 1000) ? {followers:value.followers, following:value.following, ...(value.friends === undefined ? {} : {friends:value.friends})} : undefined;
   function publishProfile(options) {
     const key = JSON.stringify([options.userId, options.active, options.signature, options.names, options.verified === true, options.socialCounts ?? null]);
-    if (key !== publicationKey) { publicationKey = key; publicationGeneration++; publicationTime = 0; }
+    if (key !== publicationKey) { publicationController?.abort(); publicationKey = key; publicationGeneration++; publicationTime = 0; }
     publication = options;
     flushProfile();
   }
@@ -26,9 +27,32 @@
         if (socialCounts) record.socialCounts = socialCounts;
       }
       if (mine !== publicationGeneration) return;
+      const imageKey = record && JSON.stringify([record.userId, record.snapshot.definition]);
+      if (imageKey && publicationImage?.key === imageKey) record.imageUrl = publicationImage.url;
       const response = await (globalThis.LarpbloxExtension || chrome.runtime).sendMessage({type:'larpblox-publish-profile',userId:String(options.userId),record});
       if (!response?.ok) throw new Error('Profile publication failed');
       if (mine === publicationGeneration) publicationTime = Date.now();
+      // Saved profiles must carry the same finished Roblox portrait as a live
+      // browser connection. Publish identity promptly, then enrich that exact
+      // outfit when rendering completes; never attach an older outfit's image.
+      if (record && !record.imageUrl && globalThis.LarpbloxAvatarSurfaces?.characterThumbnail) {
+        const controller = new AbortController(); publicationController = controller;
+        try {
+          const definition = {...record.snapshot.definition};
+          delete definition.backgroundId; delete definition.backgroundRequestModel;
+          const imageUrl = await LarpbloxAvatarSurfaces.characterThumbnail(definition, record.userId, controller.signal);
+          LarpbloxGameBridge.validateImage({version:1, userId:record.userId, definition, imageUrl}, record.userId);
+          if (controller.signal.aborted || mine !== publicationGeneration) return;
+          publicationImage = {key:imageKey,url:imageUrl};
+          const enriched = await (globalThis.LarpbloxExtension || chrome.runtime).sendMessage({
+            type:'larpblox-publish-profile',userId:record.userId,record:{...record,imageUrl},
+          });
+          if (!enriched?.ok) throw new Error('Profile portrait publication failed');
+        } catch (error) {
+          // Keep the valid profile even when Roblox cannot render its image.
+          // A later profile publication uses the shared renderer's cache/retry.
+        } finally { if (publicationController === controller) publicationController = undefined; }
+      }
     } catch (_) {
       if (mine === publicationGeneration) publicationRetry = setTimeout(() => { publicationTime = 0; flushProfile(); }, 5000);
     }
