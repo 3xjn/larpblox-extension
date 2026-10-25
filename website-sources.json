@@ -28,6 +28,7 @@
     "larpbux-avatar-surfaces.js",
     "larpbux-profile-wearing.js",
     "larpbux-names.js",
+    "larpbux-native-thumbnails.js",
     "larpbux-characters.js",
     "larpbux-shared-users.js",
     "larpbux-verification.js",

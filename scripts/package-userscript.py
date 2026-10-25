@@ -20,6 +20,13 @@ header = f'''// ==UserScript==
 // @grant        GM.getValue
 // @grant        GM.setValue
 // @grant        GM.deleteValue
+// @grant        GM_getValue
+// @grant        GM_setValue
+// @grant        GM_deleteValue
+// @grant        GM.xmlHttpRequest
+// @grant        GM.registerMenuCommand
+// @grant        GM.addValueChangeListener
+// @grant        GM.removeValueChangeListener
 // @grant        GM_xmlhttpRequest
 // @grant        GM_registerMenuCommand
 // @grant        GM_addValueChangeListener
@@ -56,7 +63,7 @@ parts.append("globalThis.LarpbloxPopupContext = {root:document.createElement('di
 parts.append(payload['popup']['js'])
 parts.append('globalThis.renderUserscriptPopup = LarpbloxPopup.renderUserscriptPopup; globalThis.LarpbloxUserscriptPopupData.userscriptInstall = userscriptInstall;')
 parts.append((root/'userscript-popup.js').read_text(encoding='utf-8'))
-parts.append("GM_registerMenuCommand('Open Larpblox', () => globalThis.LarpbloxUserscriptPopup.open());\n})();\n")
+parts.append("gmRegisterMenuCommand('Open Larpblox', () => globalThis.LarpbloxUserscriptPopup.open());\n})();\n")
 output = root/'website-release'
 (output/'larpblox.user.js').write_text('\n;\n'.join(parts),encoding='utf-8')
 (output/'larpblox.meta.js').write_text(header,encoding='utf-8')

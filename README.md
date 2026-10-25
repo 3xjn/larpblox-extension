@@ -11,7 +11,7 @@ Use your Larpblox look and name on the Roblox website. Install it once; your scr
 
 [Step-by-step guide with a screenshot and troubleshooting](https://github.com/noahkcarmstrong-ops/larpblox/blob/main/docs/userscript-install.md)
 
-Greasemonkey is not supported yet. Use one of the managers above.
+Modern Greasemonkey APIs now have a compatibility adapter, including the Desktop connection. Automated browser checks cover this path; installation in Firefox with Greasemonkey has not yet been verified. Tampermonkey and Violentmonkey remain the managers tested with actual installations.
 
 ## Use it in games
 

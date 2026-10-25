@@ -15,7 +15,7 @@ const source = fs.readFileSync(path.join(__dirname,'../website-release/larpblox.
   await page.exposeBinding('__deleteValue',(_,key)=>{delete values[key];});
   await page.route('http://127.0.0.1:38261/**',r=>r.fulfill({contentType:'text/html',body:'<!doctype html><html></html>'}));
   await page.route('https://www.roblox.com/**',r=>r.fulfill({contentType:'text/html',headers:{'Content-Security-Policy':"script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https: ws://127.0.0.1:38261; img-src * data:;"},body:'<!doctype html><html class="dark-theme"><head><meta name="user-data" data-userid="999" data-name="NativeUser" data-displayname="Native Name"></head><body><div id="container-main"></div></body></html>'}));
-  await page.addInitScript(()=>{
+  await page.addInitScript(modern=>{
     window.__menu=[];window.__requests=[];window.__gm={};
     window.GM={getValue:key=>window.__getValue(key),setValue:(key,value)=>window.__setValue(key,value),deleteValue:key=>window.__deleteValue(key)};
     window.__valueListeners={};let listenerId=0;window.GM_addValueChangeListener=(key,fn)=>{const id=++listenerId;window.__valueListeners[id]={key,fn};return id;};window.GM_removeValueChangeListener=id=>delete window.__valueListeners[id];
@@ -33,7 +33,13 @@ const source = fs.readFileSync(path.join(__dirname,'../website-release/larpblox.
       setTimeout(()=>options.onload({status:200,responseText:JSON.stringify(response)}),0);
       return {abort(){}};
     };
-  });
+    if (modern) {
+      GM.xmlHttpRequest=window.GM_xmlhttpRequest;
+      GM.registerMenuCommand=window.GM_registerMenuCommand;
+      delete window.GM_xmlhttpRequest; delete window.GM_registerMenuCommand;
+      delete window.GM_addValueChangeListener; delete window.GM_removeValueChangeListener;
+    }
+  }, Boolean(process.env.GM_MODERN));
   await page.addInitScript({content:source});
   await page.goto('https://www.roblox.com/home');
   await page.waitForFunction(()=>window.__menu.length>0);

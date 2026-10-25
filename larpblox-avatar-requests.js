@@ -64,6 +64,18 @@
       localStorage.setItem(storageKey, JSON.stringify(entries.slice(-16)));
     } catch (_) {}
   }
+  function forget(url, userId) {
+    try {
+      const cacheKey = `larpblox-render-cache:${userId}`;
+      const entries = JSON.parse(localStorage.getItem(cacheKey) || '[]');
+      localStorage.setItem(cacheKey, JSON.stringify(entries.filter(entry => entry.url !== url)));
+      const profileKey = `larpblox-characters-v1:${userId}`;
+      const saved = JSON.parse(localStorage.getItem(profileKey) || '{"profiles":[]}');
+      for (const profile of saved.profiles || []) if (profile.thumbnail === url) delete profile.thumbnail;
+      localStorage.setItem(profileKey, JSON.stringify(saved));
+    } catch (_) {}
+    for (const [key, job] of jobs) if (job.userId === String(userId) && job.url === url) jobs.delete(key);
+  }
   function retryAfter(response, fallback = 20) {
     const value = response.headers.get('retry-after');
     if (value === null) return fallback;
@@ -170,11 +182,11 @@
     const key = JSON.stringify([String(userId), thumbnailType, renderDefinition(definition, thumbnailType)]);
     let job = jobs.get(key);
     if (!job || job.controller.signal.aborted) {
-      job = {controller: new AbortController(), users: 0, complete: false};
+      job = {controller: new AbortController(), users: 0, complete: false, userId: String(userId)};
       jobs.set(key, job);
       job.promise = sharedRender(definition, userId, thumbnailType, job.controller.signal, key);
-      job.promise.then(() => {
-        job.complete = true;
+      job.promise.then(url => {
+        job.url = url; job.complete = true;
         for (const [oldKey, old] of jobs) if (jobs.size > 16 && old.complete) jobs.delete(oldKey);
       }, () => { if (jobs.get(key) === job) jobs.delete(key); });
     }
@@ -214,5 +226,5 @@
       return undefined;
     } finally { clearTimeout(timeout); signal?.removeEventListener('abort', abort); }
   }
-  globalThis.LarpbloxAvatarRequests = {render, gearPose, cached, definitionKey, waitForRender, retryAfter};
+  globalThis.LarpbloxAvatarRequests = {render, gearPose, cached, forget, definitionKey, waitForRender, retryAfter};
 })();

@@ -318,10 +318,38 @@
         cancel.onclick(); confirmUpdate(record, profile, true);
       };
       if (options.thumbnail) {
-        if (usableThumbnail(profile)) { image.src = profile.thumbnail; image.style.visibility = 'visible'; }
-        else thumbnailFor(id, profile, options).then(url => {
-          if (url && card.isConnected && current === record) { image.src = url; image.style.visibility = 'visible'; }
+        let recovered = false;
+        const show = url => {
+          if (!url || !card.isConnected || current !== record) return;
+          image.style.visibility = 'hidden';
+          image.src = url;
+        };
+        image.addEventListener('load', () => {
+          image.style.visibility = 'visible';
+          status.textContent = '';
         });
+        image.addEventListener('error', () => {
+          image.style.visibility = 'hidden';
+          if (recovered || !card.isConnected || current !== record) {
+            status.textContent = 'Picture unavailable. You can still wear this outfit.';
+            return;
+          }
+          recovered = true;
+          status.textContent = 'Loading picture…';
+          const latest = read(id), saved = latest.profiles.find(p => p.id === profile.id);
+          if (saved && saved.thumbnail === image.getAttribute('src')) {
+            delete saved.thumbnail;
+            try { write(id, latest); } catch (_) {}
+          }
+          globalThis.LarpbloxAvatarRequests?.forget?.(image.getAttribute('src'), id);
+          thumbnails.delete(`${id}:${profile.id}`);
+          thumbnailFor(id, {...profile, thumbnail: undefined}, options).then(url => {
+            if (url) show(url);
+            else if (card.isConnected) status.textContent = 'Picture unavailable. You can still wear this outfit.';
+          });
+        });
+        if (usableThumbnail(profile)) show(profile.thumbnail);
+        else thumbnailFor(id, profile, options).then(show);
       }
     }
   }
