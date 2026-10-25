@@ -40,6 +40,7 @@ await profile.close();
 
 const r15Status=await page.evaluate(()=>new Promise(resolve=>{const xhr=new XMLHttpRequest();xhr.open('POST','https://avatar.roblox.com/v1/avatar/set-player-avatar-type');xhr.onload=()=>resolve(xhr.status);xhr.send(JSON.stringify({playerAvatarType:'R15'}));}));assert.equal(r15Status,200);
 await page.waitForFunction(()=>JSON.parse(localStorage.getItem('larpblox-cosmetics-v1:123')).gameLook.definition.playerAvatarType.playerAvatarType==='R15');
+saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('larpblox-cosmetics-v1:123')));assert.deepEqual(saved.gameLook.definition.assets.map(a=>a.id).sort(),[808,809,810]);assert.deepEqual(saved.equipped.sort(),['Asset:808','Asset:809','Asset:810','Bundle:901']);
 await page.evaluate(()=>{const key='larpblox-cosmetics-v1:123',saved=JSON.parse(localStorage.getItem(key));saved.mode=false;localStorage.setItem(key,JSON.stringify(saved));dispatchEvent(new StorageEvent('storage',{key}));});
 await page.evaluate(()=>fetch('https://avatar.roblox.com/v2/avatar/set-scales',{method:'POST',body:JSON.stringify({HeightScale:1.1})}));assert.equal(mutations,1);
 assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('larpblox-cosmetics-v1:123')).gameLook.definition.scales.height),1.3);

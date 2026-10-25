@@ -141,6 +141,37 @@
   const supportsOutfit = item => isWearableAsset(item) || isAnimationBundle(item) || isBodyBundle(item);
   const supportsCosmetic = item => supportsOutfit(item) || isBackground(item);
   const outfitAssets = items => items.flatMap(expandOutfitItem);
+  function rigScope(state) {
+    return [...new Set(outfitAssets(state.items.filter(item => state.equipped.includes(keyFor(item))))
+      .filter(item => bodyAssetTypes.includes(Number(item.assetType))).map(keyFor))].sort().join(',');
+  }
+  function transitionRig(state, look, rig) {
+    let current = state, nextLook = look, rigStash = state.rigStash;
+    let definition = {...look.definition, playerAvatarType:{playerAvatarType:rig}};
+    if (rig === 'R15' && rigStash?.rig === 'R6' && rigStash.scope === rigScope(current)) {
+      const knownItems = new Map([...current.items, ...rigStash.items].map(item => [keyFor(item), item]));
+      nextLook = {...look, items:[...look.items, ...rigStash.items].filter((item, index, all) => all.findIndex(other => keyFor(other) === keyFor(item)) === index)};
+      definition = {...definition, assets:[...definition.assets, ...rigStash.assets].filter((asset, index, all) => all.findIndex(other => Number(other.id) === Number(asset.id)) === index)};
+      current = {...current, items:[...current.items, ...rigStash.items.filter(item => !current.items.some(existing => keyFor(existing) === keyFor(item)))], equipped:[...new Set([...current.equipped, ...rigStash.equipped.filter(key => knownItems.has(key))])]};
+    }
+    if (rig === 'R6') {
+      const incompatible = new Set(outfitAssets([...look.items, ...(rigStash?.items || [])]).filter(item => [...animationAssetTypes,64,65,66,67,68,69,70,71,72].includes(Number(item.assetType))).map(item => item.id));
+      const worn = new Set(current.equipped.filter(key => {
+        const item = current.items.find(item => keyFor(item) === key);
+        return outfitAssets(item ? [item] : []).some(asset => incompatible.has(asset.id));
+      }));
+      const stashItems = [...(rigStash?.items || []), ...look.items, ...current.items].filter(item => rigStash?.items.includes(item) || (incompatible.has(item.id) || worn.has(keyFor(item))) && (look.items.includes(item) || worn.has(keyFor(item)))).filter((item, index, all) => all.findIndex(other => keyFor(other) === keyFor(item)) === index);
+      const stashAssets = [...(rigStash?.assets || []), ...definition.assets].filter(asset => incompatible.has(asset.id)).filter((asset, index, all) => all.findIndex(other => Number(other.id) === Number(asset.id)) === index);
+      rigStash = {version:1, rig:'R6', scope:rigScope(current), items:stashItems, assets:stashAssets, equipped:[...new Set([...(rigStash?.equipped || []), ...worn])]};
+      definition.assets = definition.assets.filter(asset => !incompatible.has(asset.id));
+      nextLook = {...look, items:look.items.filter(item => !incompatible.has(item.id))};
+      current = {...current, fullOutfitKey:undefined, equipped:[...new Set(current.equipped.flatMap(key => {
+        const item = current.items.find(item => keyFor(item) === key);
+        return isBodyBundle(item) || isAnimationBundle(item) ? outfitAssets([item]).filter(asset => !incompatible.has(asset.id)).map(keyFor) : incompatible.has(item?.id) ? [] : [key];
+      }))]};
+    }
+    return {state:{...current, rigStash:rig === 'R15' ? undefined : rigStash}, look:{...nextLook, definition}};
+  }
   const accessoryCount = (items, type) => items.filter(item => Number(item.assetType) === type).length;
   function matchesAvatarCategory(item, category, equipped = false) {
     if (!supportsCosmetic(item)) return false;
@@ -187,6 +218,13 @@
       return {...state, backgroundId:nextId, equipped:(state.equipped || []).filter(value => !isBackground(state.items.find(candidate => keyFor(candidate) === value)))};
     }
     if (!supportsOutfit(item)) throw new Error('This item can be collected, but the game outfit importer does not support it yet.');
+    if (isBodyBundle(item) && state.rigStash) state = {...state, rigStash:undefined};
+    if (state.rigStash && (isAnimationBundle(item) || [64,65,66,67,68,69,70,71,72].includes(Number(item.assetType)))) {
+      const slots = new Set(outfitAssets([item]).map(asset => Number(asset.assetType)));
+      const staleItems = state.rigStash.items.filter(candidate => outfitAssets([candidate]).some(asset => slots.has(Number(asset.assetType))));
+      const stale = new Set(staleItems.map(keyFor)), staleIds = new Set(outfitAssets(staleItems).map(asset => Number(asset.id)));
+      state = {...state, rigStash:{...state.rigStash, items:state.rigStash.items.filter(candidate => !stale.has(keyFor(candidate))), assets:state.rigStash.assets.filter(asset => !staleIds.has(Number(asset.id))), equipped:state.rigStash.equipped.filter(key => !stale.has(key))}};
+    }
     if (isBodyBundle(item)) {
       const parts = item.assets.filter(isWearableAsset);
       const removing = parts.every(part => state.equipped.includes(keyFor(part)));
@@ -282,7 +320,8 @@
     }
     const selectedBackground = snapshot.backgroundId ?? snapshot.definition?.backgroundId ?? snapshot.definition?.backgroundRequestModel?.id;
     const backgroundId = selectedBackground === undefined ? state.backgroundId : Number(selectedBackground) || undefined;
-    return {...state, items, equipped, ...(backgroundId ? {backgroundId} : {backgroundId:undefined}), gameLook: snapshot};
+    const next = {...state, items, equipped, ...(backgroundId ? {backgroundId} : {backgroundId:undefined}), gameLook: snapshot};
+    return state.rigStash && rigScope(next) !== rigScope(state) ? {...next, rigStash:undefined} : next;
   }
   function gamePreviewDefinition(state) {
     const look = state.gameLook;
@@ -374,7 +413,7 @@
     const backgrounds = state.items.filter(isBackground).map(({id, name}) => ({id, name}));
     return {version: 1, userId: String(userId), definition, backgroundId: definition.backgroundId || 0, backgrounds, items: definition.assets.map(asset => items.get(asset.id)).filter(Boolean).map(({id, name, assetType}) => ({id, name, assetType, itemType: 'Asset'}))};
   }
-  if (typeof module !== 'undefined' && module.exports) { module.exports = {changedBodyColors, changedBodyScales, addToCart, checkoutCart, changeUsername, localNames, localSocialCounts, amount, formatBalance, collect, equip, outfit, supportsOutfit, supportsCosmetic, isBackground, previewDefinition, matchesAvatarCategory, mergeGameSnapshot, gamePreviewDefinition, gameCommand, gameOutfitMatches, snapshotMatchesPending, smokestackStyle, hatStyleFor, hatStyleState, SMOKESTACK_HAT_ID, SMOKESTACK_STYLES}; return; }
+  if (typeof module !== 'undefined' && module.exports) { module.exports = {changedBodyColors, changedBodyScales, addToCart, checkoutCart, changeUsername, localNames, localSocialCounts, amount, formatBalance, collect, equip, outfit, supportsOutfit, supportsCosmetic, isBackground, previewDefinition, matchesAvatarCategory, mergeGameSnapshot, gamePreviewDefinition, gameCommand, gameOutfitMatches, snapshotMatchesPending, transitionRig, smokestackStyle, hatStyleFor, hatStyleState, SMOKESTACK_HAT_ID, SMOKESTACK_STYLES}; return; }
   let state, userId, panel, list, message, exportBox, purchaseDialog, previewElement, previewViewer, previewSignature, previewController;
   // Catalog Try On is deliberately separate from the saved Larp outfit.  It is
   // a disposable render only: no save(), bridge message, purchase, or equip is
@@ -431,7 +470,9 @@
     const backgroundId = Number.isSafeInteger(saved?.backgroundId) && saved.backgroundId > 0 && items.some(item => isBackground(item) && item.id === saved.backgroundId) ? saved.backgroundId : undefined;
     const hatStyles = saved?.hatStyles && typeof saved.hatStyles === 'object' ? {[String(SMOKESTACK_HAT_ID)]:smokestackStyle(saved.hatStyles[String(SMOKESTACK_HAT_ID)])} : {};
     const fullOutfitKey = items.some(item => keyFor(item) === saved?.fullOutfitKey && isBodyBundle(item) && item.bundleType === 'BodyParts') ? saved.fullOutfitKey : undefined;
-    return {version: 1, cart, names, socialCounts, mode: saved?.mode === true, verified: saved?.verified === true, sharing: typeof saved?.sharing === 'boolean' ? saved.sharing : gameLook?.sharing?.enabled === true, pendingOutfit: saved?.mode === true && saved?.pendingOutfit === true, balance: Number.isSafeInteger(saved?.balance) && saved.balance >= 0 ? saved.balance : 0, items, backgroundId, hatStyles, fullOutfitKey, equipped: Array.isArray(saved?.equipped) ? saved.equipped.filter(value => items.some(item => keyFor(item) === value) && !isBackground(items.find(item => keyFor(item) === value))).slice(0, 100) : [], ...(gameLook ? {gameLook} : {})};
+    const rigStash = saved?.rigStash?.version === 1 && saved.rigStash.rig === 'R6' && typeof saved.rigStash.scope === 'string' && Array.isArray(saved.rigStash.items) && Array.isArray(saved.rigStash.assets)
+      ? {version:1, rig:'R6', scope:saved.rigStash.scope, items:saved.rigStash.items.slice(0, 100), assets:saved.rigStash.assets.slice(0, 100), equipped:Array.isArray(saved.rigStash.equipped) ? saved.rigStash.equipped.slice(0, 100) : []} : undefined;
+    return {version: 1, cart, names, socialCounts, mode: saved?.mode === true, verified: saved?.verified === true, sharing: typeof saved?.sharing === 'boolean' ? saved.sharing : gameLook?.sharing?.enabled === true, pendingOutfit: saved?.mode === true && saved?.pendingOutfit === true, balance: Number.isSafeInteger(saved?.balance) && saved.balance >= 0 ? saved.balance : 0, items, backgroundId, hatStyles, fullOutfitKey, ...(rigStash ? {rigStash} : {}), equipped: Array.isArray(saved?.equipped) ? saved.equipped.filter(value => items.some(item => keyFor(item) === value) && !isBackground(items.find(item => keyFor(item) === value))).slice(0, 100) : [], ...(gameLook ? {gameLook} : {})};
   }
   const avatarUrl = () => '/my/avatar';
   async function syncNames() {
@@ -903,20 +944,12 @@
         look = {version:1, userId:String(account), definition, items:definition.assets.map(asset => known.get(asset.id)).filter(item => item && Number.isInteger(item.assetType))};
         current = mergeGameSnapshot(current, look);
       }
-      let definition = {...look.definition, scales:{...look.definition.scales, ...patch}, ...(rig ? {playerAvatarType:{playerAvatarType:rig}} : {})};
-      if (rig === 'R6') {
-        // Keep heads and body parts: Roblox supplies their native R6 meshes.
-        const incompatible = new Set(outfitAssets([...look.items,...current.items]).filter(item => [...animationAssetTypes,64,65,66,67,68,69,70,71,72].includes(Number(item.assetType))).map(item => item.id));
-        definition.assets = definition.assets.filter(asset => !incompatible.has(asset.id));
-        look = {...look, items:look.items.filter(item => !incompatible.has(item.id))};
-        current = {...current, fullOutfitKey:undefined, equipped:[...new Set(current.equipped.flatMap(key => {
-          const item = current.items.find(item => keyFor(item) === key);
-          // Keep body parts and heads without reintroducing R15-only assets.
-          return isBodyBundle(item) || isAnimationBundle(item)
-            ? outfitAssets([item]).filter(asset => !incompatible.has(asset.id)).map(keyFor)
-            : incompatible.has(item?.id) ? [] : [key];
-        }))]};
+      if (rig) {
+        const transitioned = transitionRig(current, {...look, definition:{...look.definition, scales:{...look.definition.scales, ...patch}}}, rig);
+        save({...transitioned.state, gameLook:transitioned.look}, true);
+        return;
       }
+      let definition = {...look.definition, scales:{...look.definition.scales, ...patch}};
       save({...current, gameLook:{...look, definition}}, true);
     } finally {clearTimeout(timeout);}
   }
